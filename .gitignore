@@ -1,0 +1,18 @@
+# .NET
+bin/
+obj/
+publish/
+*.user
+.vs/
+
+# Local runtime data — never commit secrets or live DBs
+tower.db
+tower.db-wal
+tower.db-shm
+config.json
+appsettings.Local.json
+maintenance.log
+Logs/
+
+# Brainstorm visual companion scratch
+.superpowers/
