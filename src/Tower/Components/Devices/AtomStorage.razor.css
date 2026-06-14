@@ -1,7 +1,11 @@
-/* ─── AtomStorage component ──────────────────────────────────────────────── */
-
-/* Inherits atom-section, atom-section-block, atom-block-title, atom-sub,
-   atom-row-kv from AtomSystem.razor.css (scoped but selector names match here) */
+/* ─── AtomStorage component — component-specific selectors only ─────────────
+   Shared selectors (partition-list, partition-row, partition-header,
+   partition-mount, partition-usage, disk-cards, disk-card, disk-card-header,
+   disk-model, disk-details, du-columns, du-col, du-col-title, du-item,
+   du-name, du-size, atom-section, atom-section-block, atom-block-title,
+   atom-sub, atom-row-kv, mc-bar-wrap, mono)
+   have been moved to wwwroot/app.css (global).
+   ────────────────────────────────────────────────────────────────────────── */
 
 .atom-section {
     display: flex;
@@ -26,171 +30,9 @@
     margin-bottom: 0.75rem;
 }
 
-.atom-sub {
-    font-size: 0.75rem;
-    color: #8b949e;
-}
-
-.atom-row-kv {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 0.5rem;
-    font-size: 0.8rem;
-    padding: 2px 0;
-    border-bottom: 1px solid #21262d;
-}
-
-.atom-row-kv:last-child {
-    border-bottom: none;
-}
-
-.atom-row-kv > span:first-child {
-    color: #8b949e;
-}
-
-/* ─── Partition list ──────────────────────────────────────────────────────── */
-
-.partition-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-}
-
-.partition-row {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 0.6rem 0;
-    border-bottom: 1px solid #21262d;
-}
-
-.partition-row:last-child {
-    border-bottom: none;
-}
-
-.partition-header {
-    display: flex;
-    align-items: baseline;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-}
-
-.partition-mount {
-    font-weight: 600;
-    font-size: 0.85rem;
-    color: #e6edf3;
-    min-width: 90px;
-}
+/* ─── Partition fstype label (unique to AtomStorage) ─────────────────────── */
 
 .partition-fstype {
     font-size: 0.75rem;
     color: #8b949e;
-}
-
-.partition-usage {
-    margin-left: auto;
-    font-size: 0.78rem;
-    font-weight: 500;
-}
-
-.mc-bar-wrap {
-    padding: 0.15rem 0;
-}
-
-/* ─── Physical disk cards ─────────────────────────────────────────────────── */
-
-.disk-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 0.75rem;
-}
-
-.disk-card {
-    background: #0d1117;
-    border: 1px solid #30363d;
-    border-radius: 6px;
-    padding: 0.75rem 0.9rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-    /* border-left colour set inline for alert level */
-}
-
-.disk-card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-    margin-bottom: 0.4rem;
-    padding-bottom: 0.4rem;
-    border-bottom: 1px solid #30363d;
-}
-
-.disk-model {
-    font-weight: 600;
-    font-size: 0.82rem;
-    color: #e6edf3;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.disk-details {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-}
-
-.mono {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 0.78rem;
-}
-
-/* ─── Filesystem usage breakdown columns ──────────────────────────────────── */
-
-.du-columns {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 1rem;
-}
-
-.du-col {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-}
-
-.du-col-title {
-    font-size: 0.72rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #8b949e;
-    margin-bottom: 0.4rem;
-    padding-bottom: 0.3rem;
-    border-bottom: 1px solid #21262d;
-}
-
-.du-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 0.5rem;
-    font-size: 0.78rem;
-    padding: 2px 0;
-}
-
-.du-name {
-    color: #c9d1d9;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    flex: 1;
-}
-
-.du-size {
-    color: #8b949e;
-    white-space: nowrap;
-    flex-shrink: 0;
 }

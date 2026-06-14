@@ -208,13 +208,10 @@ else
         _jellyfinUrl            = cfg["jellyfin_url"]?.ToString() ?? "";
         _telegramChatId         = cfg["telegram_chat_id"]?.ToString() ?? "";
 
-        // API returns "***" when a secret is set; don't echo it, just flag as configured
+        // API returns "***" when a secret is set; any non-empty value means configured
         var jfKey   = cfg["jellyfin_api_key"]?.ToString() ?? "";
         var tgToken = cfg["telegram_bot_token"]?.ToString() ?? "";
-        _jellyfinKeyConfigured  = !string.IsNullOrEmpty(jfKey) && jfKey != "***" || jfKey == "***";
-        _telegramTokenConfigured = !string.IsNullOrEmpty(tgToken) && tgToken != "***" || tgToken == "***";
-        // Simplify: any non-empty value (including "***") means configured
-        _jellyfinKeyConfigured  = !string.IsNullOrEmpty(jfKey);
+        _jellyfinKeyConfigured   = !string.IsNullOrEmpty(jfKey);
         _telegramTokenConfigured = !string.IsNullOrEmpty(tgToken);
     }
 

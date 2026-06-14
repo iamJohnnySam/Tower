@@ -121,6 +121,540 @@ h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.3rem; }
     gap: 0.35rem;
 }
 
+/* ── Shared device component classes (Atom + Pi) ─────────────────────────── */
+
+/* Layout shell */
+.atom-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    max-width: 1100px;
+}
+
+.atom-section-block {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 1rem 1.1rem;
+}
+
+.atom-block-title {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #8b949e;
+    margin-bottom: 0.75rem;
+}
+
+/* Header bar */
+.atom-header {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #21262d;
+}
+
+.atom-hostname {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #e6edf3;
+}
+
+.atom-uptime {
+    font-size: 0.8rem;
+    color: #8b949e;
+}
+
+/* Cards grid */
+.atom-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 0.85rem;
+}
+
+.atom-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 0.85rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+.atom-card-title {
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #8b949e;
+}
+
+.atom-big-value {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.atom-sub {
+    font-size: 0.75rem;
+    color: #8b949e;
+}
+
+/* KV list / table-like rows */
+.atom-kv-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.atom-row-kv {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    padding: 2px 0;
+    border-bottom: 1px solid #21262d;
+}
+
+.atom-row-kv:last-child {
+    border-bottom: none;
+}
+
+.atom-row-kv > span:first-child {
+    color: #8b949e;
+}
+
+/* Clean data table */
+.atom-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+}
+
+.atom-table th {
+    text-align: left;
+    color: #8b949e;
+    font-weight: 500;
+    padding: 4px 8px 4px 0;
+    border-bottom: 1px solid #30363d;
+    white-space: nowrap;
+}
+
+.atom-table td {
+    padding: 4px 8px 4px 0;
+    border-bottom: 1px solid #21262d;
+    vertical-align: middle;
+}
+
+.atom-table tr:last-child td {
+    border-bottom: none;
+}
+
+/* Temperatures */
+.atom-temps {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+/* Core bars */
+.atom-core-bars {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    margin-top: 6px;
+}
+
+.core-bar-wrap {
+    flex: 1 1 24px;
+    min-width: 20px;
+    max-width: 40px;
+}
+
+.core-bar {
+    height: 6px;
+    background: #0d1117;
+    border-radius: 2px;
+    border: 1px solid #30363d;
+    overflow: hidden;
+}
+
+.core-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: #58a6ff;
+    transition: width 0.4s ease;
+}
+
+.core-bar-fill.val-green { background: #3fb950; }
+.core-bar-fill.val-amber { background: #d29922; }
+.core-bar-fill.val-red   { background: #f85149; }
+
+/* Sparkline */
+.atom-sparkline svg {
+    display: block;
+    width: 100%;
+}
+
+/* Network row */
+.atom-net-row {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+/* mc-bar-wrap (partition usage bar padding) */
+.mc-bar-wrap {
+    padding: 0.15rem 0;
+}
+
+/* Mono helper */
+.mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.78rem;
+}
+
+/* Accent colour shorthand */
+.accent {
+    color: #58a6ff;
+}
+
+/* Partition list */
+.partition-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.partition-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid #21262d;
+}
+
+.partition-row:last-child {
+    border-bottom: none;
+}
+
+.partition-header {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.partition-mount {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #e6edf3;
+    min-width: 90px;
+}
+
+.partition-usage {
+    margin-left: auto;
+    font-size: 0.78rem;
+    font-weight: 500;
+}
+
+/* Physical disk cards */
+.disk-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 0.75rem;
+}
+
+.disk-card {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 0.75rem 0.9rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    /* border-left colour set inline for alert level */
+}
+
+.disk-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid #30363d;
+}
+
+.disk-model {
+    font-weight: 600;
+    font-size: 0.82rem;
+    color: #e6edf3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.disk-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+/* Filesystem usage breakdown columns */
+.du-columns {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem;
+}
+
+.du-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.du-col-title {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #8b949e;
+    margin-bottom: 0.4rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid #21262d;
+}
+
+.du-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+    font-size: 0.78rem;
+    padding: 2px 0;
+}
+
+.du-name {
+    color: #c9d1d9;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+.du-size {
+    color: #8b949e;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* Buttons — shared across device components */
+.btn-danger {
+    display: inline-block;
+    padding: 0.32rem 0.85rem;
+    border-radius: 6px;
+    border: 1px solid #f85149;
+    background: #f85149;
+    color: #fff;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 500;
+    line-height: 1.5;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.btn-danger:hover {
+    background: #da3633;
+    border-color: #da3633;
+}
+
+.btn-danger:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.btn-danger-outline {
+    display: inline-block;
+    padding: 0.32rem 0.85rem;
+    border-radius: 6px;
+    border: 1px solid #f85149;
+    background: transparent;
+    color: #f85149;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 500;
+    line-height: 1.5;
+    transition: background 0.15s;
+}
+
+.btn-danger-outline:hover {
+    background: rgba(248, 81, 73, 0.1);
+}
+
+.btn-secondary {
+    display: inline-block;
+    padding: 0.32rem 0.85rem;
+    border-radius: 6px;
+    border: 1px solid #30363d;
+    background: #21262d;
+    color: #c9d1d9;
+    cursor: pointer;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.btn-secondary:hover {
+    background: #30363d;
+    border-color: #8b949e;
+}
+
+.btn-sm {
+    padding: 0.18rem 0.6rem;
+    font-size: 0.75rem;
+}
+
+.link-accent {
+    color: #58a6ff;
+    font-size: 0.82rem;
+    text-decoration: none;
+}
+
+.link-accent:hover {
+    text-decoration: underline;
+}
+
+/* Maintenance badges / status */
+.maint-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #fff;
+    /* background set inline for result colour */
+}
+
+.maint-status-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.maint-run-result {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.maint-log {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.72rem;
+    line-height: 1.5;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    padding: 0.75rem 0.9rem;
+    max-height: 360px;
+    overflow-y: auto;
+    color: #c9d1d9;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin: 0;
+}
+
+.danger-confirm-box {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    background: rgba(248, 81, 73, 0.06);
+    border: 1px solid rgba(248, 81, 73, 0.25);
+    border-radius: 6px;
+    padding: 0.65rem 0.9rem;
+}
+
+.danger-row {
+    display: flex;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+/* Config form */
+.config-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.config-row {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    align-items: flex-start;
+    gap: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #21262d;
+}
+
+.config-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.config-label {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: #c9d1d9;
+    padding-top: 0.3rem;
+    cursor: default;
+}
+
+.config-control {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.config-input {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    color: #c9d1d9;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    width: 120px;
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.config-input:focus {
+    border-color: #58a6ff;
+}
+
+.config-hint {
+    font-size: 0.72rem;
+    color: #8b949e;
+    line-height: 1.4;
+}
+
+.save-confirm {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #3fb950;
+    margin-left: 10px;
+}
+
 /* ── Pi device views — shared selectors ─────────────────────────────────── */
 .pi-offline-panel {
     display: flex;

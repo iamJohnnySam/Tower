@@ -185,6 +185,9 @@ else
             var s = await Pi.StatsAsync(BaseUrl);
             _offline = s is null;
             _stats   = s;
+            // Self-heal: if config failed on initial load, retry while device is reachable
+            if (_config is null && !_offline)
+                _config = await Pi.ConfigAsync(BaseUrl);
             await InvokeAsync(StateHasChanged);
         }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
     }
@@ -199,7 +202,7 @@ else
 
         _stats  = statsTask.Result;
         _config = configTask.Result;
-        _offline = _stats is null && _config is null;
+        _offline = _stats is null;
 
         ParseLogs(logsTask.Result);
     }
