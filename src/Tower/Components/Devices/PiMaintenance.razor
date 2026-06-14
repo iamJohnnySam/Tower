@@ -1,0 +1,295 @@
+@using Tower.Core.Pi
+@using System.Text.Json.Nodes
+@implements IAsyncDisposable
+@inject PiAgentClient Pi
+
+@if (_offline)
+{
+    <div class="pi-offline-panel">
+        <span class="pi-offline-dot">&#x1F534;</span>
+        <span class="pi-offline-msg">@DeviceName is offline / unreachable</span>
+    </div>
+}
+else
+{
+    <div class="atom-section">
+
+        @* ── Status summary ───────────────────────────────────────────────────── *@
+        <div class="atom-section-block">
+            <div class="atom-block-title">Device Status</div>
+            <div class="atom-kv-list">
+                @if (_stats is not null)
+                {
+                    var waylandIdle = _stats["wayland_idle"]?.GetValue<bool>() ?? false;
+                    var idleSecs = _stats["consecutive_idle_seconds"]?.GetValue<int>() ?? 0;
+                    <div class="atom-row-kv">
+                        <span>Idle State</span>
+                        <span class="@(waylandIdle ? "val-amber" : "val-green")">
+                            @(waylandIdle ? "Idle" : "Active")
+                        </span>
+                    </div>
+                    <div class="atom-row-kv">
+                        <span>Consecutive Idle</span>
+                        <span>@FmtDuration(idleSecs)</span>
+                    </div>
+                    var uptime = _stats["uptime"]?.ToString();
+                    if (!string.IsNullOrEmpty(uptime))
+                    {
+                        <div class="atom-row-kv">
+                            <span>Uptime</span>
+                            <span>@uptime</span>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="atom-sub text-muted">Loading stats…</div>
+                }
+            </div>
+        </div>
+
+        @* ── Auto-shutdown status (from config) ───────────────────────────────── *@
+        <div class="atom-section-block">
+            <div class="atom-block-title">Auto-Shutdown</div>
+            <div class="atom-kv-list">
+                @if (_config is not null)
+                {
+                    var shutdownEnabled = _config["shutdown_enabled"]?.GetValue<bool>() ?? true;
+                    var idleTimeout = _config["idle_timeout_minutes"]?.GetValue<int>() ?? 30;
+                    <div class="atom-row-kv">
+                        <span>Enabled</span>
+                        <span class="@(shutdownEnabled ? "val-green" : "val-red")">
+                            @(shutdownEnabled ? "Yes" : "No")
+                        </span>
+                    </div>
+                    <div class="atom-row-kv">
+                        <span>Idle Timeout</span>
+                        <span>@idleTimeout minutes</span>
+                    </div>
+                    @if (_stats is not null)
+                    {
+                        var idleSecs = _stats["consecutive_idle_seconds"]?.GetValue<int>() ?? 0;
+                        var timeoutSecs = idleTimeout * 60;
+                        var progress = timeoutSecs > 0 ? Math.Min((double)idleSecs / timeoutSecs * 100, 100) : 0;
+                        <div class="atom-row-kv">
+                            <span>Idle Progress</span>
+                            <span>@idleSecs / @timeoutSecs s (@Fmt.PctInt(progress))</span>
+                        </div>
+                        <div class="mc-bar-wrap" style="margin:6px 0">
+                            <div class="mc-bar">
+                                <div class="mc-bar-fill @IdleBarClass(progress)"
+                                     style="width:@($"{progress:0.#}%")"></div>
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="atom-sub text-muted">Config unavailable</div>
+                }
+            </div>
+        </div>
+
+        @* ── OS Update Status ─────────────────────────────────────────────────── *@
+        <div class="atom-section-block">
+            <div class="atom-block-title">OS Update Status</div>
+            <div class="atom-sub text-muted">
+                OS update information is not exposed by the Pi agent.
+                Connect via SSH to run <code>apt list --upgradable</code>.
+            </div>
+        </div>
+
+        @* ── Reset Idle ───────────────────────────────────────────────────────── *@
+        <div class="atom-section-block">
+            <div class="atom-block-title">Idle Counter</div>
+            <div class="atom-sub text-muted" style="margin-bottom:10px">
+                Reset the consecutive-idle timer on this Pi. Safe to run — does not affect display.
+            </div>
+            <button class="btn-secondary" @onclick="ResetIdleAsync" disabled="@_resettingIdle">
+                @(_resettingIdle ? "Resetting…" : "Reset Idle Counter")
+            </button>
+            @if (_idleResetMsg is not null)
+            {
+                <span class="atom-sub" style="margin-left:10px;@(_idleResetOk ? "color:#3fb950" : "color:#f85149")">
+                    @_idleResetMsg
+                </span>
+            }
+        </div>
+
+        @* ── Danger: Shutdown ─────────────────────────────────────────────────── *@
+        <div class="atom-section-block">
+            <div class="atom-block-title" style="color:#f85149">Danger Zone</div>
+            <div class="danger-row">
+                @if (!_shutdownConfirm)
+                {
+                    <button class="btn-danger-outline" @onclick="() => _shutdownConfirm = true">
+                        Shutdown @DeviceName…
+                    </button>
+                }
+                else
+                {
+                    <div class="danger-confirm-box">
+                        <span class="val-red">This will power off @DeviceName immediately.</span>
+                        <button class="btn-danger" @onclick="DoShutdownAsync" disabled="@_shuttingDown">
+                            @(_shuttingDown ? "Sending…" : "Confirm — Shutdown Now")
+                        </button>
+                        <button class="btn-secondary" @onclick="() => _shutdownConfirm = false">Cancel</button>
+                    </div>
+                }
+            </div>
+            @if (_shutdownMsg is not null)
+            {
+                <div class="atom-sub @(_shutdownOk ? "val-green" : "val-red")" style="margin-top:8px">
+                    @_shutdownMsg
+                </div>
+            }
+        </div>
+
+        @* ── Logs ─────────────────────────────────────────────────────────────── *@
+        <div class="atom-section-block">
+            <div class="atom-block-title" style="display:flex;align-items:center;gap:12px">
+                Pi Agent Logs
+                <button class="btn-secondary btn-sm" @onclick="RefreshLogsAsync">Refresh</button>
+            </div>
+            <pre class="maint-log">@_logsText</pre>
+        </div>
+
+    </div>
+}
+
+@code {
+    [Parameter] public string BaseUrl    { get; set; } = "";
+    [Parameter] public string DeviceName { get; set; } = "";
+
+    private bool       _offline         = false;
+    private JsonNode?  _stats;
+    private JsonNode?  _config;
+
+    private bool       _shutdownConfirm = false;
+    private bool       _shuttingDown    = false;
+    private string?    _shutdownMsg;
+    private bool       _shutdownOk;
+
+    private bool       _resettingIdle   = false;
+    private string?    _idleResetMsg;
+    private bool       _idleResetOk;
+
+    private string     _logsText        = "(loading…)";
+    private Timer?     _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAllAsync();
+        _timer = new Timer(async _ =>
+        {
+            var s = await Pi.StatsAsync(BaseUrl);
+            _offline = s is null;
+            _stats   = s;
+            await InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+    }
+
+    private async Task LoadAllAsync()
+    {
+        var statsTask  = Pi.StatsAsync(BaseUrl);
+        var configTask = Pi.ConfigAsync(BaseUrl);
+        var logsTask   = Pi.LogsAsync(BaseUrl);
+
+        await Task.WhenAll(statsTask, configTask, logsTask);
+
+        _stats  = statsTask.Result;
+        _config = configTask.Result;
+        _offline = _stats is null && _config is null;
+
+        ParseLogs(logsTask.Result);
+    }
+
+    private void ParseLogs(string? raw)
+    {
+        if (raw is null)
+        {
+            _logsText = "(unavailable)";
+            return;
+        }
+        try
+        {
+            // Agent returns JSON: {"lines": [...], "error": "..."}
+            var node = System.Text.Json.Nodes.JsonNode.Parse(raw);
+            var lines = node?["lines"]?.AsArray();
+            if (lines is null || lines.Count == 0)
+            {
+                var err = node?["error"]?.ToString();
+                _logsText = string.IsNullOrEmpty(err) ? "(no log entries)" : $"(error: {err})";
+            }
+            else
+            {
+                _logsText = string.Join('\n', lines.Select(l => l?.ToString() ?? ""));
+            }
+        }
+        catch
+        {
+            // If it's somehow plain text, show it directly
+            _logsText = raw;
+        }
+    }
+
+    private async Task RefreshLogsAsync()
+    {
+        var raw = await Pi.LogsAsync(BaseUrl);
+        ParseLogs(raw);
+        StateHasChanged();
+    }
+
+    private async Task ResetIdleAsync()
+    {
+        _resettingIdle = true;
+        _idleResetMsg  = null;
+        StateHasChanged();
+        try
+        {
+            var ok = await Pi.IdleResetAsync(BaseUrl);
+            _idleResetOk  = ok;
+            _idleResetMsg = ok ? "Idle counter reset." : "Reset failed.";
+        }
+        finally
+        {
+            _resettingIdle = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DoShutdownAsync()
+    {
+        _shuttingDown  = true;
+        _shutdownMsg   = null;
+        StateHasChanged();
+        try
+        {
+            var ok = await Pi.ShutdownAsync(BaseUrl);
+            _shutdownOk  = ok;
+            _shutdownMsg = ok ? "Shutdown command sent — device will power off shortly." : "Shutdown command failed.";
+        }
+        finally
+        {
+            _shuttingDown    = false;
+            _shutdownConfirm = false;
+            StateHasChanged();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_timer is not null)
+            await _timer.DisposeAsync();
+    }
+
+    static string IdleBarClass(double pct) => pct > 80 ? "val-red" : pct > 50 ? "val-amber" : "val-green";
+
+    static string FmtDuration(int seconds)
+    {
+        if (seconds <= 0)   return "0s";
+        if (seconds < 60)   return $"{seconds}s";
+        if (seconds < 3600) return $"{seconds / 60}m {seconds % 60}s";
+        return $"{seconds / 3600}h {seconds % 3600 / 60}m";
+    }
+}

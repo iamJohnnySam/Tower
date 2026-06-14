@@ -84,7 +84,34 @@
             }
             else if (EffectiveKind == "pi")
             {
-                <p class="text-muted">Pi device views — coming in Task 13</p>
+                var piDev = Cfg.Value.Devices
+                    .FirstOrDefault(d => string.Equals(d.Id, EffectiveDevice, StringComparison.OrdinalIgnoreCase));
+                if (piDev is not null)
+                {
+                    switch (EffectiveSection.ToLowerInvariant())
+                    {
+                        case "system":
+                            <PiSystem @key="@(piDev.Id + "-system")"
+                                      BaseUrl="@(piDev.BaseUrl ?? "")"
+                                      DeviceName="@piDev.Name" />
+                            break;
+                        case "maintenance":
+                            <PiMaintenance @key="@(piDev.Id + "-maintenance")"
+                                           BaseUrl="@(piDev.BaseUrl ?? "")"
+                                           DeviceName="@piDev.Name" />
+                            break;
+                        case "configuration":
+                            <PiConfiguration @key="@(piDev.Id + "-configuration")"
+                                             BaseUrl="@(piDev.BaseUrl ?? "")"
+                                             DeviceName="@piDev.Name" />
+                            break;
+                        default:
+                            <PiSystem @key="@(piDev.Id + "-system")"
+                                      BaseUrl="@(piDev.BaseUrl ?? "")"
+                                      DeviceName="@piDev.Name" />
+                            break;
+                    }
+                }
             }
             else
             {

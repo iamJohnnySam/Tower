@@ -1,0 +1,279 @@
+@using Tower.Core.Pi
+@using System.Text.Json.Nodes
+@implements IDisposable
+@inject PiAgentClient Pi
+
+@if (_offline)
+{
+    <div class="pi-offline-panel">
+        <span class="pi-offline-dot">&#x1F534;</span>
+        <span class="pi-offline-msg">@DeviceName is offline / unreachable</span>
+    </div>
+}
+else if (_config is null)
+{
+    <div class="atom-sub" style="padding:1rem">Loading…</div>
+}
+else
+{
+    <div class="atom-section">
+
+        <div class="atom-section-block">
+            <div class="atom-block-title">Pi Configuration</div>
+            <p class="atom-sub text-muted" style="margin-bottom:14px">
+                Settings are stored on <strong>@DeviceName</strong> at <code>~/pi-agent/config.json</code>.
+                API key fields show &#x25CF;&#x25CF;&#x25CF;&#x25CF; when a value is configured;
+                clear the "Replace" field and leave it empty to keep the existing value.
+            </p>
+
+            <div class="config-form">
+
+                @* ── Idle timeout ─────────────────────────────────────────────── *@
+                <div class="config-row">
+                    <label class="config-label" for="pi-idle-timeout">Idle Timeout (minutes)</label>
+                    <div class="config-control">
+                        <input type="number" id="pi-idle-timeout" min="1" max="240"
+                               class="config-input"
+                               value="@_idleTimeoutMinutes"
+                               @oninput="e => _idleTimeoutMinutes = TryParseInt(e.Value?.ToString(), 30)" />
+                        <span class="config-hint">
+                            Shut down when idle for this many minutes (10 min uptime guard applies).
+                        </span>
+                    </div>
+                </div>
+
+                @* ── Auto-shutdown toggle ─────────────────────────────────────── *@
+                <div class="config-row">
+                    <label class="config-label" for="pi-shutdown-enabled">Auto-Shutdown Enabled</label>
+                    <div class="config-control">
+                        <input type="checkbox" id="pi-shutdown-enabled"
+                               checked="@_shutdownEnabled"
+                               @onchange="e => _shutdownEnabled = (bool)(e.Value ?? true)" />
+                        <span class="config-hint">
+                            Allow the agent to automatically power off this Pi when idle.
+                        </span>
+                    </div>
+                </div>
+
+                @* ── Jellyfin URL ─────────────────────────────────────────────── *@
+                <div class="config-row">
+                    <label class="config-label" for="pi-jf-url">Jellyfin URL</label>
+                    <div class="config-control">
+                        <input type="text" id="pi-jf-url"
+                               class="config-input" style="width:240px"
+                               placeholder="http://192.168.1.30:8096"
+                               value="@_jellyfinUrl"
+                               @oninput="e => _jellyfinUrl = e.Value?.ToString() ?? string.Empty" />
+                        <span class="config-hint">Base URL of your Jellyfin server.</span>
+                    </div>
+                </div>
+
+                @* ── Jellyfin API key ─────────────────────────────────────────── *@
+                <div class="config-row">
+                    <label class="config-label">Jellyfin API Key</label>
+                    <div class="config-control">
+                        @if (_jellyfinKeyConfigured && !_replaceJellyfinKey)
+                        {
+                            <div style="display:flex;align-items:center;gap:8px">
+                                <span class="config-hint" style="font-size:1rem;letter-spacing:2px">&#x25CF;&#x25CF;&#x25CF;&#x25CF;</span>
+                                <span class="config-hint val-green">Configured</span>
+                                <button class="btn-secondary btn-sm" @onclick="() => _replaceJellyfinKey = true">Replace</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <input type="password" id="pi-jf-key"
+                                   class="config-input" style="width:240px"
+                                   placeholder="@(_jellyfinKeyConfigured ? "Enter new key to replace" : "Paste API key")"
+                                   value="@_jellyfinKeyNew"
+                                   @oninput="e => _jellyfinKeyNew = e.Value?.ToString() ?? string.Empty" />
+                            @if (_jellyfinKeyConfigured)
+                            {
+                                <button class="btn-secondary btn-sm" style="margin-top:4px"
+                                        @onclick="() => { _replaceJellyfinKey = false; _jellyfinKeyNew = string.Empty; }">
+                                    Cancel
+                                </button>
+                            }
+                        }
+                        <span class="config-hint">Used to check active Jellyfin streams before shutdown.</span>
+                    </div>
+                </div>
+
+                @* ── Telegram bot token ───────────────────────────────────────── *@
+                <div class="config-row">
+                    <label class="config-label">Telegram Bot Token</label>
+                    <div class="config-control">
+                        @if (_telegramTokenConfigured && !_replaceTelegramToken)
+                        {
+                            <div style="display:flex;align-items:center;gap:8px">
+                                <span class="config-hint" style="font-size:1rem;letter-spacing:2px">&#x25CF;&#x25CF;&#x25CF;&#x25CF;</span>
+                                <span class="config-hint val-green">Configured</span>
+                                <button class="btn-secondary btn-sm" @onclick="() => _replaceTelegramToken = true">Replace</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <input type="password" id="pi-tg-token"
+                                   class="config-input" style="width:240px"
+                                   placeholder="@(_telegramTokenConfigured ? "Enter new token to replace" : "Bot token")"
+                                   value="@_telegramTokenNew"
+                                   @oninput="e => _telegramTokenNew = e.Value?.ToString() ?? string.Empty" />
+                            @if (_telegramTokenConfigured)
+                            {
+                                <button class="btn-secondary btn-sm" style="margin-top:4px"
+                                        @onclick="() => { _replaceTelegramToken = false; _telegramTokenNew = string.Empty; }">
+                                    Cancel
+                                </button>
+                            }
+                        }
+                        <span class="config-hint">Sends idle warnings and shutdown notifications.</span>
+                    </div>
+                </div>
+
+                @* ── Telegram chat ID ─────────────────────────────────────────── *@
+                <div class="config-row">
+                    <label class="config-label" for="pi-tg-chat">Telegram Chat ID</label>
+                    <div class="config-control">
+                        <input type="text" id="pi-tg-chat"
+                               class="config-input" style="width:180px"
+                               placeholder="-1001234567890"
+                               value="@_telegramChatId"
+                               @oninput="e => _telegramChatId = e.Value?.ToString() ?? string.Empty" />
+                        <span class="config-hint">Chat or group ID for Telegram notifications.</span>
+                    </div>
+                </div>
+
+                @* ── Save button ──────────────────────────────────────────────── *@
+                <div class="config-row">
+                    <div class="config-label"></div>
+                    <div class="config-control">
+                        <button class="btn-primary" @onclick="SaveAsync" disabled="@_saving">
+                            @(_saving ? "Saving…" : "Save")
+                        </button>
+                        @if (_saveMsg is not null)
+                        {
+                            <span class="save-confirm" style="color:@(_saveOk ? "#3fb950" : "#f85149");margin-left:10px">
+                                @_saveMsg
+                            </span>
+                        }
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+}
+
+@code {
+    [Parameter] public string BaseUrl    { get; set; } = "";
+    [Parameter] public string DeviceName { get; set; } = "";
+
+    private bool      _offline  = false;
+    private JsonNode? _config;
+    private bool      _disposed = false;
+
+    // Editable fields
+    private int    _idleTimeoutMinutes   = 30;
+    private bool   _shutdownEnabled      = true;
+    private string _jellyfinUrl          = "";
+    private string _jellyfinKeyNew       = "";
+    private bool   _jellyfinKeyConfigured = false;
+    private bool   _replaceJellyfinKey   = false;
+    private string _telegramTokenNew     = "";
+    private bool   _telegramTokenConfigured = false;
+    private bool   _replaceTelegramToken = false;
+    private string _telegramChatId       = "";
+
+    private bool    _saving  = false;
+    private string? _saveMsg;
+    private bool    _saveOk;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var cfg = await Pi.ConfigAsync(BaseUrl);
+        if (cfg is null)
+        {
+            _offline = true;
+            return;
+        }
+        _config = cfg;
+        LoadFromConfig(cfg);
+    }
+
+    private void LoadFromConfig(JsonNode cfg)
+    {
+        _idleTimeoutMinutes     = cfg["idle_timeout_minutes"]?.GetValue<int>() ?? 30;
+        _shutdownEnabled        = cfg["shutdown_enabled"]?.GetValue<bool>() ?? true;
+        _jellyfinUrl            = cfg["jellyfin_url"]?.ToString() ?? "";
+        _telegramChatId         = cfg["telegram_chat_id"]?.ToString() ?? "";
+
+        // API returns "***" when a secret is set; don't echo it, just flag as configured
+        var jfKey   = cfg["jellyfin_api_key"]?.ToString() ?? "";
+        var tgToken = cfg["telegram_bot_token"]?.ToString() ?? "";
+        _jellyfinKeyConfigured  = !string.IsNullOrEmpty(jfKey) && jfKey != "***" || jfKey == "***";
+        _telegramTokenConfigured = !string.IsNullOrEmpty(tgToken) && tgToken != "***" || tgToken == "***";
+        // Simplify: any non-empty value (including "***") means configured
+        _jellyfinKeyConfigured  = !string.IsNullOrEmpty(jfKey);
+        _telegramTokenConfigured = !string.IsNullOrEmpty(tgToken);
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving  = true;
+        _saveMsg = null;
+        StateHasChanged();
+        try
+        {
+            var body = new JsonObject
+            {
+                ["idle_timeout_minutes"] = _idleTimeoutMinutes,
+                ["shutdown_enabled"]     = _shutdownEnabled,
+                ["jellyfin_url"]         = _jellyfinUrl,
+                ["telegram_chat_id"]     = _telegramChatId,
+            };
+
+            // Only include secrets if the user typed a new value
+            if (!string.IsNullOrEmpty(_jellyfinKeyNew))
+                body["jellyfin_api_key"] = _jellyfinKeyNew;
+
+            if (!string.IsNullOrEmpty(_telegramTokenNew))
+                body["telegram_bot_token"] = _telegramTokenNew;
+
+            var ok = await Pi.SetConfigAsync(BaseUrl, body);
+            _saveOk  = ok;
+            _saveMsg = ok ? "Saved ✓" : "Save failed";
+
+            if (ok)
+            {
+                // Reload to get fresh masked values
+                var fresh = await Pi.ConfigAsync(BaseUrl);
+                if (fresh is not null)
+                {
+                    _config = fresh;
+                    LoadFromConfig(fresh);
+                    _jellyfinKeyNew   = "";
+                    _telegramTokenNew = "";
+                    _replaceJellyfinKey   = false;
+                    _replaceTelegramToken = false;
+                }
+            }
+
+            await Task.Delay(3000);
+            _saveMsg = null;
+            if (!_disposed)
+                await InvokeAsync(StateHasChanged);
+        }
+        finally
+        {
+            _saving = false;
+            if (!_disposed)
+                StateHasChanged();
+        }
+    }
+
+    public void Dispose() => _disposed = true;
+
+    static int TryParseInt(string? s, int fallback) =>
+        int.TryParse(s, out var v) ? v : fallback;
+}
