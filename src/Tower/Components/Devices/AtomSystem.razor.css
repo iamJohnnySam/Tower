@@ -1,0 +1,252 @@
+/* ─── AtomSystem component ───────────────────────────────────────────────── */
+
+.atom-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    max-width: 1100px;
+}
+
+.atom-section-block {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 1rem 1.1rem;
+}
+
+.atom-block-title {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #8b949e;
+    margin-bottom: 0.75rem;
+}
+
+/* ─── Header bar ─────────────────────────────────────────────────────────── */
+
+.atom-header {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #21262d;
+}
+
+.atom-hostname {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #e6edf3;
+}
+
+.atom-uptime {
+    font-size: 0.8rem;
+    color: #8b949e;
+}
+
+/* ─── Cards grid ─────────────────────────────────────────────────────────── */
+
+.atom-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 0.85rem;
+}
+
+.atom-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 0.85rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+.atom-card-title {
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #8b949e;
+}
+
+.atom-big-value {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.atom-sub {
+    font-size: 0.75rem;
+    color: #8b949e;
+}
+
+/* ─── Core bars ──────────────────────────────────────────────────────────── */
+
+.atom-core-bars {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    margin-top: 6px;
+}
+
+.core-bar-wrap {
+    flex: 1 1 24px;
+    min-width: 20px;
+    max-width: 40px;
+}
+
+.core-bar {
+    height: 6px;
+    background: #0d1117;
+    border-radius: 2px;
+    border: 1px solid #30363d;
+    overflow: hidden;
+}
+
+.core-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: #58a6ff;
+    transition: width 0.4s ease;
+}
+
+.core-bar-fill.val-green { background: #3fb950; }
+.core-bar-fill.val-amber { background: #d29922; }
+.core-bar-fill.val-red   { background: #f85149; }
+
+/* ─── Sparkline ──────────────────────────────────────────────────────────── */
+
+.atom-sparkline svg {
+    display: block;
+    width: 100%;
+}
+
+/* ─── Network row ────────────────────────────────────────────────────────── */
+
+.atom-net-row {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+/* ─── KV list / table-like rows ──────────────────────────────────────────── */
+
+.atom-kv-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.atom-row-kv {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    padding: 2px 0;
+    border-bottom: 1px solid #21262d;
+}
+
+.atom-row-kv:last-child {
+    border-bottom: none;
+}
+
+.atom-row-kv > span:first-child {
+    color: #8b949e;
+}
+
+/* ─── Clean data table ───────────────────────────────────────────────────── */
+
+.atom-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+}
+
+.atom-table th {
+    text-align: left;
+    color: #8b949e;
+    font-weight: 500;
+    padding: 4px 8px 4px 0;
+    border-bottom: 1px solid #30363d;
+    white-space: nowrap;
+}
+
+.atom-table td {
+    padding: 4px 8px 4px 0;
+    border-bottom: 1px solid #21262d;
+    vertical-align: middle;
+}
+
+.atom-table tr:last-child td {
+    border-bottom: none;
+}
+
+/* ─── Temperatures ───────────────────────────────────────────────────────── */
+
+.atom-temps {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.temp-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.8rem;
+    padding: 2px 0;
+    border-bottom: 1px solid #21262d;
+}
+
+.temp-row:last-child {
+    border-bottom: none;
+}
+
+.temp-label {
+    color: #8b949e;
+}
+
+.temp-val {
+    font-weight: 600;
+}
+
+/* ─── Services grid in atom section ──────────────────────────────────────── */
+
+.svc-item {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.8rem;
+    color: #c9d1d9;
+    padding: 0.2rem 0;
+}
+
+.svc-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.svc-status {
+    font-size: 0.68rem;
+    color: #f85149;
+}
+
+/* ─── Mono helper ────────────────────────────────────────────────────────── */
+
+.mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.78rem;
+}
+
+/* ─── Accent colour shorthand ────────────────────────────────────────────── */
+
+.accent {
+    color: #58a6ff;
+}

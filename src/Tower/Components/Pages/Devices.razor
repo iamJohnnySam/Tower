@@ -15,7 +15,7 @@
         @foreach (var dev in Cfg.Value.Devices)
         {
             var isActive = string.Equals(dev.Id, EffectiveDevice, StringComparison.OrdinalIgnoreCase);
-            var defaultSec = dev.Kind == "self" ? "system" : "system";
+            const string defaultSec = "system";
             <a class="device-rail-item @(isActive ? "active" : "")"
                href="/devices/@dev.Id/@defaultSec">
                 <span class="dev-dot @(dev.Kind == "self" ? "dot-green" : "dot-neutral")"></span>

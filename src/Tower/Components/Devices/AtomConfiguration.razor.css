@@ -1,0 +1,97 @@
+/* ─── AtomConfiguration component ────────────────────────────────────────── */
+
+.atom-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    max-width: 800px;
+}
+
+.atom-section-block {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 1rem 1.1rem;
+}
+
+.atom-block-title {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #8b949e;
+    margin-bottom: 0.75rem;
+}
+
+.atom-sub {
+    font-size: 0.75rem;
+    color: #8b949e;
+}
+
+/* ─── Config form ─────────────────────────────────────────────────────────── */
+
+.config-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.config-row {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    align-items: flex-start;
+    gap: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #21262d;
+}
+
+.config-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.config-label {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: #c9d1d9;
+    padding-top: 0.3rem;
+    cursor: default;
+}
+
+.config-control {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.config-input {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    color: #c9d1d9;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    width: 120px;
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.config-input:focus {
+    border-color: #58a6ff;
+}
+
+.config-hint {
+    font-size: 0.72rem;
+    color: #8b949e;
+    line-height: 1.4;
+}
+
+/* ─── Save confirmation ───────────────────────────────────────────────────── */
+
+.save-confirm {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #3fb950;
+    margin-left: 10px;
+}

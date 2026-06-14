@@ -1,8 +1,10 @@
 @using Tower.Core.Settings
 @using Tower.Core.Maintenance
+@using Tower.Core.Data
 @inject SettingsService Settings
 @inject MaintenanceRunner Runner
 @inject MaintenanceOptions Opts
+@inject TowerDbContext Db
 
 <div class="atom-section">
 
@@ -161,6 +163,15 @@
         _windowHour    = Settings.Get("maint.window_hour");
         var rebootVal  = Settings.Get("maint.reboot_enabled");
         _rebootEnabled = rebootVal is null || rebootVal.Trim().ToLowerInvariant() != "false";
+
+        // Compute best window from CPU profile data in DB; fall back to 03:00
+        try
+        {
+            var (cpu, samples) = CpuProfileRecorder.LoadFromDb(Db);
+            int best = CpuProfile.BestWindow(cpu, samples);
+            _bestWindow = $"{best:00}:00";
+        }
+        catch { _bestWindow = "03:00"; }
 
         RefreshLog();
     }

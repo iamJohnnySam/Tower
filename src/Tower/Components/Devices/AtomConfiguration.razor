@@ -4,6 +4,7 @@
 @using Microsoft.EntityFrameworkCore
 @inject SettingsService Settings
 @inject TowerDbContext Db
+@implements IDisposable
 
 <div class="atom-section">
 
@@ -80,6 +81,7 @@
     private bool   _rebootEnabled  = true;
     private bool   _saved          = false;
     private string _bestWindowHint = "";
+    private bool   _disposed       = false;
 
     protected override void OnInitialized()
     {
@@ -107,6 +109,9 @@
         _saved = true;
         await Task.Delay(2000);
         _saved = false;
-        StateHasChanged();
+        if (!_disposed)
+            await InvokeAsync(StateHasChanged);
     }
+
+    public void Dispose() => _disposed = true;
 }

@@ -77,6 +77,50 @@ h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.3rem; }
     border-color: #388bfd;
 }
 
+/* ── Global value colour utilities (used by Devices/Atom components) ─────── */
+.val-green { color: #3fb950; }
+.val-amber { color: #d29922; }
+.val-red   { color: #f85149; }
+
+/* ── Mini progress bar (shared by Home + Atom components) ────────────────── */
+.mc-bar {
+    height: 8px;
+    background: #0d1117;
+    border-radius: 3px;
+    border: 1px solid #30363d;
+    overflow: hidden;
+}
+
+.mc-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: #58a6ff;
+    transition: width 0.4s ease;
+}
+
+.mc-bar-fill.val-green { background: #3fb950; }
+.mc-bar-fill.val-amber { background: #d29922; }
+.mc-bar-fill.val-red   { background: #f85149; }
+
+/* ── Service status dots (shared) ────────────────────────────────────────── */
+.svc-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.svc-on  { background: #3fb950; }
+.svc-off { background: #f85149; }
+
+/* ── Services grid (used on Home and AtomSystem) ─────────────────────────── */
+.services-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 0.35rem;
+}
+
 /* ── Misc ────────────────────────────────────────────────────────────────── */
 .blazor-error-boundary {
     background: #161b22;

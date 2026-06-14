@@ -1,0 +1,198 @@
+/* ─── AtomMaintenance component ──────────────────────────────────────────── */
+
+.atom-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    max-width: 900px;
+}
+
+.atom-section-block {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 1rem 1.1rem;
+}
+
+.atom-block-title {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #8b949e;
+    margin-bottom: 0.75rem;
+}
+
+.atom-sub {
+    font-size: 0.75rem;
+    color: #8b949e;
+}
+
+.atom-kv-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.atom-row-kv {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    padding: 2px 0;
+    border-bottom: 1px solid #21262d;
+}
+
+.atom-row-kv:last-child {
+    border-bottom: none;
+}
+
+.atom-row-kv > span:first-child {
+    color: #8b949e;
+}
+
+/* ─── Status badge ────────────────────────────────────────────────────────── */
+
+.maint-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #fff;
+    /* background set inline for result colour */
+}
+
+.maint-status-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+/* ─── Run result ─────────────────────────────────────────────────────────── */
+
+.maint-run-result {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+/* ─── Maintenance log ─────────────────────────────────────────────────────── */
+
+.maint-log {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.72rem;
+    line-height: 1.5;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    padding: 0.75rem 0.9rem;
+    max-height: 360px;
+    overflow-y: auto;
+    color: #c9d1d9;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin: 0;
+}
+
+/* ─── Danger confirm box ──────────────────────────────────────────────────── */
+
+.danger-confirm-box {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    background: rgba(248, 81, 73, 0.06);
+    border: 1px solid rgba(248, 81, 73, 0.25);
+    border-radius: 6px;
+    padding: 0.65rem 0.9rem;
+}
+
+.danger-row {
+    display: flex;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+/* ─── Buttons ────────────────────────────────────────────────────────────── */
+
+.btn-danger {
+    display: inline-block;
+    padding: 0.32rem 0.85rem;
+    border-radius: 6px;
+    border: 1px solid #f85149;
+    background: #f85149;
+    color: #fff;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 500;
+    line-height: 1.5;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.btn-danger:hover {
+    background: #da3633;
+    border-color: #da3633;
+}
+
+.btn-danger:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.btn-danger-outline {
+    display: inline-block;
+    padding: 0.32rem 0.85rem;
+    border-radius: 6px;
+    border: 1px solid #f85149;
+    background: transparent;
+    color: #f85149;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 500;
+    line-height: 1.5;
+    transition: background 0.15s;
+}
+
+.btn-danger-outline:hover {
+    background: rgba(248, 81, 73, 0.1);
+}
+
+.btn-secondary {
+    display: inline-block;
+    padding: 0.32rem 0.85rem;
+    border-radius: 6px;
+    border: 1px solid #30363d;
+    background: #21262d;
+    color: #c9d1d9;
+    cursor: pointer;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.btn-secondary:hover {
+    background: #30363d;
+    border-color: #8b949e;
+}
+
+.btn-sm {
+    padding: 0.18rem 0.6rem;
+    font-size: 0.75rem;
+}
+
+/* ─── Accent link ────────────────────────────────────────────────────────── */
+
+.link-accent {
+    color: #58a6ff;
+    font-size: 0.82rem;
+    text-decoration: none;
+}
+
+.link-accent:hover {
+    text-decoration: underline;
+}
