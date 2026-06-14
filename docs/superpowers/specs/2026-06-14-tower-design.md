@@ -14,7 +14,9 @@ Communication, Jellyfin, Settings.
 ## Decisions
 
 - **Stack:** ASP.NET Core + Blazor Server, .NET 10. Single deployable.
-- **Port:** 5600. systemd unit `tower.service`. `deploy.sh` (stop → publish → start).
+- **Port:** **8889 during development** (server-monitor keeps 8888), switched to **8888**
+  at cutover once server-monitor is retired (Task 16). Open the active port in `ufw`.
+  systemd unit `tower.service`. `deploy.sh` (stop → publish → start).
 - **Access:** LAN + Tailscale, no login (same posture as server-monitor).
 - **Live updates:** Blazor Server / SignalR. Background pollers as `IHostedService`.
 - **Data:** one local SQLite `tower.db` via EF Core (Code-First). DB and log sizes
