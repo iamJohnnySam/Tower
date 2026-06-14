@@ -133,6 +133,9 @@ public class StatsWorker(LiveState state) : BackgroundService
         var gpu  = GpuCollector.Collect();
         var noip = NoIpCollector.Collect();
 
+        // ── Mounted partitions (DriveInfo) ────────────────────────────────────
+        var partitions = ReadPartitions();
+
         // ── Hostname / Uptime ─────────────────────────────────────────────────
         string hostname = System.Net.Dns.GetHostName();
         string uptime   = await ReadUptimeStringAsync(ct);
@@ -166,10 +169,52 @@ public class StatsWorker(LiveState state) : BackgroundService
             Temps         = temps,
             Gpu           = gpu,
             NoIp          = noip,
+            Partitions    = partitions,
         };
     }
 
     // ─── Private helpers ──────────────────────────────────────────────────────
+
+    // Build list of mounted partitions from DriveInfo, skipping pseudo filesystems
+    private static List<Tower.Core.State.PartitionInfo> ReadPartitions()
+    {
+        var result = new List<Tower.Core.State.PartitionInfo>();
+        var pseudoFs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "tmpfs", "devtmpfs", "squashfs", "overlay", "proc", "sysfs",
+            "cgroup", "cgroup2", "devpts", "mqueue", "debugfs", "tracefs",
+            "autofs", "hugetlbfs", "fusectl", "configfs", "securityfs",
+            "pstore", "bpf", "ramfs", "binfmt_misc", "rpc_pipefs"
+        };
+        try
+        {
+            foreach (var drive in System.IO.DriveInfo.GetDrives())
+            {
+                try
+                {
+                    if (!drive.IsReady) continue;
+                    if (pseudoFs.Contains(drive.DriveFormat)) continue;
+                    if (drive.Name.StartsWith("/snap", StringComparison.Ordinal)) continue;
+
+                    ulong total = (ulong)drive.TotalSize;
+                    ulong free  = (ulong)drive.TotalFreeSpace;
+                    ulong used  = total > free ? total - free : 0;
+                    double pct  = total > 0 ? (double)used / total * 100.0 : 0;
+
+                    result.Add(new Tower.Core.State.PartitionInfo(
+                        Mount:      drive.Name,
+                        Fstype:     drive.DriveFormat,
+                        TotalBytes: total,
+                        UsedBytes:  used,
+                        FreeBytes:  free,
+                        Pct:        pct));
+                }
+                catch { /* skip this drive */ }
+            }
+        }
+        catch { /* non-fatal */ }
+        return result;
+    }
 
     // Parse cpu0, cpu1, … lines from /proc/stat
     private static CpuTimes[] ParseAllCoreTimes(string[] statLines)

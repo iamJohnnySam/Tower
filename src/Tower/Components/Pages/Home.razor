@@ -253,20 +253,8 @@
 
     double RootDiskPct()
     {
-        var segs = Live.RootSegments;
-        if (segs.Count == 0) return -1;
-        // RootSegments represent sub-dirs of /; total size is sum
-        // Better: use Disks which have usage info from SmartInfo?
-        // Actually, derive from /proc or estimate: segments = top dirs under /
-        // For overview, report from disks if available, else skip
-        var disks = Live.Disks;
-        if (disks.Count > 0)
-        {
-            // We can't reliably compute % from SMART alone; fallback: sum root segments vs total
-            // Use df-derived info if stored — LiveState doesn't have it explicitly;
-            // return -1 to show "—" (disk % isn't stored in current model)
-        }
-        return -1;
+        var p = Live.Stats.Partitions.FirstOrDefault(x => x.Mount == "/");
+        return p is not null ? p.Pct : -1;
     }
 
     List<(int level, string text)> BuildAlerts(StatsSnapshot s)

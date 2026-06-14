@@ -7,6 +7,7 @@ namespace Tower.Core.State;
 public record NicInfo(string Name, bool Up, long SpeedMbps, string Ip, ulong Sent, ulong Recv);
 public record ProcInfo(int Pid, string Name, string User, double Cpu, long MemBytes);
 public record TempInfo(string Chip, string Label, double Temp);
+public record PartitionInfo(string Mount, string Fstype, ulong TotalBytes, ulong UsedBytes, ulong FreeBytes, double Pct);
 
 // ─── Snapshot (one point-in-time view for rendering) ─────────────────────────
 
@@ -55,6 +56,9 @@ public class StatsSnapshot
     // GPU / NoIP (never null — always at least "none" / "unknown")
     public GpuStats Gpu { get; init; } = new GpuStats("none");
     public NoIpStatus NoIp { get; init; } = new NoIpStatus("unknown");
+
+    // Mounted partitions (from DriveInfo)
+    public List<PartitionInfo> Partitions { get; init; } = new();
 }
 
 // ─── LiveState singleton ──────────────────────────────────────────────────────

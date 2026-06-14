@@ -1,0 +1,260 @@
+@using Tower.Core.Settings
+@using Tower.Core.Maintenance
+@inject SettingsService Settings
+@inject MaintenanceRunner Runner
+@inject MaintenanceOptions Opts
+
+<div class="atom-section">
+
+    @* ── OS Update Status ─────────────────────────────────────────────────────── *@
+    <div class="atom-section-block">
+        <div class="atom-block-title">OS Update Status</div>
+        <div class="maint-status-row">
+            @{ var (statusColor, statusLabel) = LastResultStyle(_lastResult); }
+            <span class="maint-badge" style="background:@statusColor">@statusLabel</span>
+            @if (!string.IsNullOrEmpty(_lastTs))
+            {
+                <span class="atom-sub">Last run: @_lastTs</span>
+            }
+            else
+            {
+                <span class="atom-sub text-muted">No maintenance run recorded.</span>
+            }
+        </div>
+        @if (!string.IsNullOrEmpty(_lastResult) && _lastResult != "none")
+        {
+            <div class="atom-sub" style="margin-top:4px">Result: <strong>@_lastResult</strong></div>
+        }
+    </div>
+
+    @* ── Scheduler Status (read-only) ─────────────────────────────────────────── *@
+    <div class="atom-section-block">
+        <div class="atom-block-title">Scheduler Status</div>
+        <div class="atom-kv-list">
+            <div class="atom-row-kv">
+                <span>Enabled</span>
+                <span class="@(_schedEnabled ? "val-green" : "val-red")">@(_schedEnabled ? "Yes" : "No")</span>
+            </div>
+            <div class="atom-row-kv">
+                <span>Window Hour</span>
+                <span>@(_windowHour ?? $"Auto ({_bestWindow})")</span>
+            </div>
+            <div class="atom-row-kv">
+                <span>Auto-Reboot</span>
+                <span class="@(_rebootEnabled ? "val-green" : "text-muted")">@(_rebootEnabled ? "Yes" : "No")</span>
+            </div>
+        </div>
+        <div style="margin-top:8px">
+            <a href="/devices/atom/configuration" class="link-accent">Change in Configuration →</a>
+        </div>
+    </div>
+
+    @* ── Run Now ──────────────────────────────────────────────────────────────── *@
+    <div class="atom-section-block">
+        <div class="atom-block-title">Manual Maintenance</div>
+        <div class="atom-sub text-muted" style="margin-bottom:10px">
+            Triggers <code>sudo @Opts.ScriptPath</code> — this runs an apt upgrade.
+        </div>
+
+        @if (!_runConfirm)
+        {
+            <button class="btn-secondary" @onclick="() => _runConfirm = true">Run Now…</button>
+        }
+        else
+        {
+            <div class="danger-confirm-box">
+                <span class="val-amber">This will run apt upgrade. Confirm?</span>
+                <button class="btn-danger" @onclick="RunNowAsync" disabled="@_running">
+                    @(_running ? "Running…" : "Confirm — Run Now")
+                </button>
+                <button class="btn-secondary" @onclick="() => _runConfirm = false">Cancel</button>
+            </div>
+        }
+
+        @if (_runResult is not null)
+        {
+            <div class="maint-run-result" style="margin-top:10px">
+                @{ var (rc, rl) = LastResultStyle(_runResult.Status); }
+                <span class="maint-badge" style="background:@rc">@rl</span>
+                @if (!string.IsNullOrEmpty(_runResult.Message))
+                {
+                    <span class="atom-sub"> — @_runResult.Message</span>
+                }
+            </div>
+        }
+    </div>
+
+    @* ── Reboot / Shutdown ────────────────────────────────────────────────────── *@
+    <div class="atom-section-block">
+        <div class="atom-block-title" style="color:#f85149">Danger Zone</div>
+
+        <div class="danger-row">
+            @if (!_rebootConfirm)
+            {
+                <button class="btn-danger-outline" @onclick="() => _rebootConfirm = true">Reboot…</button>
+            }
+            else
+            {
+                <div class="danger-confirm-box">
+                    <span class="val-red">This will reboot the server immediately.</span>
+                    <button class="btn-danger" @onclick="DoRebootAsync">Confirm — Reboot Now</button>
+                    <button class="btn-secondary" @onclick="() => _rebootConfirm = false">Cancel</button>
+                </div>
+            }
+        </div>
+
+        <div class="danger-row" style="margin-top:10px">
+            @if (!_shutdownConfirm)
+            {
+                <button class="btn-danger-outline" @onclick="() => _shutdownConfirm = true">Shutdown…</button>
+            }
+            else
+            {
+                <div class="danger-confirm-box">
+                    <span class="val-red">This will power off the server immediately.</span>
+                    <button class="btn-danger" @onclick="DoShutdownAsync">Confirm — Shutdown Now</button>
+                    <button class="btn-secondary" @onclick="() => _shutdownConfirm = false">Cancel</button>
+                </div>
+            }
+        </div>
+
+        @if (!string.IsNullOrEmpty(_powerMsg))
+        {
+            <div class="atom-sub val-amber" style="margin-top:8px">@_powerMsg</div>
+        }
+    </div>
+
+    @* ── Maintenance Log ──────────────────────────────────────────────────────── *@
+    <div class="atom-section-block">
+        <div class="atom-block-title" style="display:flex;align-items:center;gap:12px">
+            Maintenance Log
+            <button class="btn-secondary btn-sm" @onclick="RefreshLog">Refresh</button>
+        </div>
+        <pre class="maint-log">@_logText</pre>
+    </div>
+
+</div>
+
+@code {
+    private string  _lastResult  = "none";
+    private string  _lastTs      = "";
+    private bool    _schedEnabled;
+    private string? _windowHour;
+    private string  _bestWindow  = "03:00";
+    private bool    _rebootEnabled = true;
+
+    private bool    _runConfirm   = false;
+    private bool    _running      = false;
+    private Tower.Core.Maintenance.MaintenanceResult? _runResult;
+
+    private bool    _rebootConfirm   = false;
+    private bool    _shutdownConfirm = false;
+    private string  _powerMsg        = "";
+
+    private string  _logText = "(no log yet)";
+
+    protected override void OnInitialized()
+    {
+        _lastResult    = Settings.Get("maint.last_result") ?? "none";
+        _lastTs        = Settings.Get("maint.last_ts")     ?? "";
+        _schedEnabled  = Settings.Get("maint.enabled") == "true";
+        _windowHour    = Settings.Get("maint.window_hour");
+        var rebootVal  = Settings.Get("maint.reboot_enabled");
+        _rebootEnabled = rebootVal is null || rebootVal.Trim().ToLowerInvariant() != "false";
+
+        RefreshLog();
+    }
+
+    private void RefreshLog()
+    {
+        try
+        {
+            if (File.Exists(Opts.LogPath))
+            {
+                var lines = File.ReadAllLines(Opts.LogPath);
+                // show last 120 lines
+                _logText = lines.Length > 120
+                    ? string.Join('\n', lines[^120..])
+                    : string.Join('\n', lines);
+            }
+            else
+            {
+                _logText = "(no log yet)";
+            }
+        }
+        catch (Exception ex)
+        {
+            _logText = $"(error reading log: {ex.Message})";
+        }
+    }
+
+    private async Task RunNowAsync()
+    {
+        _running = true;
+        _runResult = null;
+        StateHasChanged();
+        try
+        {
+            var result = await Task.Run(() => Runner.Run("manual"));
+            _runResult = result;
+            // Refresh settings-derived status
+            _lastResult = Settings.Get("maint.last_result") ?? "none";
+            _lastTs     = Settings.Get("maint.last_ts") ?? "";
+            RefreshLog();
+        }
+        finally
+        {
+            _running    = false;
+            _runConfirm = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DoRebootAsync()
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                "sudo", "/sbin/shutdown -r now")
+            {
+                UseShellExecute = false,
+            });
+            _powerMsg = "Reboot command sent…";
+        }
+        catch (Exception ex)
+        {
+            _powerMsg = $"Failed: {ex.Message}";
+        }
+        _rebootConfirm = false;
+        await Task.CompletedTask;
+    }
+
+    private async Task DoShutdownAsync()
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                "sudo", "/sbin/shutdown now")
+            {
+                UseShellExecute = false,
+            });
+            _powerMsg = "Shutdown command sent…";
+        }
+        catch (Exception ex)
+        {
+            _powerMsg = $"Failed: {ex.Message}";
+        }
+        _shutdownConfirm = false;
+        await Task.CompletedTask;
+    }
+
+    static (string color, string label) LastResultStyle(string? result) => result?.ToLowerInvariant() switch
+    {
+        "success"        => ("#3fb950", "Success"),
+        "success+reboot" => ("#3fb950", "Success + Reboot"),
+        "failed"         => ("#f85149", "Failed"),
+        "error"          => ("#f85149", "Error"),
+        "skipped"        => ("#d29922", "Skipped"),
+        _                => ("#555", "No Run"),
+    };
+}

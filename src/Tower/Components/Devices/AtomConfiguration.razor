@@ -1,0 +1,112 @@
+@using Tower.Core.Settings
+@using Tower.Core.Maintenance
+@using Tower.Core.Data
+@using Microsoft.EntityFrameworkCore
+@inject SettingsService Settings
+@inject TowerDbContext Db
+
+<div class="atom-section">
+
+    <div class="atom-section-block">
+        <div class="atom-block-title">Maintenance Configuration</div>
+        <p class="atom-sub text-muted" style="margin-bottom:14px">
+            Configure the automated maintenance scheduler for this device.
+            API keys and external service credentials are managed in the Settings tab.
+        </p>
+
+        <div class="config-form">
+
+            @* ── Scheduler enabled ───────────────────────────────────────────── *@
+            <div class="config-row">
+                <label class="config-label" for="maint-enabled">Scheduler Enabled</label>
+                <div class="config-control">
+                    <input type="checkbox" id="maint-enabled"
+                           checked="@_maintEnabled"
+                           @onchange="e => _maintEnabled = (bool)(e.Value ?? false)" />
+                    <span class="config-hint">Automatically run maintenance during the configured window.</span>
+                </div>
+            </div>
+
+            @* ── Window hour ─────────────────────────────────────────────────── *@
+            <div class="config-row">
+                <label class="config-label" for="window-hour">Maintenance Window Hour</label>
+                <div class="config-control">
+                    <input type="number" id="window-hour" min="0" max="23"
+                           class="config-input"
+                           placeholder="auto"
+                           value="@_windowHourStr"
+                           @oninput="e => { _windowHourStr = e.Value?.ToString() ?? string.Empty; }" />
+                    <span class="config-hint">
+                        Hour (0–23) to run maintenance, or leave empty for auto.
+                        @if (!string.IsNullOrWhiteSpace(_bestWindowHint))
+                        {
+                            <span> Best window from CPU history: <strong>@_bestWindowHint</strong></span>
+                        }
+                    </span>
+                </div>
+            </div>
+
+            @* ── Auto-reboot ─────────────────────────────────────────────────── *@
+            <div class="config-row">
+                <label class="config-label" for="reboot-enabled">Auto-Reboot After Updates</label>
+                <div class="config-control">
+                    <input type="checkbox" id="reboot-enabled"
+                           checked="@_rebootEnabled"
+                           @onchange="e => _rebootEnabled = (bool)(e.Value ?? false)" />
+                    <span class="config-hint">Reboot automatically if updates require it (only when uptime > 30 min).</span>
+                </div>
+            </div>
+
+            @* ── Save button ─────────────────────────────────────────────────── *@
+            <div class="config-row">
+                <div class="config-label"></div>
+                <div class="config-control">
+                    <button class="btn-primary" @onclick="SaveAsync">Save</button>
+                    @if (_saved)
+                    {
+                        <span class="save-confirm" style="color:#3fb950;margin-left:10px">Saved ✓</span>
+                    }
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+@code {
+    private bool   _maintEnabled   = false;
+    private string _windowHourStr  = "";
+    private bool   _rebootEnabled  = true;
+    private bool   _saved          = false;
+    private string _bestWindowHint = "";
+
+    protected override void OnInitialized()
+    {
+        _maintEnabled  = Settings.Get("maint.enabled") == "true";
+        _windowHourStr = Settings.Get("maint.window_hour") ?? "";
+        var rebootVal  = Settings.Get("maint.reboot_enabled");
+        _rebootEnabled = rebootVal is null || rebootVal.Trim().ToLowerInvariant() != "false";
+
+        // Compute best window hint from DB
+        try
+        {
+            var (cpu, samples) = Tower.Core.Maintenance.CpuProfileRecorder.LoadFromDb(Db);
+            int best = Tower.Core.Maintenance.CpuProfile.BestWindow(cpu, samples);
+            _bestWindowHint = $"{best:00}:00";
+        }
+        catch { _bestWindowHint = ""; }
+    }
+
+    private async Task SaveAsync()
+    {
+        Settings.Set("maint.enabled",        _maintEnabled ? "true" : null);
+        Settings.Set("maint.window_hour",    string.IsNullOrWhiteSpace(_windowHourStr) ? null : _windowHourStr.Trim());
+        Settings.Set("maint.reboot_enabled", _rebootEnabled ? "true" : "false");
+
+        _saved = true;
+        await Task.Delay(2000);
+        _saved = false;
+        StateHasChanged();
+    }
+}

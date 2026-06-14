@@ -1,6 +1,115 @@
 @page "/devices"
+@page "/devices/{Device}"
+@page "/devices/{Device}/{Section}"
+@using Microsoft.Extensions.Options
+@using Tower.Components.Devices
+@inject IOptions<TowerConfig> Cfg
 
 <PageTitle>Tower — Devices</PageTitle>
 
-<h1>Devices</h1>
-<p class="text-muted">Devices coming in M2 (Task 12).</p>
+<div class="devices-layout">
+
+    @* ── Left device sub-rail ─────────────────────────────────────────────── *@
+    <nav class="device-rail">
+        <div class="device-rail-title">Devices</div>
+        @foreach (var dev in Cfg.Value.Devices)
+        {
+            var isActive = string.Equals(dev.Id, EffectiveDevice, StringComparison.OrdinalIgnoreCase);
+            var defaultSec = dev.Kind == "self" ? "system" : "system";
+            <a class="device-rail-item @(isActive ? "active" : "")"
+               href="/devices/@dev.Id/@defaultSec">
+                <span class="dev-dot @(dev.Kind == "self" ? "dot-green" : "dot-neutral")"></span>
+                <span class="dev-rail-name">@dev.Name</span>
+                @if (dev.Kind == "self")
+                {
+                    <span class="dev-rail-badge">Self</span>
+                }
+                else
+                {
+                    <span class="dev-rail-badge">Pi</span>
+                }
+            </a>
+        }
+    </nav>
+
+    @* ── Main content area ─────────────────────────────────────────────────── *@
+    <div class="device-content">
+
+        @* ── Submenu (horizontal pills) ──────────────────────────────────────── *@
+        @if (EffectiveKind == "self")
+        {
+            <div class="device-submenu">
+                @foreach (var sec in new[] { "system", "maintenance", "configuration", "storage" })
+                {
+                    var isActive = string.Equals(sec, EffectiveSection, StringComparison.OrdinalIgnoreCase);
+                    <a class="submenu-pill @(isActive ? "active" : "")"
+                       href="/devices/@EffectiveDevice/@sec">@Capitalize(sec)</a>
+                }
+            </div>
+        }
+        else if (EffectiveKind == "pi")
+        {
+            <div class="device-submenu">
+                @foreach (var sec in new[] { "system", "maintenance", "configuration" })
+                {
+                    var isActive = string.Equals(sec, EffectiveSection, StringComparison.OrdinalIgnoreCase);
+                    <a class="submenu-pill @(isActive ? "active" : "")"
+                       href="/devices/@EffectiveDevice/@sec">@Capitalize(sec)</a>
+                }
+            </div>
+        }
+
+        @* ── Body ────────────────────────────────────────────────────────────── *@
+        <div class="device-body">
+            @if (EffectiveKind == "self")
+            {
+                @switch (EffectiveSection.ToLowerInvariant())
+                {
+                    case "system":
+                        <AtomSystem />
+                        break;
+                    case "maintenance":
+                        <AtomMaintenance />
+                        break;
+                    case "configuration":
+                        <AtomConfiguration />
+                        break;
+                    case "storage":
+                        <AtomStorage />
+                        break;
+                    default:
+                        <AtomSystem />
+                        break;
+                }
+            }
+            else if (EffectiveKind == "pi")
+            {
+                <p class="text-muted">Pi device views — coming in Task 13</p>
+            }
+            else
+            {
+                <p class="text-muted">No devices configured.</p>
+            }
+        </div>
+
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? Device  { get; set; }
+    [Parameter] public string? Section { get; set; }
+
+    private string EffectiveDevice  => Device  ?? DefaultDevice;
+    private string EffectiveSection => Section ?? "system";
+    private string EffectiveKind    => Cfg.Value.Devices
+        .FirstOrDefault(d => string.Equals(d.Id, EffectiveDevice, StringComparison.OrdinalIgnoreCase))
+        ?.Kind ?? "";
+
+    private string DefaultDevice =>
+        Cfg.Value.Devices.FirstOrDefault(d => d.Kind == "self")?.Id
+        ?? Cfg.Value.Devices.FirstOrDefault()?.Id
+        ?? "";
+
+    private static string Capitalize(string s) =>
+        string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s[1..];
+}
