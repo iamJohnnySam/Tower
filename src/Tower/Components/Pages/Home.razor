@@ -4,6 +4,7 @@
 @using Tower.Core.Metrics
 @using Microsoft.Extensions.Options
 @using Tower.Components.Shared
+@using System.Collections.Concurrent
 @inject LiveState Live
 @inject IOptions<TowerConfig> Cfg
 @inject PiAgentClient PiClient
@@ -222,7 +223,7 @@
 
 @code {
     private System.Threading.Timer? _timer;
-    private readonly Dictionary<string, bool?> _piOnline = new();
+    private readonly ConcurrentDictionary<string, bool?> _piOnline = new();
 
     protected override void OnInitialized()
     {
