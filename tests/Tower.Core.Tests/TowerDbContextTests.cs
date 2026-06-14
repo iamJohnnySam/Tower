@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Tower.Core.Data;
 using Tower.Core.Models;
 using Xunit;
+namespace Tower.Core.Tests;
 public class TowerDbContextTests {
     static TowerDbContext NewDb() {
         var o = new DbContextOptionsBuilder<TowerDbContext>().UseSqlite("DataSource=:memory:").Options;

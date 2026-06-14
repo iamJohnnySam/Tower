@@ -12,9 +12,11 @@ public class TowerDbContext(DbContextOptions<TowerDbContext> options) : DbContex
         b.Entity<CpuProfileSlot>().HasKey(x => x.Slot);
         b.Entity<CpuProfileSlot>().Property(x => x.Slot).ValueGeneratedNever();
         b.Entity<Setting>().HasKey(x => x.Key);
+        b.Entity<Setting>().Property(x => x.Key).ValueGeneratedNever();
         b.Entity<TelegramSubscriber>().HasKey(x => x.ChatId);
         b.Entity<TelegramSubscriber>().Property(x => x.ChatId).ValueGeneratedNever();
         b.Entity<PlayHistory>().HasIndex(x => x.StartedAt);
         b.Entity<PlayHistory>().HasIndex(x => x.MediaName);
+        b.Entity<TelegramMessage>().HasIndex(x => x.ChatId);
     }
 }
