@@ -1,6 +1,315 @@
 @page "/"
+@using Tower.Core.State
+@using Tower.Core.Pi
+@using Tower.Core.Metrics
+@using Microsoft.Extensions.Options
+@using Tower.Components.Shared
+@inject LiveState Live
+@inject IOptions<TowerConfig> Cfg
+@inject PiAgentClient PiClient
+@implements IAsyncDisposable
 
 <PageTitle>Tower — Overview</PageTitle>
 
-<h1>Tower &mdash; Overview</h1>
-<p class="text-muted">overview coming</p>
+<div class="home-page">
+
+    @{ var s = Live.Stats; }
+
+    @* ── 1. Devices Status Row ─────────────────────────────────────────────── *@
+    <section class="home-section">
+        <h2 class="section-title">Devices</h2>
+        <div class="devices-row">
+            @foreach (var dev in Cfg.Value.Devices)
+            {
+                if (dev.Kind == "self")
+                {
+                    <div class="device-card device-online">
+                        <div class="device-header">
+                            <span class="status-dot online"></span>
+                            <span class="device-name">@dev.Name</span>
+                            <span class="device-badge">Online</span>
+                        </div>
+                        <div class="device-metrics">
+                            <span class="dm-item">CPU: <strong>@Fmt.PctInt(s.CpuPct)</strong></span>
+                            <span class="dm-item">Mem: <strong>@Fmt.PctInt(s.MemPct)</strong></span>
+                            <span class="dm-item dm-uptime" title="Uptime">↑ @(string.IsNullOrEmpty(s.Uptime) ? "—" : s.Uptime)</span>
+                        </div>
+                    </div>
+                }
+                else if (dev.Kind == "pi" && dev.BaseUrl != null)
+                {
+                    var online = _piOnline.TryGetValue(dev.Id, out var v) ? v : (bool?)null;
+                    <div class="device-card @(online == true ? "device-online" : online == false ? "device-offline" : "device-checking")">
+                        <div class="device-header">
+                            <span class="status-dot @(online == true ? "online" : online == false ? "offline" : "checking")"></span>
+                            <span class="device-name">@dev.Name</span>
+                            <span class="device-badge">@(online == true ? "Online" : online == false ? "Offline" : "Checking…")</span>
+                        </div>
+                        @if (online == true)
+                        {
+                            <div class="device-metrics">
+                                <span class="dm-item"><strong>Pi</strong></span>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        </div>
+    </section>
+
+    @* ── 2. Key Metrics ────────────────────────────────────────────────────── *@
+    <section class="home-section">
+        <h2 class="section-title">System Metrics</h2>
+        <div class="metrics-grid">
+
+            <div class="metric-card metric-cpu">
+                <div class="mc-header">
+                    <span class="mc-title">CPU</span>
+                    <span class="mc-value @CpuClass(s.CpuPct)">@Fmt.PctInt(s.CpuPct)</span>
+                </div>
+                <div class="mc-sparkline">
+                    <Sparkline Data="@s.CpuHistory" Width="220" Height="36" Color="#58a6ff" FillColor="rgba(88,166,255,0.1)" />
+                </div>
+                <div class="mc-sub">
+                    @s.CpuCount cores
+                    @if (s.Load.Length >= 3)
+                    {
+                        <span> &bull; load @($"{s.Load[0]:0.00}") @($"{s.Load[1]:0.00}") @($"{s.Load[2]:0.00}")</span>
+                    }
+                    @if (s.FreqMhz > 0)
+                    {
+                        <span> &bull; @Fmt.Freq(s.FreqMhz)</span>
+                    }
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="mc-header">
+                    <span class="mc-title">Memory</span>
+                    <span class="mc-value @MemClass(s.MemPct)">@Fmt.PctInt(s.MemPct)</span>
+                </div>
+                <div class="mc-bar-wrap">
+                    <div class="mc-bar">
+                        <div class="mc-bar-fill @MemClass(s.MemPct)" style="width: @($"{Math.Min(s.MemPct,100):0.#}%")"></div>
+                    </div>
+                </div>
+                <div class="mc-sub">
+                    @Fmt.Bytes(s.MemUsedBytes) / @Fmt.Bytes(s.MemTotalBytes)
+                    @if (s.SwapTotalBytes > 0)
+                    {
+                        <span> &bull; Swap @Fmt.PctInt(s.SwapPct)</span>
+                    }
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="mc-header">
+                    <span class="mc-title">Network ↓</span>
+                    <span class="mc-value accent">@Fmt.Rate(s.NetRecvRate)</span>
+                </div>
+                <div class="mc-sparkline">
+                    <Sparkline Data="@s.RecvHistory" Width="220" Height="36" Color="#3fb950" FillColor="rgba(63,185,80,0.1)" />
+                </div>
+                <div class="mc-sub">↑ @Fmt.Rate(s.NetSentRate) sent</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="mc-header">
+                    <span class="mc-title">Root Disk</span>
+                    @{ var rootPct = RootDiskPct(); }
+                    <span class="mc-value @DiskClass(rootPct)">@(rootPct >= 0 ? Fmt.PctInt(rootPct) : "—")</span>
+                </div>
+                <div class="mc-bar-wrap">
+                    @if (rootPct >= 0)
+                    {
+                        <div class="mc-bar">
+                            <div class="mc-bar-fill @DiskClass(rootPct)" style="width: @($"{Math.Min(rootPct,100):0.#}%")"></div>
+                        </div>
+                    }
+                </div>
+                <div class="mc-sub">
+                    @{ var rootDisk = Live.Disks.FirstOrDefault(); }
+                    @if (rootDisk != null)
+                    {
+                        <span>@rootDisk.Model (@rootDisk.Health)</span>
+                    }
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    @* ── 3. Services Health Grid ───────────────────────────────────────────── *@
+    @if (s.Services.Count > 0)
+    {
+        <section class="home-section">
+            <h2 class="section-title">Services</h2>
+            <div class="services-grid">
+                @foreach (var svc in s.Services.OrderBy(kv => kv.Key))
+                {
+                    var active = svc.Value == "active";
+                    <div class="svc-item">
+                        <span class="svc-dot @(active ? "svc-on" : "svc-off")"></span>
+                        <span class="svc-name">@svc.Key</span>
+                        @if (!active)
+                        {
+                            <span class="svc-status">@svc.Value</span>
+                        }
+                    </div>
+                }
+            </div>
+        </section>
+    }
+
+    @* ── 4. Active Alerts ─────────────────────────────────────────────────── *@
+    <section class="home-section">
+        <h2 class="section-title">Alerts</h2>
+        @{ var alerts = BuildAlerts(s); }
+        @if (alerts.Count == 0)
+        {
+            <div class="alerts-ok">
+                <span class="ok-check">✓</span> All systems normal
+            </div>
+        }
+        else
+        {
+            <div class="alerts-list">
+                @foreach (var (level, text) in alerts)
+                {
+                    <div class="alert-row">
+                        <AlertBadge Level="@level" Text="@LevelLabel(level)" />
+                        <span class="alert-text">@text</span>
+                    </div>
+                }
+            </div>
+        }
+    </section>
+
+    @* ── 5. Public IP / NoIP ──────────────────────────────────────────────── *@
+    <section class="home-section">
+        <h2 class="section-title">Public IP / No-IP</h2>
+        <div class="noip-card">
+            <div class="noip-row">
+                <span class="noip-label">Service</span>
+                <span class="noip-val">
+                    <span class="svc-dot @(s.NoIp.Status == "active" ? "svc-on" : "svc-off")"></span>
+                    @s.NoIp.Status
+                </span>
+            </div>
+            <div class="noip-row">
+                <span class="noip-label">Current IP</span>
+                <span class="noip-val">@(s.NoIp.CurrentIp ?? "—")</span>
+            </div>
+            <div class="noip-row">
+                <span class="noip-label">Last Update</span>
+                <span class="noip-val">@(s.NoIp.LastUpdate ?? "—")</span>
+            </div>
+            <div class="noip-row">
+                <span class="noip-label">Last Check</span>
+                <span class="noip-val">@(s.NoIp.LastCheck ?? "—")</span>
+            </div>
+            @if (!string.IsNullOrEmpty(s.NoIp.PrevIp))
+            {
+                <div class="noip-row">
+                    <span class="noip-label">Prev IP</span>
+                    <span class="noip-val noip-prev">@s.NoIp.PrevIp</span>
+                </div>
+            }
+        </div>
+    </section>
+
+</div>
+
+@code {
+    private System.Threading.Timer? _timer;
+    private readonly Dictionary<string, bool?> _piOnline = new();
+
+    protected override void OnInitialized()
+    {
+        // seed pi state as null (checking)
+        foreach (var dev in Cfg.Value.Devices.Where(d => d.Kind == "pi" && d.BaseUrl != null))
+            _piOnline[dev.Id] = null;
+
+        _timer = new System.Threading.Timer(async _ =>
+        {
+            // poll each pi
+            foreach (var dev in Cfg.Value.Devices.Where(d => d.Kind == "pi" && d.BaseUrl != null))
+            {
+                var result = await PiClient.StatsAsync(dev.BaseUrl!);
+                _piOnline[dev.Id] = result != null;
+            }
+            await InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.Zero, TimeSpan.FromSeconds(2));
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_timer != null)
+            await _timer.DisposeAsync();
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    double RootDiskPct()
+    {
+        var segs = Live.RootSegments;
+        if (segs.Count == 0) return -1;
+        // RootSegments represent sub-dirs of /; total size is sum
+        // Better: use Disks which have usage info from SmartInfo?
+        // Actually, derive from /proc or estimate: segments = top dirs under /
+        // For overview, report from disks if available, else skip
+        var disks = Live.Disks;
+        if (disks.Count > 0)
+        {
+            // We can't reliably compute % from SMART alone; fallback: sum root segments vs total
+            // Use df-derived info if stored — LiveState doesn't have it explicitly;
+            // return -1 to show "—" (disk % isn't stored in current model)
+        }
+        return -1;
+    }
+
+    List<(int level, string text)> BuildAlerts(StatsSnapshot s)
+    {
+        var list = new List<(int, string)>();
+
+        // Disk SMART alerts
+        foreach (var d in Live.Disks)
+        {
+            if (d.Alert > 0)
+            {
+                var msg = $"{d.Model}: {d.Health}" +
+                          (d.Temp.HasValue ? $", temp {d.Temp}°C" : "");
+                list.Add((d.Alert, msg));
+            }
+        }
+
+        // NoIP alert if not active
+        if (!string.IsNullOrEmpty(s.NoIp.Status) && s.NoIp.Status != "active" && s.NoIp.Status != "unknown")
+        {
+            list.Add((1, $"No-IP service: {s.NoIp.Status}"));
+        }
+
+        // Memory pressure alert > 90%
+        if (s.MemPct > 90)
+            list.Add((2, $"High memory usage: {Fmt.PctInt(s.MemPct)}"));
+        else if (s.MemPct > 80)
+            list.Add((1, $"Elevated memory usage: {Fmt.PctInt(s.MemPct)}"));
+
+        // High CPU sustained alert
+        if (s.CpuPct > 90)
+            list.Add((2, $"High CPU usage: {Fmt.PctInt(s.CpuPct)}"));
+
+        return list.OrderByDescending(x => x.Item1).ToList();
+    }
+
+    static string LevelLabel(int level) => level switch
+    {
+        2 => "CRIT",
+        1 => "WARN",
+        _ => "OK"
+    };
+
+    static string CpuClass(double pct) => pct > 90 ? "val-red" : pct > 70 ? "val-amber" : "val-green";
+    static string MemClass(double pct) => pct > 90 ? "val-red" : pct > 80 ? "val-amber" : "val-green";
+    static string DiskClass(double pct) => pct > 90 ? "val-red" : pct > 75 ? "val-amber" : "val-green";
+}

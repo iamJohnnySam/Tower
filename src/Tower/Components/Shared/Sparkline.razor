@@ -1,0 +1,53 @@
+@* Sparkline — inline SVG polyline from a double[] of values 0-100 *@
+
+<svg class="sparkline" viewBox="0 0 @Width @Height" preserveAspectRatio="none"
+     width="@Width" height="@Height" xmlns="http://www.w3.org/2000/svg">
+    @if (_points.Length > 1)
+    {
+        <polyline points="@_pointsStr" fill="none" stroke="@Color" stroke-width="1.5"
+                  stroke-linecap="round" stroke-linejoin="round" />
+        @* Fill area under curve *@
+        <polyline points="@_fillStr" fill="@FillColor" stroke="none" />
+    }
+</svg>
+
+@code {
+    [Parameter] public double[] Data { get; set; } = [];
+    [Parameter] public int Width { get; set; } = 120;
+    [Parameter] public int Height { get; set; } = 32;
+    [Parameter] public string Color { get; set; } = "#58a6ff";
+    [Parameter] public string FillColor { get; set; } = "rgba(88,166,255,0.12)";
+
+    private double[] _points = [];
+    private string _pointsStr = "";
+    private string _fillStr = "";
+
+    protected override void OnParametersSet()
+    {
+        // only use non-zero tail or all points
+        _points = Data is { Length: > 0 } ? Data : [];
+        if (_points.Length < 2) return;
+
+        double max = _points.Max();
+        double min = _points.Min();
+        double range = max - min;
+        if (range < 1) { min = 0; range = 100; }
+
+        int n = _points.Length;
+        var pts = new System.Text.StringBuilder();
+        var fill = new System.Text.StringBuilder();
+
+        for (int i = 0; i < n; i++)
+        {
+            double x = i * (Width - 1.0) / (n - 1);
+            double y = Height - 1 - (_points[i] - min) / range * (Height - 2);
+            if (i == 0) fill.Append($"{x:0.#},{Height} ");
+            pts.Append($"{x:0.#},{y:0.#} ");
+            fill.Append($"{x:0.#},{y:0.#} ");
+            if (i == n - 1) fill.Append($"{x:0.#},{Height}");
+        }
+
+        _pointsStr = pts.ToString().TrimEnd();
+        _fillStr = fill.ToString().TrimEnd();
+    }
+}
