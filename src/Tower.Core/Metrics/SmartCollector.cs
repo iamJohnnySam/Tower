@@ -34,8 +34,9 @@ public static class SmartCollector {
         return a;
     }
     public static SmartInfo Collect(string device, bool ssd) {
-        var psi = new ProcessStartInfo("sudo", $"/usr/sbin/smartctl -i -H -A {device}") { RedirectStandardOutput = true };
-        using var p = Process.Start(psi)!; var outText = p.StandardOutput.ReadToEnd(); p.WaitForExit(15000);
+        var psi = new ProcessStartInfo("sudo", $"/usr/sbin/smartctl -i -H -A {device}") { RedirectStandardOutput = true, RedirectStandardError = true };
+        using var p = Process.Start(psi)!; var outText = p.StandardOutput.ReadToEnd(); p.StandardError.ReadToEnd(); p.WaitForExit(15000);
+        if (string.IsNullOrWhiteSpace(outText)) return new SmartInfo { Ssd = ssd };
         return Parse(outText, ssd);
     }
 }
