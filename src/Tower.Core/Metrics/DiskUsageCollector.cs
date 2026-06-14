@@ -16,10 +16,10 @@ public static class DiskUsageCollector {
     }
 
     public static List<DuItem> Depth1(string root) {
-        var psi = new ProcessStartInfo("du", $"-xb --max-depth=1 {root}") {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
+        var psi = new ProcessStartInfo("du") { RedirectStandardOutput = true, RedirectStandardError = true };
+        psi.ArgumentList.Add("-xb");
+        psi.ArgumentList.Add("--max-depth=1");
+        psi.ArgumentList.Add(root);
         using var p = Process.Start(psi)!;
         var o = p.StandardOutput.ReadToEnd();
         p.WaitForExit(600000);

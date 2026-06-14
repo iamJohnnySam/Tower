@@ -42,11 +42,11 @@ public static class GpuCollector {
                     var fields = o.Trim().Split(',');
                     if (fields.Length >= 6) {
                         var name    = fields[0].Trim();
-                        double.TryParse(fields[1].Trim(), out var usage);
-                        long.TryParse(fields[2].Trim(), out var memUsedMib);
-                        long.TryParse(fields[3].Trim(), out var memTotalMib);
-                        double.TryParse(fields[4].Trim(), out var temp);
-                        double.TryParse(fields[5].Trim(), out var power);
+                        double.TryParse(fields[1].Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var usage);
+                        long.TryParse(fields[2].Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var memUsedMib);
+                        long.TryParse(fields[3].Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var memTotalMib);
+                        double.TryParse(fields[4].Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var temp);
+                        double.TryParse(fields[5].Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var power);
                         return new GpuStats(
                             Type: "nvidia",
                             Name: name,
