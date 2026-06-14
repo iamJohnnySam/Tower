@@ -43,6 +43,10 @@ public class StatsWorker(LiveState state) : BackgroundService
                 var snap = await BuildSnapshotAsync(stoppingToken);
                 state.SetStats(snap);
             }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
             catch (Exception ex)
             {
                 await Console.Error.WriteLineAsync($"[StatsWorker] {ex.Message}");

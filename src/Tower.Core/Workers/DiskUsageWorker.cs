@@ -15,8 +15,12 @@ public class DiskUsageWorker(LiveState state) : BackgroundService
         {
             try
             {
-                var (root, var, projects) = Collect();
+                var (root, var, projects) = await Task.Run(Collect, stoppingToken);
                 state.SetUsage(root, var, projects);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
             }
             catch (Exception ex)
             {

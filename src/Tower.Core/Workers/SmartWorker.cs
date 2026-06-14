@@ -23,6 +23,10 @@ public class SmartWorker(LiveState state) : BackgroundService
                 var disks = CollectAllDisks();
                 state.SetDisks(disks);
             }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
             catch (Exception ex)
             {
                 await Console.Error.WriteLineAsync($"[SmartWorker] {ex.Message}");
