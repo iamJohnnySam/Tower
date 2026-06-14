@@ -186,7 +186,7 @@ public class MaintenanceRunner(IServiceScopeFactory scopes, MaintenanceOptions o
             var text = File.ReadAllText("/proc/uptime");
             return double.Parse(text.Split(' ')[0], CultureInfo.InvariantCulture);
         }
-        catch { return double.MaxValue; } // fail-open: don't block maintenance
+        catch { return 0; } // fail-closed: if we can't read uptime, treat as just-booted and skip
     }
 
     private static bool IsAptRunning()
