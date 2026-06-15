@@ -50,6 +50,12 @@ public class SystemStatsTests
     }
 
     [Fact]
+    public void Net_rate_zero_on_counter_wrap()
+    {
+        Assert.Equal(0, SystemStats.RatePerSec(5000, 100, 2.0), 1);  // cur < prev
+    }
+
+    [Fact]
     public void CpuPercent_when_no_elapsed_ticks_returns_zero()
     {
         var a = SystemStats.ParseCpuTimes("cpu  100 0 100 700 0 0 0 0 0 0");

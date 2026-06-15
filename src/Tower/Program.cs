@@ -18,7 +18,8 @@ var towerCfg = builder.Configuration.GetSection("Tower").Get<TowerConfig>() ?? n
 builder.Services.Configure<TowerConfig>(builder.Configuration.GetSection("Tower"));
 
 // ── Data / Settings ──────────────────────────────────────────────────────────
-builder.Services.AddDbContext<TowerDbContext>(o => o.UseSqlite("Data Source=tower.db"));
+builder.Services.AddDbContext<TowerDbContext>(o =>
+    o.UseSqlite("Data Source=tower.db").AddInterceptors(new SqlitePragmaInterceptor()));
 builder.Services.AddScoped<SettingsService>();
 
 // ── Live state & collectors ──────────────────────────────────────────────────
