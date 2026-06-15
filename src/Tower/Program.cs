@@ -1,9 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using Tower;
 using Tower.Components;
+using Tower.Core.Backup;
 using Tower.Core.Data;
+using Tower.Core.Jellyfin;
 using Tower.Core.Maintenance;
 using Tower.Core.Pi;
+using Tower.Core.Projects;
 using Tower.Core.Settings;
 using Tower.Core.State;
 using Tower.Core.Workers;
@@ -26,6 +29,22 @@ builder.Services.AddScoped<SettingsService>();
 builder.Services.AddSingleton<LiveState>();
 builder.Services.AddHttpClient<PiAgentClient>();
 
+// ── Jellyfin ─────────────────────────────────────────────────────────────────
+builder.Services.AddSingleton(new JellyfinOptions { JellyfinUrl = towerCfg.JellyfinUrl });
+builder.Services.AddHttpClient<JellyfinClient>();
+builder.Services.AddScoped<JellyfinStats>();
+
+// ── Projects + Backup ────────────────────────────────────────────────────────
+builder.Services.AddSingleton(new ProjectsOptions
+{
+    Projects = towerCfg.Projects
+        .Select(p => new ProjectDefCore(p.Name, p.Service, p.Port, p.DbPath, p.LogDir, p.Url))
+        .ToList()
+});
+builder.Services.AddHostedService<ProjectsWorker>();
+builder.Services.AddHttpClient<BackupService>();
+builder.Services.AddHostedService<BackupScheduler>();
+
 // ── Maintenance ──────────────────────────────────────────────────────────────
 builder.Services.AddSingleton(new MaintenanceOptions
 {
@@ -35,6 +54,7 @@ builder.Services.AddSingleton(new MaintenanceOptions
 builder.Services.AddSingleton<MaintenanceRunner>();
 
 // ── Background workers ───────────────────────────────────────────────────────
+builder.Services.AddHostedService<JellyfinWorker>();
 builder.Services.AddHostedService<StatsWorker>();
 builder.Services.AddHostedService<SmartWorker>();
 builder.Services.AddHostedService<DiskUsageWorker>();

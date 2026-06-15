@@ -1,0 +1,12 @@
+[
+  {
+    "Id": "sess1", "UserName": "john", "Client": "Jellyfin Web", "DeviceName": "Firefox",
+    "NowPlayingItem": { "Id": "m1", "Name": "Blade Runner 2049", "Type": "Movie", "Container": "mkv" },
+    "PlayState": { "PlayMethod": "Transcode", "PositionTicks": 12000000000, "IsPaused": false },
+    "TranscodingInfo": { "VideoCodec": "h264", "AudioCodec": "aac", "Bitrate": 8000000, "TranscodeReasons": ["VideoCodecNotSupported"] }
+  },
+  {
+    "Id": "sess2", "UserName": "kid", "Client": "Android TV", "DeviceName": "Shield",
+    "NowPlayingItem": null, "PlayState": { "IsPaused": false }
+  }
+]

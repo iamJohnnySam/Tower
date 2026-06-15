@@ -1,0 +1,184 @@
+/* Jellyfin page layout */
+.jellyfin-page {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 1rem 2rem;
+}
+
+/* Section spacing */
+.jf-section {
+    margin-bottom: 2rem;
+}
+
+/* Notice / info / warn / idle banners */
+.jf-notice {
+    padding: 0.6rem 1rem;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+.jf-notice-info {
+    background: rgba(88, 166, 255, 0.1);
+    border: 1px solid rgba(88, 166, 255, 0.25);
+    color: #58a6ff;
+}
+
+.jf-notice-warn {
+    background: rgba(210, 153, 34, 0.1);
+    border: 1px solid rgba(210, 153, 34, 0.3);
+    color: #d29922;
+}
+
+.jf-notice-idle {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #8b949e;
+}
+
+/* Session card internals */
+.jf-session-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.jf-session-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.jf-user {
+    font-weight: 600;
+    font-size: 1rem;
+    color: #e6edf3;
+}
+
+.jf-method-badge {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.jf-media-title {
+    font-size: 0.95rem;
+    color: #c9d1d9;
+    font-weight: 500;
+    line-height: 1.3;
+}
+
+.jf-episode {
+    color: #8b949e;
+    font-size: 0.88em;
+}
+
+.jf-episode-title {
+    color: #8b949e;
+    font-size: 0.88em;
+}
+
+.jf-session-meta {
+    font-size: 0.82rem;
+    color: #8b949e;
+}
+
+.jf-client {
+    color: #8b949e;
+}
+
+.jf-device {
+    color: #6e7681;
+}
+
+.jf-transcode-info {
+    font-size: 0.82rem;
+    color: #8b949e;
+    padding-top: 0.2rem;
+}
+
+.jf-codec-label {
+    color: #6e7681;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.jf-codec-sep {
+    color: #30363d;
+}
+
+.jf-transcode-reasons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 0.3rem;
+}
+
+.jf-reason-badge {
+    font-size: 0.7rem;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: rgba(210, 153, 34, 0.15);
+    color: #d29922;
+    border: 1px solid rgba(210, 153, 34, 0.25);
+}
+
+/* Sparkline wrapper inside cards */
+.jf-sparkline-wrap {
+    margin-top: 8px;
+}
+
+/* Timestamp in recent plays table */
+.jf-ts {
+    white-space: nowrap;
+    color: #8b949e;
+    font-size: 0.82rem;
+}
+
+/* Updated timestamp */
+.jf-updated {
+    font-size: 0.78rem;
+    color: #6e7681;
+    margin-top: 0.4rem;
+}
+
+/* Analytics sub-sections */
+.jf-analytics-block {
+    margin-bottom: 1.5rem;
+}
+
+.jf-sub-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+}
+
+/* Stat summary cards — smaller */
+.jf-stat-cards {
+    margin-bottom: 1.5rem;
+}
+
+.jf-stat-card {
+    max-width: 180px;
+}
+
+/* Refresh button alignment */
+.jf-refresh-btn {
+    margin-left: 0.75rem;
+    vertical-align: middle;
+    font-size: 0.78rem;
+}
+
+/* Recent plays table — slightly tighter columns */
+.jf-recent-table td:first-child {
+    min-width: 90px;
+}

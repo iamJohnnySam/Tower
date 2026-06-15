@@ -7,6 +7,7 @@ public class TowerConfig
     public string ServerMonitorConfigPath { get; set; } = "/home/atom/server-monitor/config.json";
     public string MaintenanceScriptPath { get; set; } = "do_maintenance.sh";
     public string MaintenanceLogPath { get; set; } = "maintenance.log";
+    public string JellyfinUrl { get; set; } = "http://localhost:8096";
 }
 
 public class DeviceConfig

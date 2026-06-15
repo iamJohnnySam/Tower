@@ -1,6 +1,43 @@
+using Tower.Core.Backup;
 using Tower.Core.Metrics;
 
 namespace Tower.Core.State;
+
+// ─── Project status ───────────────────────────────────────────────────────────
+
+public record ProjectStatus(
+    string Name,
+    string? Service,
+    int? Port,
+    string? Url,
+    string SystemdStatus,
+    bool PortOpen,
+    double Cpu,
+    long MemBytes,
+    bool ProcRunning);
+
+// ─── Jellyfin snapshot ────────────────────────────────────────────────────────
+
+public record JellyfinSnapshot(
+    IReadOnlyList<Tower.Core.Jellyfin.SessionInfo> Sessions,
+    int FfmpegCount,
+    double FfmpegCpu,
+    double[] FfmpegCountHistory,
+    double[] FfmpegCpuHistory,
+    string Error,
+    bool ApiConfigured,
+    DateTime Updated)
+{
+    public static JellyfinSnapshot Empty { get; } = new(
+        Sessions: Array.Empty<Tower.Core.Jellyfin.SessionInfo>(),
+        FfmpegCount: 0,
+        FfmpegCpu: 0,
+        FfmpegCountHistory: new double[60],
+        FfmpegCpuHistory: new double[60],
+        Error: "",
+        ApiConfigured: false,
+        Updated: DateTime.MinValue);
+}
 
 // ─── Small value types used in StatsSnapshot ─────────────────────────────────
 
@@ -86,6 +123,17 @@ public class LiveState
     // ── DB / log file sizes ──
     private List<SizeInfo> _sizes = [];
 
+    // ── Jellyfin ──
+    private JellyfinSnapshot _jellyfin = JellyfinSnapshot.Empty;
+    private readonly Queue<double> _ffmpegCountQ = new(60);
+    private readonly Queue<double> _ffmpegCpuQ   = new(60);
+
+    // ── Projects ──
+    private List<ProjectStatus> _projects = [];
+
+    // ── Backups ──
+    private List<BackupResult> _backups = [];
+
     // ─── Public read properties ──────────────────────────────────────────────
 
     public StatsSnapshot Stats
@@ -116,6 +164,21 @@ public class LiveState
     public IReadOnlyList<SizeInfo> Sizes
     {
         get { lock (_lock) return _sizes.AsReadOnly(); }
+    }
+
+    public JellyfinSnapshot Jellyfin
+    {
+        get { lock (_lock) return _jellyfin; }
+    }
+
+    public IReadOnlyList<ProjectStatus> Projects
+    {
+        get { lock (_lock) return _projects.AsReadOnly(); }
+    }
+
+    public IReadOnlyList<BackupResult> Backups
+    {
+        get { lock (_lock) return _backups.AsReadOnly(); }
     }
 
     // ─── Write methods ───────────────────────────────────────────────────────
@@ -171,6 +234,69 @@ public class LiveState
     public void SetSizes(List<SizeInfo> sizes)
     {
         lock (_lock) _sizes = [.. sizes];
+    }
+
+    public void SetJellyfin(JellyfinSnapshot s)
+    {
+        lock (_lock) _jellyfin = s;
+    }
+
+    public void SetProjects(List<ProjectStatus> projects)
+    {
+        lock (_lock) _projects = [.. projects];
+    }
+
+    /// <summary>
+    /// Upserts a backup result by name: removes any existing entry with the same
+    /// <see cref="BackupResult.Name"/>, then appends the new result.
+    /// </summary>
+    public void SetBackup(BackupResult r)
+    {
+        lock (_lock)
+        {
+            _backups.RemoveAll(b => b.Name == r.Name);
+            _backups.Add(r);
+        }
+    }
+
+    /// <summary>
+    /// Appends a data point to the rolling 60-pt ffmpeg history queues.
+    /// Call before SetJellyfin so the snapshot captures the freshly-appended values.
+    /// </summary>
+    public void PushFfmpegHistory(double count, double cpu)
+    {
+        lock (_lock)
+        {
+            Enqueue(_ffmpegCountQ, count);
+            Enqueue(_ffmpegCpuQ,   cpu);
+        }
+    }
+
+    /// <summary>
+    /// Returns the ffmpeg count history as a fixed-length (60) array.
+    /// Right-aligned, zero-padded on the left.
+    /// </summary>
+    public double[] FfmpegCountHistory()
+    {
+        lock (_lock) return ToArray(_ffmpegCountQ);
+    }
+
+    /// <summary>
+    /// Returns the ffmpeg CPU history as a fixed-length (60) array.
+    /// Right-aligned, zero-padded on the left.
+    /// </summary>
+    public double[] FfmpegCpuHistory()
+    {
+        lock (_lock) return ToArray(_ffmpegCpuQ);
+    }
+
+    /// <summary>
+    /// Returns both ffmpeg history arrays under a single lock, guaranteeing
+    /// they reflect the same state (mirrors SnapshotHistory for CPU/net).
+    /// </summary>
+    public (double[] count, double[] cpu) SnapshotFfmpegHistory()
+    {
+        lock (_lock) return (ToArray(_ffmpegCountQ), ToArray(_ffmpegCpuQ));
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
