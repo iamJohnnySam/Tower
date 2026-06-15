@@ -242,6 +242,15 @@ public class LiveState
         lock (_lock) return ToArray(_ffmpegCpuQ);
     }
 
+    /// <summary>
+    /// Returns both ffmpeg history arrays under a single lock, guaranteeing
+    /// they reflect the same state (mirrors SnapshotHistory for CPU/net).
+    /// </summary>
+    public (double[] count, double[] cpu) SnapshotFfmpegHistory()
+    {
+        lock (_lock) return (ToArray(_ffmpegCountQ), ToArray(_ffmpegCpuQ));
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     private static void Enqueue(Queue<double> q, double v)

@@ -75,12 +75,13 @@ public class JellyfinWorker(
                 }
 
                 state.PushFfmpegHistory(count, cpu);
+                var (countHist, cpuHist) = state.SnapshotFfmpegHistory();
                 state.SetJellyfin(new JellyfinSnapshot(
                     Sessions: sessions,
                     FfmpegCount: count,
                     FfmpegCpu: cpu,
-                    FfmpegCountHistory: state.FfmpegCountHistory(),
-                    FfmpegCpuHistory: state.FfmpegCpuHistory(),
+                    FfmpegCountHistory: countHist,
+                    FfmpegCpuHistory: cpuHist,
                     Error: err,
                     ApiConfigured: configured,
                     Updated: DateTime.Now));
@@ -92,6 +93,16 @@ public class JellyfinWorker(
             catch (Exception ex)
             {
                 await Console.Error.WriteLineAsync($"[jellyfin] {ex.Message}");
+                var (countHist, cpuHist) = state.SnapshotFfmpegHistory();
+                state.SetJellyfin(new JellyfinSnapshot(
+                    Sessions: Array.Empty<SessionInfo>(),
+                    FfmpegCount: 0,
+                    FfmpegCpu: 0,
+                    FfmpegCountHistory: countHist,
+                    FfmpegCpuHistory: cpuHist,
+                    Error: $"worker error: {ex.Message}",
+                    ApiConfigured: state.Jellyfin.ApiConfigured,
+                    Updated: DateTime.Now));
             }
 
             try { await Task.Delay(5000, ct); }
