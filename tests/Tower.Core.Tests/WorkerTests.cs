@@ -149,6 +149,49 @@ public class WorkerTests
         Assert.Equal(expected, StatsWorker.FormatUptime(seconds));
     }
 
+    // ─── LiveState Jellyfin ffmpeg history ───────────────────────────────────
+
+    [Fact]
+    public void LiveState_ffmpeg_history_is_always_60_elements_and_last_value_matches()
+    {
+        var ls = new LiveState();
+        ls.PushFfmpegHistory(3, 47.5);
+        var countHist = ls.FfmpegCountHistory();
+        var cpuHist   = ls.FfmpegCpuHistory();
+        Assert.Equal(60, countHist.Length);
+        Assert.Equal(60, cpuHist.Length);
+        // Most recent value is in the last slot
+        Assert.Equal(3,    countHist[59]);
+        Assert.Equal(47.5, cpuHist[59]);
+        // All other slots are zero (only one push so far)
+        Assert.All(countHist.Take(59), v => Assert.Equal(0, v));
+        Assert.All(cpuHist.Take(59),   v => Assert.Equal(0, v));
+    }
+
+    [Fact]
+    public void LiveState_ffmpeg_history_evicts_oldest_after_60_pushes()
+    {
+        var ls = new LiveState();
+        for (int i = 0; i < 60; i++)
+            ls.PushFfmpegHistory(i, i * 2.0);
+
+        var countHist = ls.FfmpegCountHistory();
+        var cpuHist   = ls.FfmpegCpuHistory();
+        Assert.Equal(0,  countHist[0]);   // oldest retained
+        Assert.Equal(59, countHist[59]);  // newest
+        Assert.Equal(0.0,  cpuHist[0]);
+        Assert.Equal(118.0, cpuHist[59]);
+
+        // Push one more — slot 0 should now be 1 (index 0 evicted)
+        ls.PushFfmpegHistory(60, 120.0);
+        countHist = ls.FfmpegCountHistory();
+        cpuHist   = ls.FfmpegCpuHistory();
+        Assert.Equal(1,    countHist[0]);
+        Assert.Equal(60,   countHist[59]);
+        Assert.Equal(2.0,  cpuHist[0]);
+        Assert.Equal(120.0, cpuHist[59]);
+    }
+
     // ─── DiskUsageWorker ─────────────────────────────────────────────────────
 
     [Fact]

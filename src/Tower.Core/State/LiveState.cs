@@ -2,6 +2,29 @@ using Tower.Core.Metrics;
 
 namespace Tower.Core.State;
 
+// ─── Jellyfin snapshot ────────────────────────────────────────────────────────
+
+public record JellyfinSnapshot(
+    IReadOnlyList<Tower.Core.Jellyfin.SessionInfo> Sessions,
+    int FfmpegCount,
+    double FfmpegCpu,
+    double[] FfmpegCountHistory,
+    double[] FfmpegCpuHistory,
+    string Error,
+    bool ApiConfigured,
+    DateTime Updated)
+{
+    public static JellyfinSnapshot Empty { get; } = new(
+        Sessions: Array.Empty<Tower.Core.Jellyfin.SessionInfo>(),
+        FfmpegCount: 0,
+        FfmpegCpu: 0,
+        FfmpegCountHistory: new double[60],
+        FfmpegCpuHistory: new double[60],
+        Error: "",
+        ApiConfigured: false,
+        Updated: DateTime.MinValue);
+}
+
 // ─── Small value types used in StatsSnapshot ─────────────────────────────────
 
 public record NicInfo(string Name, bool Up, long SpeedMbps, string Ip, ulong Sent, ulong Recv);
@@ -86,6 +109,11 @@ public class LiveState
     // ── DB / log file sizes ──
     private List<SizeInfo> _sizes = [];
 
+    // ── Jellyfin ──
+    private JellyfinSnapshot _jellyfin = JellyfinSnapshot.Empty;
+    private readonly Queue<double> _ffmpegCountQ = new(60);
+    private readonly Queue<double> _ffmpegCpuQ   = new(60);
+
     // ─── Public read properties ──────────────────────────────────────────────
 
     public StatsSnapshot Stats
@@ -116,6 +144,11 @@ public class LiveState
     public IReadOnlyList<SizeInfo> Sizes
     {
         get { lock (_lock) return _sizes.AsReadOnly(); }
+    }
+
+    public JellyfinSnapshot Jellyfin
+    {
+        get { lock (_lock) return _jellyfin; }
     }
 
     // ─── Write methods ───────────────────────────────────────────────────────
@@ -171,6 +204,42 @@ public class LiveState
     public void SetSizes(List<SizeInfo> sizes)
     {
         lock (_lock) _sizes = [.. sizes];
+    }
+
+    public void SetJellyfin(JellyfinSnapshot s)
+    {
+        lock (_lock) _jellyfin = s;
+    }
+
+    /// <summary>
+    /// Appends a data point to the rolling 60-pt ffmpeg history queues.
+    /// Call before SetJellyfin so the snapshot captures the freshly-appended values.
+    /// </summary>
+    public void PushFfmpegHistory(double count, double cpu)
+    {
+        lock (_lock)
+        {
+            Enqueue(_ffmpegCountQ, count);
+            Enqueue(_ffmpegCpuQ,   cpu);
+        }
+    }
+
+    /// <summary>
+    /// Returns the ffmpeg count history as a fixed-length (60) array.
+    /// Right-aligned, zero-padded on the left.
+    /// </summary>
+    public double[] FfmpegCountHistory()
+    {
+        lock (_lock) return ToArray(_ffmpegCountQ);
+    }
+
+    /// <summary>
+    /// Returns the ffmpeg CPU history as a fixed-length (60) array.
+    /// Right-aligned, zero-padded on the left.
+    /// </summary>
+    public double[] FfmpegCpuHistory()
+    {
+        lock (_lock) return ToArray(_ffmpegCpuQ);
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
