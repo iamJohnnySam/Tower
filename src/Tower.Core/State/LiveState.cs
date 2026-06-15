@@ -1,3 +1,4 @@
+using Tower.Core.Backup;
 using Tower.Core.Metrics;
 
 namespace Tower.Core.State;
@@ -130,6 +131,9 @@ public class LiveState
     // ── Projects ──
     private List<ProjectStatus> _projects = [];
 
+    // ── Backups ──
+    private List<BackupResult> _backups = [];
+
     // ─── Public read properties ──────────────────────────────────────────────
 
     public StatsSnapshot Stats
@@ -170,6 +174,11 @@ public class LiveState
     public IReadOnlyList<ProjectStatus> Projects
     {
         get { lock (_lock) return _projects.AsReadOnly(); }
+    }
+
+    public IReadOnlyList<BackupResult> Backups
+    {
+        get { lock (_lock) return _backups.AsReadOnly(); }
     }
 
     // ─── Write methods ───────────────────────────────────────────────────────
@@ -235,6 +244,19 @@ public class LiveState
     public void SetProjects(List<ProjectStatus> projects)
     {
         lock (_lock) _projects = [.. projects];
+    }
+
+    /// <summary>
+    /// Upserts a backup result by name: removes any existing entry with the same
+    /// <see cref="BackupResult.Name"/>, then appends the new result.
+    /// </summary>
+    public void SetBackup(BackupResult r)
+    {
+        lock (_lock)
+        {
+            _backups.RemoveAll(b => b.Name == r.Name);
+            _backups.Add(r);
+        }
     }
 
     /// <summary>
