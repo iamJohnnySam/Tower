@@ -61,11 +61,13 @@ public class BackupScheduler(
         if (!TryParseSchedule(schedule, out int h, out int m))
             return;
 
-        var now   = DateTime.Now;
-        var today = now.ToString("yyyy-MM-dd");
+        var now    = DateTime.Now;
+        var today  = now.ToString("yyyy-MM-dd");
+        var target = new DateTime(now.Year, now.Month, now.Day, h, m, 0);
 
-        // Fire only on the correct minute and only once per calendar day.
-        if (now.Hour != h || now.Minute != m || _lastBackupDate == today)
+        // Fire on the first tick at-or-after the scheduled time today, once per calendar day.
+        // This avoids missed backups if the process restarts or a tick overshoots the exact minute.
+        if (_lastBackupDate == today || now < target)
             return;
 
         // Build the list of databases to back up:
