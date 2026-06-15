@@ -1,6 +1,9 @@
 using Tower.Core.Jellyfin;
 namespace Tower.Core.Tests;
 public class JellyfinParseTests {
+    [Fact] public void Malformed_json_returns_empty() => Assert.Empty(JellyfinClient.ParseSessions("not json{"));
+    [Fact] public void Object_root_returns_empty() => Assert.Empty(JellyfinClient.ParseSessions("{\"error\":\"Unauthorized\"}"));
+    [Fact] public void Empty_array_returns_empty() => Assert.Empty(JellyfinClient.ParseSessions("[]"));
     [Fact] public void Parses_playing_and_idle_sessions() {
         var json = System.IO.File.ReadAllText("Fixtures/jellyfin_sessions.json");
         var sessions = JellyfinClient.ParseSessions(json);
