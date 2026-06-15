@@ -1,6 +1,449 @@
 @page "/projects"
+@using Microsoft.Extensions.Options
+@using Tower.Core.Backup
+@using Tower.Core.Projects
+@using Tower.Core.Settings
+@using Tower.Core.State
+@inject LiveState Live
+@inject IOptions<TowerConfig> Cfg
+@inject BackupService Backup
+@inject SettingsService SettingsSvc
+@implements IAsyncDisposable
 
 <PageTitle>Tower — Projects</PageTitle>
 
-<h1>Projects</h1>
-<p class="text-muted">Projects &mdash; coming in M2.</p>
+<div class="projects-page">
+
+    <h1 class="page-title">Projects</h1>
+
+    @* ── 1. Project Cards ─────────────────────────────────────────────────────── *@
+    <section class="proj-section">
+        <h2 class="section-title">Services</h2>
+
+        @{
+            var projects    = Live.Projects;
+            var cfgProjects = Cfg.Value.Projects;
+        }
+
+        @if (projects.Count == 0)
+        {
+            <div class="proj-notice">No projects configured.</div>
+        }
+        else
+        {
+            <div class="atom-cards-grid">
+                @foreach (var proj in projects)
+                {
+                    // Capture loop variables for lambda captures
+                    var pname   = proj.Name;
+                    var psvc    = proj.Service;
+
+                    var cfgProj = cfgProjects.FirstOrDefault(p => p.Name == proj.Name);
+                    var dbPath  = cfgProj?.DbPath;
+                    var logDir  = cfgProj?.LogDir;
+                    var hasDb   = !string.IsNullOrEmpty(dbPath);
+                    var hasSvc  = !string.IsNullOrEmpty(psvc);
+                    var hasUrl  = !string.IsNullOrEmpty(proj.Url) && proj.PortOpen;
+
+                    // Per-card state
+                    _controlResult.TryGetValue(pname, out var ctrlResult);
+                    _backupResult.TryGetValue(pname, out var bkpResult);
+                    _logsText.TryGetValue(pname, out var logsText);
+                    var logsOpen     = _logsOpen.TryGetValue(pname, out var lo) && lo;
+                    var ctrlBusy     = _busy.TryGetValue(pname, out var b1) && b1;
+                    var bkpBusy      = _backupBusy.TryGetValue(pname, out var b2) && b2;
+                    var logsLoading  = _logsLoading.TryGetValue(pname, out var b3) && b3;
+                    var confirmPending = _confirmPending.TryGetValue(pname, out var cp) ? cp : null;
+
+                    // Systemd badge colour
+                    string sysClass = proj.SystemdStatus switch
+                    {
+                        "active"                => "val-green",
+                        "n/a"                   => "proj-badge-grey",
+                        "failed" or "inactive"  => "val-red",
+                        _                       => "val-amber"
+                    };
+
+                    <div class="atom-card proj-card">
+
+                        @* Name + systemd badge *@
+                        <div class="proj-card-header">
+                            <span class="proj-name">@proj.Name</span>
+                            <span class="proj-svc-badge @sysClass">@proj.SystemdStatus</span>
+                        </div>
+
+                        @* Port chip *@
+                        @if (proj.Port.HasValue)
+                        {
+                            <div class="proj-port-row">
+                                <span class="svc-dot @(proj.PortOpen ? "svc-on" : "svc-off")"></span>
+                                <span class="proj-port-label">:@proj.Port</span>
+                                <span class="proj-port-state">@(proj.PortOpen ? "open" : "closed")</span>
+                            </div>
+                        }
+
+                        @* CPU + Mem *@
+                        <div class="proj-metrics-row">
+                            <span class="proj-metric-label">CPU</span>
+                            <span class="proj-metric-val @(proj.ProcRunning ? "val-green" : "")">
+                                @(proj.ProcRunning ? Fmt.PctInt(proj.Cpu) : "—")
+                            </span>
+                            <span class="proj-metric-sep">|</span>
+                            <span class="proj-metric-label">Mem</span>
+                            <span class="proj-metric-val">
+                                @(proj.ProcRunning ? Fmt.Bytes(proj.MemBytes) : "—")
+                            </span>
+                        </div>
+
+                        @* Action buttons *@
+                        <div class="proj-btn-row">
+
+                            @if (hasSvc && psvc != null)
+                            {
+                                var svc = psvc; // capture for lambdas
+
+                                @* Start *@
+                                <button class="btn-secondary btn-sm proj-btn-start"
+                                        disabled="@ctrlBusy"
+                                        @onclick="@(() => ControlAsync(pname, svc, "start"))">
+                                    @(_busy.TryGetValue(pname, out var _b) && _b &&
+                                      _busyAction.TryGetValue(pname, out var _ba) && _ba == "start" ? "…" : "Start")
+                                </button>
+
+                                @* Stop (2-click confirm) *@
+                                @if (confirmPending == "stop")
+                                {
+                                    <span class="proj-confirm-row">
+                                        <span class="val-red" style="font-size:0.75rem">Stop?</span>
+                                        <button class="btn-danger btn-sm"
+                                                disabled="@ctrlBusy"
+                                                @onclick="@(() => ControlAsync(pname, svc, "stop"))">Yes</button>
+                                        <button class="btn-secondary btn-sm"
+                                                @onclick="@(() => ClearConfirm(pname))">No</button>
+                                    </span>
+                                }
+                                else
+                                {
+                                    <button class="btn-danger btn-sm"
+                                            disabled="@ctrlBusy"
+                                            @onclick="@(() => SetConfirm(pname, "stop"))">Stop</button>
+                                }
+
+                                @* Restart (2-click confirm) *@
+                                @if (confirmPending == "restart")
+                                {
+                                    <span class="proj-confirm-row">
+                                        <span class="val-amber" style="font-size:0.75rem">Restart?</span>
+                                        <button class="btn-secondary btn-sm proj-btn-amber"
+                                                disabled="@ctrlBusy"
+                                                @onclick="@(() => ControlAsync(pname, svc, "restart"))">Yes</button>
+                                        <button class="btn-secondary btn-sm"
+                                                @onclick="@(() => ClearConfirm(pname))">No</button>
+                                    </span>
+                                }
+                                else
+                                {
+                                    <button class="btn-secondary btn-sm proj-btn-amber"
+                                            disabled="@ctrlBusy"
+                                            @onclick="@(() => SetConfirm(pname, "restart"))">Restart</button>
+                                }
+                            }
+
+                            @* Open (external link — only if Url and port open) *@
+                            @if (hasUrl)
+                            {
+                                <a class="btn-secondary btn-sm proj-btn-open" href="@proj.Url" target="_blank">Open</a>
+                            }
+
+                            @* Backup DB *@
+                            @if (hasDb && dbPath != null)
+                            {
+                                var dpath = dbPath; // capture
+                                var tokenOk = SettingsSvc.IsConfigured("dropbox.access_token");
+                                <button class="btn-secondary btn-sm"
+                                        disabled="@(bkpBusy || !tokenOk)"
+                                        title="@(tokenOk ? null : "Configure Dropbox in Settings")"
+                                        @onclick="@(() => BackupDbAsync(pname, dpath))">
+                                    @(bkpBusy ? "Backing up…" : "Backup DB")
+                                </button>
+                            }
+
+                            @* Logs toggle *@
+                            @{
+                                var ldir = logDir;
+                                var lsvc = psvc;
+                            }
+                            <button class="btn-secondary btn-sm"
+                                    @onclick="@(() => ToggleLogsAsync(pname, ldir, lsvc))">
+                                @(logsOpen ? "Hide Logs" : "Logs")
+                            </button>
+
+                            @if (logsOpen && !string.IsNullOrEmpty(logsText))
+                            {
+                                <button class="btn-secondary btn-sm"
+                                        disabled="@logsLoading"
+                                        @onclick="@(() => RefreshLogsAsync(pname, ldir, lsvc))">
+                                    @(logsLoading ? "…" : "↻")
+                                </button>
+                            }
+
+                        </div>
+
+                        @* Control result *@
+                        @if (ctrlResult.HasValue)
+                        {
+                            <div class="@(ctrlResult.Value.Ok ? "val-green" : "val-red") proj-result">
+                                @ctrlResult.Value.Msg
+                            </div>
+                        }
+
+                        @* Backup result *@
+                        @if (bkpResult != null)
+                        {
+                            <div class="@(bkpResult.Success ? "val-green" : "val-red") proj-result">
+                                @(bkpResult.Success
+                                    ? $"✓ backed up, {Fmt.Bytes(bkpResult.Size)}"
+                                    : $"✗ {bkpResult.Error}")
+                            </div>
+                        }
+
+                        @* Log panel *@
+                        @if (logsOpen)
+                        {
+                            if (logsLoading && string.IsNullOrEmpty(logsText))
+                            {
+                                <div class="proj-notice" style="font-size:0.75rem">Loading logs…</div>
+                            }
+                            else
+                            {
+                                <pre class="maint-log">@(string.IsNullOrEmpty(logsText) ? "(no output)" : logsText)</pre>
+                            }
+                        }
+
+                    </div>
+                }
+            </div>
+        }
+    </section>
+
+    @* ── 2. Backup Status ─────────────────────────────────────────────────────── *@
+    <section class="proj-section">
+        <h2 class="section-title">Backup Status</h2>
+
+        @{
+            var backups = Live.Backups;
+        }
+
+        @if (backups.Count == 0)
+        {
+            <div class="proj-notice">No backups have run yet this session.</div>
+        }
+        else
+        {
+            <table class="atom-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Status</th>
+                        <th>Size</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var b in backups)
+                    {
+                        <tr>
+                            <td>@b.Name</td>
+                            <td>
+                                @if (b.Success)
+                                {
+                                    <span class="val-green">✓ OK</span>
+                                }
+                                else
+                                {
+                                    <span class="val-red">✗ @b.Error</span>
+                                }
+                            </td>
+                            <td>@(b.Success ? Fmt.Bytes(b.Size) : "—")</td>
+                            <td>@b.Ts.ToString("HH:mm")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+
+    @* ── 3. Top Processes ─────────────────────────────────────────────────────── *@
+    <section class="proj-section">
+        <h2 class="section-title">Top Processes</h2>
+
+        @{
+            var procs = Live.Stats.TopProcs;
+        }
+
+        @if (procs.Count == 0)
+        {
+            <div class="proj-notice">No process data yet.</div>
+        }
+        else
+        {
+            <table class="atom-table">
+                <thead>
+                    <tr>
+                        <th>PID</th>
+                        <th>Name</th>
+                        <th>User</th>
+                        <th>CPU%</th>
+                        <th>Mem</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in procs)
+                    {
+                        <tr>
+                            <td class="proj-pid">@p.Pid</td>
+                            <td>@p.Name</td>
+                            <td class="proj-user">@p.User</td>
+                            <td class="@CpuClass(p.Cpu)">@Fmt.PctInt(p.Cpu)</td>
+                            <td>@Fmt.Bytes(p.MemBytes)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+
+</div>
+
+@code {
+    private System.Threading.Timer? _timer;
+    private bool _disposed;
+
+    // Per-card busy flags
+    private readonly Dictionary<string, bool>    _busy        = new();
+    private readonly Dictionary<string, string?> _busyAction  = new();
+    private readonly Dictionary<string, bool>    _backupBusy  = new();
+    private readonly Dictionary<string, bool>    _logsLoading = new();
+
+    // Per-card transient results
+    private readonly Dictionary<string, (bool Ok, string Msg)?> _controlResult = new();
+    private readonly Dictionary<string, BackupResult?>           _backupResult  = new();
+
+    // Per-card log state
+    private readonly Dictionary<string, bool>   _logsOpen = new();
+    private readonly Dictionary<string, string> _logsText = new();
+
+    // Per-card 2-click confirm state (value = which action is pending: "stop"|"restart")
+    private readonly Dictionary<string, string?> _confirmPending = new();
+
+    protected override void OnInitialized()
+    {
+        _timer = new System.Threading.Timer(async _ =>
+        {
+            if (_disposed) return;
+            await InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+    }
+
+    // ── Service control ──────────────────────────────────────────────────────
+
+    private async Task ControlAsync(string name, string service, string action)
+    {
+        _busy[name]          = true;
+        _busyAction[name]    = action;
+        _confirmPending.Remove(name);
+        _controlResult[name] = null;
+        await InvokeAsync(StateHasChanged);
+
+        var ok = await Task.Run(() => ProjectControl.Control(service, action));
+
+        _busy[name]          = false;
+        _busyAction[name]    = null;
+        _controlResult[name] = (ok, ok ? $"✓ {action} OK" : $"✗ {action} failed");
+        await InvokeAsync(StateHasChanged);
+
+        // Auto-clear the result badge after 5 s
+        await Task.Delay(5000);
+        if (!_disposed)
+        {
+            _controlResult[name] = null;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void SetConfirm(string name, string action)
+    {
+        _confirmPending[name] = action;
+        StateHasChanged();
+    }
+
+    private void ClearConfirm(string name)
+    {
+        _confirmPending.Remove(name);
+        StateHasChanged();
+    }
+
+    // ── Backup ───────────────────────────────────────────────────────────────
+
+    private async Task BackupDbAsync(string name, string dbPath)
+    {
+        var token = SettingsSvc.Get("dropbox.access_token");
+        if (string.IsNullOrEmpty(token)) return;
+
+        _backupBusy[name]   = true;
+        _backupResult[name] = null;
+        await InvokeAsync(StateHasChanged);
+
+        var result = await Backup.BackupAsync(name, dbPath, token);
+
+        _backupBusy[name]   = false;
+        _backupResult[name] = result;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // ── Logs ─────────────────────────────────────────────────────────────────
+
+    private async Task ToggleLogsAsync(string name, string? logDir, string? service)
+    {
+        var wasOpen = _logsOpen.TryGetValue(name, out var o) && o;
+
+        if (wasOpen)
+        {
+            _logsOpen[name] = false;
+        }
+        else
+        {
+            _logsOpen[name] = true;
+            // Fetch logs on first open
+            if (!_logsText.ContainsKey(name))
+                await RefreshLogsAsync(name, logDir, service);
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RefreshLogsAsync(string name, string? logDir, string? service)
+    {
+        _logsLoading[name] = true;
+        await InvokeAsync(StateHasChanged);
+
+        var text = await Task.Run(() => ProjectControl.ReadLogs(logDir, service));
+
+        _logsLoading[name] = false;
+        _logsText[name]    = text;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // ── Dispose ───────────────────────────────────────────────────────────────
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        if (_timer != null)
+            await _timer.DisposeAsync();
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    static string CpuClass(double pct) => pct > 90 ? "val-red" : pct > 70 ? "val-amber" : "val-green";
+}
