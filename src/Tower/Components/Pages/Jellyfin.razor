@@ -1,6 +1,320 @@
 @page "/jellyfin"
+@using Tower.Core.Jellyfin
+@using Tower.Core.Settings
+@using Tower.Core.State
+@using Tower.Core.Models
+@inject LiveState Live
+@inject JellyfinStats JellyfinStatsSvc
+@inject SettingsService SettingsSvc
+@implements IAsyncDisposable
 
 <PageTitle>Tower — Jellyfin</PageTitle>
 
-<h1>Jellyfin</h1>
-<p class="text-muted">Jellyfin &mdash; coming in M2.</p>
+<div class="jellyfin-page">
+
+    <h1 class="page-title">Jellyfin</h1>
+
+    @{ var jf = Live.Jellyfin; }
+
+    @* ── 1. Now Playing / Live Sessions ──────────────────────────────────────── *@
+    <section class="jf-section">
+        <h2 class="section-title">Now Playing</h2>
+
+        @if (!jf.ApiConfigured)
+        {
+            <div class="jf-notice jf-notice-info">
+                Set the Jellyfin API key in <a href="/settings">Settings</a> to enable live session tracking.
+            </div>
+        }
+        else if (!string.IsNullOrEmpty(jf.Error))
+        {
+            <div class="jf-notice jf-notice-warn">@jf.Error</div>
+        }
+
+        @{
+            var playing = jf.Sessions.Where(s => s.Playing).ToList();
+        }
+
+        @if (jf.ApiConfigured && string.IsNullOrEmpty(jf.Error) && playing.Count == 0)
+        {
+            <div class="jf-notice jf-notice-idle">Nobody watching right now.</div>
+        }
+
+        @if (playing.Count > 0)
+        {
+            <div class="atom-cards-grid">
+                @foreach (var session in playing)
+                {
+                    var isTranscode = session.Method == "Transcode";
+                    var methodClass = isTranscode ? "val-amber" : "val-green";
+
+                    <div class="atom-card jf-session-card">
+                        <div class="jf-session-header">
+                            <span class="jf-user">@session.User</span>
+                            <span class="jf-method-badge @methodClass">@(string.IsNullOrEmpty(session.Method) ? "Unknown" : session.Method)</span>
+                        </div>
+
+                        <div class="jf-media-title">
+                            @if (!string.IsNullOrEmpty(session.SeriesName))
+                            {
+                                @session.SeriesName
+                                @if (session.SeasonNumber.HasValue && session.EpisodeNumber.HasValue)
+                                {
+                                    <span class="jf-episode"> S@(session.SeasonNumber.Value.ToString("D2"))E@(session.EpisodeNumber.Value.ToString("D2"))</span>
+                                }
+                                @if (!string.IsNullOrEmpty(session.Media))
+                                {
+                                    <span class="jf-episode-title"> — @session.Media</span>
+                                }
+                            }
+                            else
+                            {
+                                @session.Media
+                            }
+                        </div>
+
+                        <div class="jf-session-meta">
+                            <span class="jf-client">@session.Client</span>
+                            @if (!string.IsNullOrEmpty(session.Device))
+                            {
+                                <span class="jf-device"> / @session.Device</span>
+                            }
+                        </div>
+
+                        @if (isTranscode)
+                        {
+                            <div class="jf-transcode-info">
+                                <span class="jf-codec-label">Video:</span> <span>@(string.IsNullOrEmpty(session.VideoCodec) ? "—" : session.VideoCodec)</span>
+                                <span class="jf-codec-sep"> | </span>
+                                <span class="jf-codec-label">Audio:</span> <span>@(string.IsNullOrEmpty(session.AudioCodec) ? "—" : session.AudioCodec)</span>
+                            </div>
+                            @if (session.TranscodeReasons.Count > 0)
+                            {
+                                <div class="jf-transcode-reasons">
+                                    @foreach (var reason in session.TranscodeReasons)
+                                    {
+                                        <span class="jf-reason-badge">@reason</span>
+                                    }
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </section>
+
+    @* ── 2. Transcode Monitor ─────────────────────────────────────────────────── *@
+    <section class="jf-section">
+        <h2 class="section-title">Transcode Monitor</h2>
+        <div class="atom-cards-grid">
+
+            <div class="atom-card">
+                <div class="atom-card-title">FFmpeg Processes</div>
+                <div class="atom-big-value @(jf.FfmpegCount > 0 ? "val-amber" : "val-green")">@jf.FfmpegCount</div>
+                <div class="atom-sub">active transcode processes</div>
+                <div class="jf-sparkline-wrap">
+                    <Sparkline Data="@jf.FfmpegCountHistory" Width="280" Height="40" Color="#d29922" FillColor="rgba(210,153,34,0.12)" />
+                </div>
+            </div>
+
+            <div class="atom-card">
+                <div class="atom-card-title">FFmpeg CPU</div>
+                <div class="atom-big-value @FfmpegCpuClass(jf.FfmpegCpu)">@Fmt.PctInt(jf.FfmpegCpu)</div>
+                <div class="atom-sub">combined transcode CPU</div>
+                <div class="jf-sparkline-wrap">
+                    <Sparkline Data="@jf.FfmpegCpuHistory" Width="280" Height="40" Color="#f0883e" FillColor="rgba(240,136,62,0.12)" />
+                </div>
+            </div>
+
+        </div>
+        <div class="jf-updated">Updated: @(jf.Updated == DateTime.MinValue ? "—" : jf.Updated.ToString("HH:mm:ss"))</div>
+    </section>
+
+    @* ── 3. Watch Analytics ───────────────────────────────────────────────────── *@
+    <section class="jf-section">
+        <h2 class="section-title">
+            Watch Analytics
+            <button class="btn-secondary btn-sm jf-refresh-btn" @onclick="RefreshAnalytics">Refresh</button>
+        </h2>
+
+        @if (_analyticsLoading)
+        {
+            <div class="jf-notice jf-notice-info">Loading analytics…</div>
+        }
+        else
+        {
+            @* Stats summary *@
+            <div class="atom-cards-grid jf-stat-cards">
+
+                <div class="atom-card jf-stat-card">
+                    <div class="atom-card-title">Total Plays</div>
+                    <div class="atom-big-value val-green">@_totalPlays</div>
+                </div>
+
+                <div class="atom-card jf-stat-card">
+                    <div class="atom-card-title">Transcodes</div>
+                    <div class="atom-big-value @(_transcodeCount > 0 ? "val-amber" : "val-green")">@_transcodeCount</div>
+                </div>
+
+            </div>
+
+            @* Most watched *@
+            @if (_topMedia.Count > 0)
+            {
+                <div class="jf-analytics-block">
+                    <h3 class="jf-sub-title">Most Watched</h3>
+                    <table class="atom-table">
+                        <thead>
+                            <tr><th>Title</th><th>Plays</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var m in _topMedia)
+                            {
+                                <tr>
+                                    <td>@m.Name</td>
+                                    <td>@m.Count</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            @* Per user *@
+            @if (_perUser.Count > 0)
+            {
+                <div class="jf-analytics-block">
+                    <h3 class="jf-sub-title">Per User</h3>
+                    <table class="atom-table">
+                        <thead>
+                            <tr><th>User</th><th>Plays</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var u in _perUser)
+                            {
+                                <tr>
+                                    <td>@u.User</td>
+                                    <td>@u.Count</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            @* Recent plays *@
+            @if (_recentPlays.Count > 0)
+            {
+                <div class="jf-analytics-block">
+                    <h3 class="jf-sub-title">Recent Plays</h3>
+                    <table class="atom-table jf-recent-table">
+                        <thead>
+                            <tr><th>Time</th><th>User</th><th>Media</th><th>Method</th><th>Client</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var p in _recentPlays)
+                            {
+                                <tr>
+                                    <td class="jf-ts">@p.StartedAt.ToLocalTime().ToString("MM/dd HH:mm")</td>
+                                    <td>@(p.UserName ?? "—")</td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(p.SeriesName))
+                                        {
+                                            @p.SeriesName
+                                            @if (p.SeasonNumber.HasValue && p.EpisodeNumber.HasValue)
+                                            {
+                                                <span class="jf-episode"> S@(p.SeasonNumber.Value.ToString("D2"))E@(p.EpisodeNumber.Value.ToString("D2"))</span>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            @p.MediaName
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(p.PlayMethod))
+                                        {
+                                            <span class="@(p.PlayMethod == "Transcode" ? "val-amber" : "val-green")">@p.PlayMethod</span>
+                                        }
+                                        else
+                                        {
+                                            <span>—</span>
+                                        }
+                                    </td>
+                                    <td>@(p.ClientName ?? "—")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            @if (_topMedia.Count == 0 && _perUser.Count == 0 && _recentPlays.Count == 0)
+            {
+                <div class="jf-notice jf-notice-idle">No play history yet. History accumulates as Jellyfin sessions are detected.</div>
+            }
+        }
+    </section>
+
+</div>
+
+@code {
+    private System.Threading.Timer? _timer;
+    private bool _disposed;
+
+    // Analytics state (loaded on init + manual refresh; not hammered every 5s)
+    private bool _analyticsLoading = true;
+    private int _totalPlays;
+    private int _transcodeCount;
+    private List<MediaCount> _topMedia = new();
+    private List<UserCount> _perUser = new();
+    private List<PlayHistory> _recentPlays = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAnalyticsAsync();
+
+        _timer = new System.Threading.Timer(async _ =>
+        {
+            if (_disposed) return;
+            await InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+    }
+
+    private async Task LoadAnalyticsAsync()
+    {
+        _analyticsLoading = true;
+        // Run DB queries on background thread to avoid blocking render
+        var (total, xcode, top, perUser, recent) = await Task.Run(() =>
+        {
+            var t = JellyfinStatsSvc.TotalPlays();
+            var x = JellyfinStatsSvc.TranscodeCount();
+            var m = JellyfinStatsSvc.TopMedia(10);
+            var u = JellyfinStatsSvc.PerUser(10);
+            var r = JellyfinStatsSvc.Recent(20);
+            return (t, x, m, u, r);
+        });
+        _totalPlays = total;
+        _transcodeCount = xcode;
+        _topMedia = top;
+        _perUser = perUser;
+        _recentPlays = recent;
+        _analyticsLoading = false;
+    }
+
+    private async Task RefreshAnalytics()
+    {
+        await LoadAnalyticsAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        if (_timer != null)
+            await _timer.DisposeAsync();
+    }
+
+    static string FfmpegCpuClass(double pct) => pct > 90 ? "val-red" : pct > 50 ? "val-amber" : "val-green";
+}

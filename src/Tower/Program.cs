@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Tower;
 using Tower.Components;
 using Tower.Core.Data;
+using Tower.Core.Jellyfin;
 using Tower.Core.Maintenance;
 using Tower.Core.Pi;
 using Tower.Core.Settings;
@@ -26,6 +27,11 @@ builder.Services.AddScoped<SettingsService>();
 builder.Services.AddSingleton<LiveState>();
 builder.Services.AddHttpClient<PiAgentClient>();
 
+// ── Jellyfin ─────────────────────────────────────────────────────────────────
+builder.Services.AddSingleton(new JellyfinOptions { JellyfinUrl = towerCfg.JellyfinUrl });
+builder.Services.AddHttpClient<JellyfinClient>();
+builder.Services.AddScoped<JellyfinStats>();
+
 // ── Maintenance ──────────────────────────────────────────────────────────────
 builder.Services.AddSingleton(new MaintenanceOptions
 {
@@ -35,6 +41,7 @@ builder.Services.AddSingleton(new MaintenanceOptions
 builder.Services.AddSingleton<MaintenanceRunner>();
 
 // ── Background workers ───────────────────────────────────────────────────────
+builder.Services.AddHostedService<JellyfinWorker>();
 builder.Services.AddHostedService<StatsWorker>();
 builder.Services.AddHostedService<SmartWorker>();
 builder.Services.AddHostedService<DiskUsageWorker>();
