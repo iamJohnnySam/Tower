@@ -1,0 +1,7 @@
+# Tower — scoped passwordless sudo for the atom service account.
+# Install to /etc/sudoers.d/tower (chmod 0440, validate with visudo -c).
+# Covers SMART polling, maintenance apt runs, reboot/shutdown, and (M2) project service control.
+atom ALL=(root) NOPASSWD: /usr/sbin/smartctl
+atom ALL=(root) NOPASSWD: /home/atom/Tower/do_maintenance.sh
+atom ALL=(root) NOPASSWD: /sbin/shutdown
+atom ALL=(root) NOPASSWD: /usr/bin/systemctl start *, /usr/bin/systemctl stop *, /usr/bin/systemctl restart *

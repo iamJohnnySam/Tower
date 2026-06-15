@@ -1,0 +1,19 @@
+[Unit]
+Description=Tower — home-lab command center
+After=network.target
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=atom
+WorkingDirectory=/home/atom/Tower
+ExecStart=/home/atom/Tower/Tower
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+Environment=DOTNET_ENVIRONMENT=Production
+
+[Install]
+WantedBy=multi-user.target
