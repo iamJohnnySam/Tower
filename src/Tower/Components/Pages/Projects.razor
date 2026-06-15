@@ -159,10 +159,9 @@
                             @if (hasDb && dbPath != null)
                             {
                                 var dpath = dbPath; // capture
-                                var tokenOk = SettingsSvc.IsConfigured("dropbox.access_token");
                                 <button class="btn-secondary btn-sm"
-                                        disabled="@(bkpBusy || !tokenOk)"
-                                        title="@(tokenOk ? null : "Configure Dropbox in Settings")"
+                                        disabled="@(bkpBusy || !_dropboxConfigured)"
+                                        title="@(_dropboxConfigured ? null : "Configure Dropbox in Settings")"
                                         @onclick="@(() => BackupDbAsync(pname, dpath))">
                                     @(bkpBusy ? "Backing up…" : "Backup DB")
                                 </button>
@@ -336,8 +335,13 @@
     // Per-card 2-click confirm state (value = which action is pending: "stop"|"restart")
     private readonly Dictionary<string, string?> _confirmPending = new();
 
+    // Cached once on init — avoids a SQLite hit per card per 5 s render cycle.
+    private bool _dropboxConfigured;
+
     protected override void OnInitialized()
     {
+        _dropboxConfigured = SettingsSvc.IsConfigured("dropbox.access_token");
+
         _timer = new System.Threading.Timer(async _ =>
         {
             if (_disposed) return;

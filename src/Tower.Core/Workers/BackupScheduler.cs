@@ -15,7 +15,6 @@ namespace Tower.Core.Workers;
 /// </summary>
 public class BackupScheduler(
     IServiceScopeFactory scopes,
-    BackupService backup,
     LiveState state,
     ProjectsOptions projOpts) : BackgroundService
 {
@@ -43,15 +42,10 @@ public class BackupScheduler(
 
     private async Task RunTickAsync(CancellationToken ct)
     {
-        string schedule;
-        string token;
-
-        using (var scope = scopes.CreateScope())
-        {
-            var settings = scope.ServiceProvider.GetRequiredService<SettingsService>();
-            schedule = settings.Get("backup.schedule") ?? "02:00";
-            token    = settings.Get("dropbox.access_token") ?? "";
-        }
+        using var scope = scopes.CreateScope();
+        var settings = scope.ServiceProvider.GetRequiredService<SettingsService>();
+        var schedule = settings.Get("backup.schedule") ?? "02:00";
+        var token    = settings.Get("dropbox.access_token") ?? "";
 
         // Skip if no Dropbox token is configured.
         if (string.IsNullOrWhiteSpace(token))
@@ -69,6 +63,8 @@ public class BackupScheduler(
         // This avoids missed backups if the process restarts or a tick overshoots the exact minute.
         if (_lastBackupDate == today || now < target)
             return;
+
+        var backup = scope.ServiceProvider.GetRequiredService<BackupService>();
 
         // Build the list of databases to back up:
         // one entry per project that has a non-empty DbPath, plus tower.db.
