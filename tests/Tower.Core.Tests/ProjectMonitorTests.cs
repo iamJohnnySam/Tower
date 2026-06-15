@@ -27,9 +27,8 @@ public class ProjectControlTests
         Directory.CreateDirectory(dir);
         try
         {
-            // Filenames sorted descending: app-2026-06-15.log > app-2026-06-14.log
-            // ReadLogs reads them in that order and concatenates, then TakeLast(lines).
-            // Combined list: [B-1..5, A-1..5], TakeLast(4) = [A-2, A-3, A-4, A-5].
+            // Files are read in chronological (ascending filename) order so TakeLast gives most-recent lines.
+            // Combined list chronologically: [A-1..5, B-1..5], TakeLast(4) = [B-2, B-3, B-4, B-5].
             File.WriteAllLines(Path.Combine(dir, "app-2026-06-14.log"),
                 Enumerable.Range(1, 5).Select(i => $"line-A-{i}"));
             File.WriteAllLines(Path.Combine(dir, "app-2026-06-15.log"),
@@ -40,8 +39,29 @@ public class ProjectControlTests
             var resultLines = result.Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
             Assert.Equal(4, resultLines.Length);
-            // All 4 lines come from the tail of the concatenated content
-            Assert.Contains("line-A-5", result);
+            // All 4 lines come from the tail of the newer file
+            Assert.Contains("line-B-5", result);
+            Assert.DoesNotContain("line-A-5", result);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ReadLogs_newest_file_content_wins()
+    {
+        // Proves: with lines=1, the single returned line must come from the newer file.
+        var dir = Path.Combine(Path.GetTempPath(), $"tower-test-logs-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "2026-01-01.log"), "OLD\n");
+            File.WriteAllText(Path.Combine(dir, "2026-02-01.log"), "NEW\n");
+
+            var result = ProjectControl.ReadLogs(dir, service: null, lines: 1);
+            Assert.Equal("NEW", result.Trim());
         }
         finally
         {

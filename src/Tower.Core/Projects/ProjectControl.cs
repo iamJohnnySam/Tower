@@ -41,8 +41,10 @@ public static class ProjectControl
             if (!string.IsNullOrEmpty(logDir) && Directory.Exists(logDir))
             {
                 var files = Directory.GetFiles(logDir, "*.log", SearchOption.AllDirectories)
-                    .OrderByDescending(f => Path.GetFileName(f))
-                    .Take(3);
+                    .OrderByDescending(f => Path.GetFileName(f))   // pick newest 3
+                    .Take(3)
+                    .OrderBy(f => Path.GetFileName(f))             // then chronological so TakeLast = most recent
+                    .ToList();
 
                 var all = new List<string>();
                 foreach (var f in files)
