@@ -2,6 +2,19 @@ using Tower.Core.Metrics;
 
 namespace Tower.Core.State;
 
+// ─── Project status ───────────────────────────────────────────────────────────
+
+public record ProjectStatus(
+    string Name,
+    string? Service,
+    int? Port,
+    string? Url,
+    string SystemdStatus,
+    bool PortOpen,
+    double Cpu,
+    long MemBytes,
+    bool ProcRunning);
+
 // ─── Jellyfin snapshot ────────────────────────────────────────────────────────
 
 public record JellyfinSnapshot(
@@ -114,6 +127,9 @@ public class LiveState
     private readonly Queue<double> _ffmpegCountQ = new(60);
     private readonly Queue<double> _ffmpegCpuQ   = new(60);
 
+    // ── Projects ──
+    private List<ProjectStatus> _projects = [];
+
     // ─── Public read properties ──────────────────────────────────────────────
 
     public StatsSnapshot Stats
@@ -149,6 +165,11 @@ public class LiveState
     public JellyfinSnapshot Jellyfin
     {
         get { lock (_lock) return _jellyfin; }
+    }
+
+    public IReadOnlyList<ProjectStatus> Projects
+    {
+        get { lock (_lock) return _projects.AsReadOnly(); }
     }
 
     // ─── Write methods ───────────────────────────────────────────────────────
@@ -209,6 +230,11 @@ public class LiveState
     public void SetJellyfin(JellyfinSnapshot s)
     {
         lock (_lock) _jellyfin = s;
+    }
+
+    public void SetProjects(List<ProjectStatus> projects)
+    {
+        lock (_lock) _projects = [.. projects];
     }
 
     /// <summary>
