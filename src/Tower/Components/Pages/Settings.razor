@@ -1,0 +1,372 @@
+@page "/settings"
+@using Tower.Core.Settings
+@using Tower.Core.State
+@inject SettingsService SettingsSvc
+@inject LiveState Live
+@implements IAsyncDisposable
+
+<PageTitle>Tower — Settings</PageTitle>
+
+<div class="settings-page">
+
+    <h1 class="page-title">Settings</h1>
+
+    @* ── A) API Keys ──────────────────────────────────────────────────────────── *@
+    <section class="settings-section">
+        <div class="atom-section-block">
+            <div class="atom-block-title">API Keys</div>
+            <div class="config-form">
+
+                @* ── Jellyfin ── *@
+                <div class="config-row">
+                    <label class="config-label">Jellyfin API Key</label>
+                    <div class="config-control">
+                        @if (SettingsSvc.IsConfigured("jellyfin.api_key") && !_jellyfinReplacing)
+                        {
+                            <div class="key-configured-row">
+                                <span class="val-green configured-badge">&#10003; Configured</span>
+                                <button class="btn-secondary btn-sm" @onclick="() => _jellyfinReplacing = true">Replace</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="key-input-row">
+                                <input type="password" class="config-input config-input-wide"
+                                       placeholder="Paste new API key…"
+                                       @bind="_jellyfinValue"
+                                       @bind:event="oninput" />
+                                <button class="btn btn-primary btn-sm" @onclick="SaveJellyfin">Save</button>
+                                @if (SettingsSvc.IsConfigured("jellyfin.api_key"))
+                                {
+                                    <button class="btn-secondary btn-sm" @onclick="CancelJellyfin">Cancel</button>
+                                }
+                            </div>
+                            @if (_jellyfinSaved)
+                            {
+                                <span class="save-confirm">Saved &#10003;</span>
+                            }
+                        }
+                        <span class="config-hint">Used by the Jellyfin integration (play history, library stats).</span>
+                    </div>
+                </div>
+
+                @* ── Dropbox ── *@
+                <div class="config-row">
+                    <label class="config-label">Dropbox Access Token</label>
+                    <div class="config-control">
+                        @if (SettingsSvc.IsConfigured("dropbox.access_token") && !_dropboxReplacing)
+                        {
+                            <div class="key-configured-row">
+                                <span class="val-green configured-badge">&#10003; Configured</span>
+                                <button class="btn-secondary btn-sm" @onclick="() => _dropboxReplacing = true">Replace</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="key-input-row">
+                                <input type="password" class="config-input config-input-wide"
+                                       placeholder="Paste new token…"
+                                       @bind="_dropboxValue"
+                                       @bind:event="oninput" />
+                                <button class="btn btn-primary btn-sm" @onclick="SaveDropbox">Save</button>
+                                @if (SettingsSvc.IsConfigured("dropbox.access_token"))
+                                {
+                                    <button class="btn-secondary btn-sm" @onclick="CancelDropbox">Cancel</button>
+                                }
+                            </div>
+                            @if (_dropboxSaved)
+                            {
+                                <span class="save-confirm">Saved &#10003;</span>
+                            }
+                        }
+                        <span class="config-hint">Used for backup uploads to Dropbox (M2).</span>
+                    </div>
+                </div>
+
+                @* ── Telegram ── *@
+                <div class="config-row">
+                    <label class="config-label">Telegram Bot Token</label>
+                    <div class="config-control">
+                        @if (SettingsSvc.IsConfigured("telegram.bot_token") && !_telegramReplacing)
+                        {
+                            <div class="key-configured-row">
+                                <span class="val-green configured-badge">&#10003; Configured</span>
+                                <button class="btn-secondary btn-sm" @onclick="() => _telegramReplacing = true">Replace</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="key-input-row">
+                                <input type="password" class="config-input config-input-wide"
+                                       placeholder="Paste bot token…"
+                                       @bind="_telegramValue"
+                                       @bind:event="oninput" />
+                                <button class="btn btn-primary btn-sm" @onclick="SaveTelegram">Save</button>
+                                @if (SettingsSvc.IsConfigured("telegram.bot_token"))
+                                {
+                                    <button class="btn-secondary btn-sm" @onclick="CancelTelegram">Cancel</button>
+                                }
+                            </div>
+                            @if (_telegramSaved)
+                            {
+                                <span class="save-confirm">Saved &#10003;</span>
+                            }
+                        }
+                        <span class="config-hint">Used for Telegram notifications (wired in M3).</span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    @* ── B) Backup ────────────────────────────────────────────────────────────── *@
+    <section class="settings-section">
+        <div class="atom-section-block">
+            <div class="atom-block-title">Backup</div>
+            <div class="config-form">
+
+                <div class="config-row">
+                    <label class="config-label" for="backup-schedule">Backup Schedule</label>
+                    <div class="config-control">
+                        <input type="time" id="backup-schedule"
+                               class="config-input"
+                               value="@_backupSchedule"
+                               @oninput="e => _backupSchedule = e.Value?.ToString() ?? string.Empty" />
+                        <span class="config-hint">Time-of-day to run automatic Dropbox backups (e.g. 02:00). Backup execution wired in M2.</span>
+                    </div>
+                </div>
+
+                <div class="config-row">
+                    <div class="config-label"></div>
+                    <div class="config-control">
+                        <button class="btn btn-primary" @onclick="SaveBackup">Save</button>
+                        @if (_backupSaved)
+                        {
+                            <span class="save-confirm">Saved &#10003;</span>
+                        }
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    @* ── C) Storage / Sizes ───────────────────────────────────────────────────── *@
+    <section class="settings-section">
+        <div class="atom-section-block">
+            <div class="atom-block-title">Storage Sizes</div>
+
+            <table class="atom-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Path</th>
+                        <th>Size</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @{ var sizes = Live.Sizes; }
+                    @foreach (var item in sizes)
+                    {
+                        <tr>
+                            <td><strong>@item.Name</strong></td>
+                            <td class="mono text-muted">@item.Path</td>
+                            <td>@(item.Exists ? Fmt.Bytes(item.Bytes) : "—")</td>
+                            <td>
+                                @if (item.Exists)
+                                {
+                                    <span class="val-green">&#10003;</span>
+                                }
+                                else
+                                {
+                                    <span class="val-red">Missing</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    @if (!sizes.Any())
+                    {
+                        <tr><td colspan="4" class="text-muted">Collecting… (refreshes every 5 min)</td></tr>
+                    }
+                </tbody>
+            </table>
+
+            @* ── Log retention ── *@
+            <div style="margin-top:1.2rem;">
+                <div class="atom-block-title" style="margin-top:0.5rem;">Log Retention</div>
+                <div class="config-form">
+                    <div class="config-row">
+                        <label class="config-label" for="log-retention">Retention (days)</label>
+                        <div class="config-control">
+                            <input type="number" id="log-retention" min="1" max="365"
+                                   class="config-input"
+                                   value="@_logRetentionDays"
+                                   @oninput="e => _logRetentionDays = e.Value?.ToString() ?? string.Empty" />
+                            <span class="config-hint">Number of days to keep log files. Pruning wired in a future milestone.</span>
+                        </div>
+                    </div>
+                    <div class="config-row">
+                        <div class="config-label"></div>
+                        <div class="config-control">
+                            <button class="btn btn-primary" @onclick="SaveLogRetention">Save</button>
+                            @if (_logRetentionSaved)
+                            {
+                                <span class="save-confirm">Saved &#10003;</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+</div>
+
+@code {
+    // ── Jellyfin ──────────────────────────────────────────────────────────────
+    private string _jellyfinValue    = "";
+    private bool   _jellyfinReplacing = false;
+    private bool   _jellyfinSaved    = false;
+
+    // ── Dropbox ───────────────────────────────────────────────────────────────
+    private string _dropboxValue    = "";
+    private bool   _dropboxReplacing = false;
+    private bool   _dropboxSaved    = false;
+
+    // ── Telegram ──────────────────────────────────────────────────────────────
+    private string _telegramValue    = "";
+    private bool   _telegramReplacing = false;
+    private bool   _telegramSaved    = false;
+
+    // ── Backup ────────────────────────────────────────────────────────────────
+    private string _backupSchedule = "";
+    private bool   _backupSaved    = false;
+
+    // ── Log retention ─────────────────────────────────────────────────────────
+    private string _logRetentionDays  = "30";
+    private bool   _logRetentionSaved = false;
+
+    // ── Timer for auto-refresh ────────────────────────────────────────────────
+    private System.Threading.Timer? _timer;
+    private bool _disposed = false;
+
+    protected override void OnInitialized()
+    {
+        _backupSchedule   = SettingsSvc.Get("backup.schedule") ?? "";
+        _logRetentionDays = SettingsSvc.Get("log.retention_days") ?? "30";
+
+        // Refresh the sizes table every 10 s
+        _timer = new System.Threading.Timer(_ =>
+        {
+            if (!_disposed)
+                InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+    }
+
+    // ── Jellyfin ──────────────────────────────────────────────────────────────
+
+    private void CancelJellyfin()
+    {
+        _jellyfinReplacing = false;
+        _jellyfinValue     = "";
+    }
+
+    private async Task SaveJellyfin()
+    {
+        var val = _jellyfinValue.Trim();
+        if (string.IsNullOrWhiteSpace(val)) return;
+
+        SettingsSvc.Set("jellyfin.api_key", val);
+        _jellyfinValue    = "";
+        _jellyfinReplacing = false;
+        _jellyfinSaved    = true;
+        StateHasChanged();
+
+        await Task.Delay(2500);
+        if (!_disposed) { _jellyfinSaved = false; await InvokeAsync(StateHasChanged); }
+    }
+
+    // ── Dropbox ───────────────────────────────────────────────────────────────
+
+    private void CancelDropbox()
+    {
+        _dropboxReplacing = false;
+        _dropboxValue     = "";
+    }
+
+    private async Task SaveDropbox()
+    {
+        var val = _dropboxValue.Trim();
+        if (string.IsNullOrWhiteSpace(val)) return;
+
+        SettingsSvc.Set("dropbox.access_token", val);
+        _dropboxValue    = "";
+        _dropboxReplacing = false;
+        _dropboxSaved    = true;
+        StateHasChanged();
+
+        await Task.Delay(2500);
+        if (!_disposed) { _dropboxSaved = false; await InvokeAsync(StateHasChanged); }
+    }
+
+    // ── Telegram ──────────────────────────────────────────────────────────────
+
+    private void CancelTelegram()
+    {
+        _telegramReplacing = false;
+        _telegramValue     = "";
+    }
+
+    private async Task SaveTelegram()
+    {
+        var val = _telegramValue.Trim();
+        if (string.IsNullOrWhiteSpace(val)) return;
+
+        SettingsSvc.Set("telegram.bot_token", val);
+        _telegramValue    = "";
+        _telegramReplacing = false;
+        _telegramSaved    = true;
+        StateHasChanged();
+
+        await Task.Delay(2500);
+        if (!_disposed) { _telegramSaved = false; await InvokeAsync(StateHasChanged); }
+    }
+
+    // ── Backup ────────────────────────────────────────────────────────────────
+
+    private async Task SaveBackup()
+    {
+        SettingsSvc.Set("backup.schedule",
+            string.IsNullOrWhiteSpace(_backupSchedule) ? null : _backupSchedule.Trim());
+        _backupSaved = true;
+        StateHasChanged();
+
+        await Task.Delay(2500);
+        if (!_disposed) { _backupSaved = false; await InvokeAsync(StateHasChanged); }
+    }
+
+    // ── Log retention ─────────────────────────────────────────────────────────
+
+    private async Task SaveLogRetention()
+    {
+        SettingsSvc.Set("log.retention_days",
+            string.IsNullOrWhiteSpace(_logRetentionDays) ? "30" : _logRetentionDays.Trim());
+        _logRetentionSaved = true;
+        StateHasChanged();
+
+        await Task.Delay(2500);
+        if (!_disposed) { _logRetentionSaved = false; await InvokeAsync(StateHasChanged); }
+    }
+
+    // ── Dispose ───────────────────────────────────────────────────────────────
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        if (_timer != null)
+            await _timer.DisposeAsync();
+    }
+}

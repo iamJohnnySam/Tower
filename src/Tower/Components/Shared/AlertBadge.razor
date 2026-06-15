@@ -1,0 +1,8 @@
+@* AlertBadge — a colored pill: 0=green, 1=amber, 2=red *@
+
+<span class="alert-badge alert-badge-@Level">@Text</span>
+
+@code {
+    [Parameter] public int Level { get; set; }  // 0=ok, 1=warn, 2=crit
+    [Parameter] public string Text { get; set; } = "";
+}

@@ -1,0 +1,288 @@
+/* ─── Home overview page ─────────────────────────────────────────────────── */
+
+.home-page {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    max-width: 1100px;
+}
+
+.home-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.section-title {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #8b949e;
+    margin: 0;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid #21262d;
+}
+
+/* ─── Device cards ───────────────────────────────────────────────────────── */
+
+.devices-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.device-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    min-width: 180px;
+    max-width: 260px;
+    flex: 1 1 180px;
+}
+
+.device-card.device-online { border-left: 3px solid #3fb950; }
+.device-card.device-offline { border-left: 3px solid #f85149; }
+.device-card.device-checking { border-left: 3px solid #484f58; }
+
+.device-header {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-bottom: 0.4rem;
+}
+
+.device-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #c9d1d9;
+    flex: 1;
+}
+
+.device-badge {
+    font-size: 0.68rem;
+    color: #8b949e;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.status-dot.online { background: #3fb950; box-shadow: 0 0 4px #3fb950; }
+.status-dot.offline { background: #f85149; }
+.status-dot.checking { background: #484f58; }
+
+.device-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    font-size: 0.78rem;
+    color: #8b949e;
+}
+
+.dm-item strong { color: #c9d1d9; }
+.dm-uptime { flex-basis: 100%; }
+
+/* ─── Metric cards ───────────────────────────────────────────────────────── */
+
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 0.75rem;
+}
+
+.metric-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 0.85rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+.mc-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.mc-title {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #8b949e;
+}
+
+.mc-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.mc-value.accent { color: #58a6ff; }
+.mc-value.val-green { color: #3fb950; }
+.mc-value.val-amber { color: #d29922; }
+.mc-value.val-red   { color: #f85149; }
+
+.mc-sub {
+    font-size: 0.72rem;
+    color: #8b949e;
+}
+
+.mc-sparkline {
+    margin: 0.1rem 0;
+}
+
+.mc-sparkline svg {
+    display: block;
+    width: 100%;
+    height: 36px;
+}
+
+.mc-bar-wrap {
+    padding: 0.2rem 0;
+}
+
+.mc-bar {
+    height: 5px;
+    background: #21262d;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.mc-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.4s ease;
+}
+
+.mc-bar-fill.val-green { background: #3fb950; }
+.mc-bar-fill.val-amber { background: #d29922; }
+.mc-bar-fill.val-red   { background: #f85149; }
+
+/* ─── Services grid ──────────────────────────────────────────────────────── */
+
+.services-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 0.35rem;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+}
+
+.svc-item {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.8rem;
+    color: #c9d1d9;
+    padding: 0.2rem 0;
+}
+
+.svc-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.svc-dot.svc-on  { background: #3fb950; }
+.svc-dot.svc-off { background: #f85149; }
+
+.svc-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.svc-status {
+    font-size: 0.68rem;
+    color: #f85149;
+}
+
+/* ─── Alerts ─────────────────────────────────────────────────────────────── */
+
+.alerts-ok {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    color: #3fb950;
+}
+
+.ok-check {
+    font-size: 1rem;
+}
+
+.alerts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.alert-row {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.82rem;
+}
+
+.alert-text {
+    color: #c9d1d9;
+}
+
+/* ─── No-IP / Public IP card ─────────────────────────────────────────────── */
+
+.noip-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.noip-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: 0.82rem;
+}
+
+.noip-label {
+    width: 90px;
+    color: #8b949e;
+    flex-shrink: 0;
+}
+
+.noip-val {
+    color: #c9d1d9;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.noip-prev {
+    color: #8b949e;
+    font-size: 0.78rem;
+}

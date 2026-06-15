@@ -1,0 +1,76 @@
+/* ─── AtomSystem component — component-specific selectors only ─────────────
+   Shared selectors (atom-cards-grid, atom-card, atom-header, atom-hostname,
+   atom-uptime, atom-big-value, atom-sub, atom-kv-list, atom-row-kv,
+   atom-table, atom-temps, atom-core-bars, core-bar-wrap, core-bar,
+   core-bar-fill, atom-sparkline, atom-net-row, mc-bar-wrap, mono, accent)
+   have been moved to wwwroot/app.css (global).
+   ────────────────────────────────────────────────────────────────────────── */
+
+.atom-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    max-width: 1100px;
+}
+
+.atom-section-block {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 1rem 1.1rem;
+}
+
+.atom-block-title {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #8b949e;
+    margin-bottom: 0.75rem;
+}
+
+/* ─── Temperatures (rows unique to AtomSystem) ────────────────────────────── */
+
+.temp-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.8rem;
+    padding: 2px 0;
+    border-bottom: 1px solid #21262d;
+}
+
+.temp-row:last-child {
+    border-bottom: none;
+}
+
+.temp-label {
+    color: #8b949e;
+}
+
+.temp-val {
+    font-weight: 600;
+}
+
+/* ─── Services list (unique to AtomSystem) ────────────────────────────────── */
+
+.svc-item {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.8rem;
+    color: #c9d1d9;
+    padding: 0.2rem 0;
+}
+
+.svc-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.svc-status {
+    font-size: 0.68rem;
+    color: #f85149;
+}

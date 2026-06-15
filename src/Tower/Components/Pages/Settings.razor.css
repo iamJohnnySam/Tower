@@ -1,0 +1,45 @@
+/* Settings page — component-specific selectors only.
+   Shared: atom-section-block, atom-block-title, config-form, config-row,
+           config-label, config-control, config-input, config-hint,
+           save-confirm, btn-secondary, btn-sm, atom-table, val-green, val-red, mono.
+   These are all in wwwroot/app.css. */
+
+.settings-page {
+    max-width: 860px;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.page-title {
+    margin-bottom: 0.25rem;
+}
+
+.settings-section {
+    /* sections are stacked by the flex column above */
+}
+
+/* "✓ Configured" row with Replace button */
+.key-configured-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.configured-badge {
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+/* Input + Save + Cancel in a row */
+.key-input-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+/* Wider input for API keys/tokens */
+.config-input-wide {
+    width: 300px;
+}

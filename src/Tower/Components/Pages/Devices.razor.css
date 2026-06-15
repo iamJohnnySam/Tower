@@ -1,0 +1,133 @@
+/* ─── Devices page layout ─────────────────────────────────────────────────── */
+
+.devices-layout {
+    display: flex;
+    flex-direction: row;
+    min-height: calc(100vh - 56px);
+}
+
+/* ─── Left device rail (sidebar) ─────────────────────────────────────────── */
+
+.device-rail {
+    width: 180px;
+    flex-shrink: 0;
+    background: #161b22;
+    border-right: 1px solid #30363d;
+    padding: 1rem 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.device-rail-title {
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #8b949e;
+    padding: 0 0.5rem 0.6rem 0.5rem;
+    border-bottom: 1px solid #21262d;
+    margin-bottom: 0.3rem;
+}
+
+.device-rail-item {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.45rem 0.6rem;
+    border-radius: 5px;
+    color: #c9d1d9;
+    font-size: 0.85rem;
+    text-decoration: none;
+    transition: background 0.15s;
+    border-left: 3px solid transparent;
+}
+
+.device-rail-item:hover {
+    background: #21262d;
+    text-decoration: none;
+}
+
+.device-rail-item.active {
+    background: rgba(88, 166, 255, 0.08);
+    border-left-color: #58a6ff;
+    color: #e6edf3;
+}
+
+.dev-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.dot-green   { background: #3fb950; box-shadow: 0 0 4px #3fb950; }
+.dot-neutral { background: #484f58; }
+
+.dev-rail-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dev-rail-badge {
+    font-size: 0.65rem;
+    color: #8b949e;
+    background: #21262d;
+    border: 1px solid #30363d;
+    border-radius: 3px;
+    padding: 1px 4px;
+}
+
+/* ─── Main content area ───────────────────────────────────────────────────── */
+
+.device-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 1.25rem 1.5rem;
+    min-width: 0;
+}
+
+/* ─── Horizontal pill submenu ─────────────────────────────────────────────── */
+
+.device-submenu {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 1.25rem;
+}
+
+.submenu-pill {
+    padding: 0.3rem 0.9rem;
+    border-radius: 20px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    color: #8b949e;
+    font-size: 0.82rem;
+    text-decoration: none;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.submenu-pill:hover {
+    background: #21262d;
+    color: #c9d1d9;
+    border-color: #8b949e;
+    text-decoration: none;
+}
+
+.submenu-pill.active {
+    background: #58a6ff;
+    border-color: #58a6ff;
+    color: #fff;
+}
+
+/* ─── Body area (component content) ──────────────────────────────────────── */
+
+.device-body {
+    flex: 1;
+    min-width: 0;
+}

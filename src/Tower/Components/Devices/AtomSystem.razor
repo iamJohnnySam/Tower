@@ -1,0 +1,233 @@
+@using Tower.Core.State
+@using Tower.Components.Shared
+@inject LiveState Live
+@implements IAsyncDisposable
+
+<div class="atom-section">
+
+    @{ var s = Live.Stats; }
+
+    @* ── Header ───────────────────────────────────────────────────────────────── *@
+    <div class="atom-header">
+        <span class="atom-hostname">@(string.IsNullOrEmpty(s.Hostname) ? "—" : s.Hostname)</span>
+        <span class="atom-uptime">↑ @(string.IsNullOrEmpty(s.Uptime) ? "—" : s.Uptime)</span>
+    </div>
+
+    <div class="atom-cards-grid">
+
+        @* ── CPU card ──────────────────────────────────────────────────────────── *@
+        <div class="atom-card">
+            <div class="atom-card-title">CPU</div>
+            <div class="atom-big-value @CpuClass(s.CpuPct)">@Fmt.PctInt(s.CpuPct)</div>
+            <div class="atom-sub">
+                @s.CpuCount cores
+                @if (s.Load.Length >= 3)
+                {
+                    <span> &bull; load @($"{s.Load[0]:0.00}") @($"{s.Load[1]:0.00}") @($"{s.Load[2]:0.00}")</span>
+                }
+                @if (s.FreqMhz > 0)
+                {
+                    <span> &bull; @Fmt.Freq(s.FreqMhz)</span>
+                    @if (s.FreqMaxMhz > 0)
+                    {
+                        <span> / @Fmt.Freq(s.FreqMaxMhz)</span>
+                    }
+                }
+            </div>
+            <div class="atom-sparkline">
+                <Sparkline Data="@s.CpuHistory" Width="280" Height="40" Color="#58a6ff" FillColor="rgba(88,166,255,0.1)" />
+            </div>
+            @if (s.CpuCores.Length > 0)
+            {
+                <div class="atom-core-bars">
+                    @for (int i = 0; i < s.CpuCores.Length; i++)
+                    {
+                        var pct = s.CpuCores[i];
+                        <div class="core-bar-wrap" title="Core @i: @Fmt.PctInt(pct)">
+                            <div class="core-bar">
+                                <div class="core-bar-fill @CpuClass(pct)" style="width:@($"{Math.Min(pct,100):0.#}%")"></div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        @* ── Memory card ─────────────────────────────────────────────────────── *@
+        <div class="atom-card">
+            <div class="atom-card-title">Memory</div>
+            <div class="atom-big-value @MemClass(s.MemPct)">@Fmt.PctInt(s.MemPct)</div>
+            <div class="atom-sub">@Fmt.Bytes(s.MemUsedBytes) / @Fmt.Bytes(s.MemTotalBytes)</div>
+            <div class="mc-bar-wrap" style="margin:6px 0">
+                <div class="mc-bar">
+                    <div class="mc-bar-fill @MemClass(s.MemPct)" style="width:@($"{Math.Min(s.MemPct,100):0.#}%")"></div>
+                </div>
+            </div>
+            @if (s.SwapTotalBytes > 0)
+            {
+                <div class="atom-sub" style="margin-top:8px">
+                    <strong>Swap:</strong> @Fmt.Bytes(s.SwapUsedBytes) / @Fmt.Bytes(s.SwapTotalBytes)
+                    <span class="@MemClass(s.SwapPct)"> (@Fmt.PctInt(s.SwapPct))</span>
+                </div>
+                <div class="mc-bar-wrap" style="margin:4px 0">
+                    <div class="mc-bar">
+                        <div class="mc-bar-fill @MemClass(s.SwapPct)" style="width:@($"{Math.Min(s.SwapPct,100):0.#}%")"></div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        @* ── Network card ─────────────────────────────────────────────────────── *@
+        <div class="atom-card">
+            <div class="atom-card-title">Network</div>
+            <div class="atom-net-row">
+                <span class="accent">↓ @Fmt.Rate(s.NetRecvRate)</span>
+                <span style="color:#3fb950"> ↑ @Fmt.Rate(s.NetSentRate)</span>
+            </div>
+            <div class="atom-sparkline">
+                <Sparkline Data="@s.RecvHistory" Width="280" Height="36" Color="#58a6ff" FillColor="rgba(88,166,255,0.08)" />
+            </div>
+            <div class="atom-sparkline" style="margin-top:2px">
+                <Sparkline Data="@s.SentHistory" Width="280" Height="36" Color="#3fb950" FillColor="rgba(63,185,80,0.08)" />
+            </div>
+            @if (s.Nics.Count > 0)
+            {
+                <table class="atom-table" style="margin-top:10px">
+                    <thead>
+                        <tr><th>NIC</th><th>Up</th><th>Speed</th><th>IP</th><th>↓ Total</th><th>↑ Total</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var nic in s.Nics)
+                        {
+                            <tr>
+                                <td>@nic.Name</td>
+                                <td><span class="svc-dot @(nic.Up ? "svc-on" : "svc-off")"></span></td>
+                                <td>@(nic.SpeedMbps > 0 ? $"{nic.SpeedMbps} Mbps" : "—")</td>
+                                <td>@(string.IsNullOrEmpty(nic.Ip) ? "—" : nic.Ip)</td>
+                                <td>@Fmt.Bytes(nic.Recv)</td>
+                                <td>@Fmt.Bytes(nic.Sent)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+
+        @* ── Temperatures card ────────────────────────────────────────────────── *@
+        @if (s.Temps.Count > 0)
+        {
+            <div class="atom-card">
+                <div class="atom-card-title">Temperatures</div>
+                <div class="atom-temps">
+                    @foreach (var t in s.Temps)
+                    {
+                        <div class="temp-row">
+                            <span class="temp-label">@t.Label</span>
+                            <span class="temp-val @TempClass(t.Temp)">@($"{t.Temp:0.#}")°C</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @* ── GPU card ─────────────────────────────────────────────────────────── *@
+        <div class="atom-card">
+            <div class="atom-card-title">GPU</div>
+            @if (s.Gpu.Type != "none" && s.Gpu.Name is not null)
+            {
+                <div class="atom-sub" style="margin-bottom:6px">@s.Gpu.Name (@s.Gpu.Type)</div>
+                @if (s.Gpu.Usage.HasValue)
+                {
+                    <div class="atom-row-kv"><span>Usage</span><span class="@CpuClass(s.Gpu.Usage.Value)">@Fmt.PctInt(s.Gpu.Usage.Value)</span></div>
+                }
+                @if (s.Gpu.Temp.HasValue)
+                {
+                    <div class="atom-row-kv"><span>Temp</span><span class="@TempClass(s.Gpu.Temp.Value)">@($"{s.Gpu.Temp.Value:0.#}")°C</span></div>
+                }
+                @if (s.Gpu.Power.HasValue)
+                {
+                    <div class="atom-row-kv"><span>Power</span><span>@($"{s.Gpu.Power.Value:0.#}") W</span></div>
+                }
+                @if (s.Gpu.MemUsed.HasValue && s.Gpu.MemTotal.HasValue)
+                {
+                    <div class="atom-row-kv"><span>VRAM</span><span>@Fmt.Bytes(s.Gpu.MemUsed.Value) / @Fmt.Bytes(s.Gpu.MemTotal.Value)</span></div>
+                }
+            }
+            else
+            {
+                <div class="atom-sub">No discrete GPU</div>
+            }
+        </div>
+
+    </div>
+
+    @* ── Services grid ────────────────────────────────────────────────────────── *@
+    @if (s.Services.Count > 0)
+    {
+        <div class="atom-section-block">
+            <div class="atom-block-title">Services</div>
+            <div class="services-grid">
+                @foreach (var svc in s.Services.OrderBy(kv => kv.Key))
+                {
+                    var active = svc.Value == "active";
+                    <div class="svc-item">
+                        <span class="svc-dot @(active ? "svc-on" : "svc-off")"></span>
+                        <span class="svc-name">@svc.Key</span>
+                        @if (!active)
+                        {
+                            <span class="svc-status">@svc.Value</span>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    @* ── Top Processes ────────────────────────────────────────────────────────── *@
+    @if (s.TopProcs.Count > 0)
+    {
+        <div class="atom-section-block">
+            <div class="atom-block-title">Top Processes</div>
+            <table class="atom-table">
+                <thead>
+                    <tr><th>PID</th><th>Name</th><th>User</th><th>CPU%</th><th>Memory</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in s.TopProcs.Take(20))
+                    {
+                        <tr>
+                            <td class="mono">@p.Pid</td>
+                            <td>@p.Name</td>
+                            <td>@p.User</td>
+                            <td class="@CpuClass(p.Cpu)">@($"{p.Cpu:0.0}")%</td>
+                            <td>@Fmt.Bytes(p.MemBytes)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+</div>
+
+@code {
+    private System.Threading.Timer? _timer;
+
+    protected override void OnInitialized()
+    {
+        _timer = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_timer != null)
+            await _timer.DisposeAsync();
+    }
+
+    static string CpuClass(double pct)  => pct > 90 ? "val-red" : pct > 70 ? "val-amber" : "val-green";
+    static string MemClass(double pct)  => pct > 90 ? "val-red" : pct > 80 ? "val-amber" : "val-green";
+    static string TempClass(double c)   => c > 80 ? "val-red" : c > 65 ? "val-amber" : "val-green";
+}

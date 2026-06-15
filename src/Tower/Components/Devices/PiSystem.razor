@@ -1,0 +1,170 @@
+@using Tower.Core.Pi
+@using System.Text.Json.Nodes
+@implements IAsyncDisposable
+@inject PiAgentClient Pi
+
+@if (_offline)
+{
+    <div class="pi-offline-panel">
+        <span class="pi-offline-dot">&#x1F534;</span>
+        <span class="pi-offline-msg">@DeviceName is offline / unreachable</span>
+    </div>
+}
+else if (_stats is null)
+{
+    <div class="atom-sub" style="padding:1rem">Loading…</div>
+}
+else
+{
+    var s = _stats;
+
+    <div class="atom-section">
+
+        @* ── Header ──────────────────────────────────────────────────────────── *@
+        <div class="atom-header">
+            <span class="atom-hostname">@(s["hostname"]?.ToString() ?? DeviceName)</span>
+            <span class="atom-uptime">&#8593; @(s["uptime"]?.ToString() ?? "—")</span>
+        </div>
+
+        <div class="atom-cards-grid">
+
+            @* ── CPU card ────────────────────────────────────────────────────── *@
+            <div class="atom-card">
+                <div class="atom-card-title">CPU</div>
+                @{ var cpuPct = s["cpu_pct"]?.GetValue<double>() ?? 0.0; }
+                <div class="atom-big-value @CpuClass(cpuPct)">@Fmt.PctInt(cpuPct)</div>
+                <div class="atom-sub">Raspberry Pi</div>
+                <div class="mc-bar-wrap" style="margin:6px 0">
+                    <div class="mc-bar">
+                        <div class="mc-bar-fill @CpuClass(cpuPct)" style="width:@($"{Math.Min(cpuPct,100):0.#}%")"></div>
+                    </div>
+                </div>
+            </div>
+
+            @* ── Memory card ─────────────────────────────────────────────────── *@
+            <div class="atom-card">
+                <div class="atom-card-title">Memory</div>
+                @{ var memPct = s["mem_pct"]?.GetValue<double>() ?? 0.0;
+                   var memUsed = s["mem_used"]?.GetValue<long>() ?? 0L;
+                   var memTotal = s["mem_total"]?.GetValue<long>() ?? 0L; }
+                <div class="atom-big-value @MemClass(memPct)">@Fmt.PctInt(memPct)</div>
+                <div class="atom-sub">@Fmt.Bytes(memUsed) / @Fmt.Bytes(memTotal)</div>
+                <div class="mc-bar-wrap" style="margin:6px 0">
+                    <div class="mc-bar">
+                        <div class="mc-bar-fill @MemClass(memPct)" style="width:@($"{Math.Min(memPct,100):0.#}%")"></div>
+                    </div>
+                </div>
+            </div>
+
+            @* ── Temperature card ─────────────────────────────────────────────── *@
+            @{ var tempNode = s["temp"];
+               double? tempVal = tempNode is not null && tempNode.GetValueKind() != System.Text.Json.JsonValueKind.Null
+                   ? tempNode.GetValue<double>() : null; }
+            <div class="atom-card">
+                <div class="atom-card-title">Temperature</div>
+                @if (tempVal.HasValue)
+                {
+                    <div class="atom-big-value @TempClass(tempVal.Value)">@($"{tempVal.Value:0.#}")&#176;C</div>
+                    <div class="atom-sub">SoC / CPU</div>
+                }
+                else
+                {
+                    <div class="atom-big-value atom-sub">—</div>
+                    <div class="atom-sub">Sensor unavailable</div>
+                }
+            </div>
+
+            @* ── Idle card ────────────────────────────────────────────────────── *@
+            <div class="atom-card">
+                <div class="atom-card-title">Idle Status</div>
+                @{ var waylandIdle = s["wayland_idle"]?.GetValue<bool>() ?? false;
+                   var idleSecs = s["consecutive_idle_seconds"]?.GetValue<int>() ?? 0; }
+                <div class="atom-big-value @(waylandIdle ? "val-amber" : "val-green")">
+                    @(waylandIdle ? "Idle" : "Active")
+                </div>
+                @if (idleSecs > 0)
+                {
+                    <div class="atom-sub">@FmtDuration(idleSecs) consecutive idle</div>
+                }
+                else
+                {
+                    <div class="atom-sub">No idle accumulation</div>
+                }
+                @{ var tsNode = s["ts"]?.ToString(); }
+                @if (!string.IsNullOrEmpty(tsNode))
+                {
+                    <div class="atom-sub" style="margin-top:4px">Last poll: @tsNode</div>
+                }
+            </div>
+
+        </div>
+
+        @* ── Raw fields (expandable) ──────────────────────────────────────────── *@
+        <details class="pi-raw-details">
+            <summary class="atom-block-title" style="cursor:pointer;user-select:none">Raw Stats Fields</summary>
+            <div class="atom-section-block" style="margin-top:0.5rem">
+                <div class="atom-kv-list">
+                    @foreach (var kv in _stats.AsObject())
+                    {
+                        <div class="atom-row-kv">
+                            <span class="mono">@kv.Key</span>
+                            <span>@(kv.Value?.ToJsonString() ?? "null")</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </details>
+
+    </div>
+}
+
+@code {
+    [Parameter] public string BaseUrl  { get; set; } = "";
+    [Parameter] public string DeviceName { get; set; } = "";
+
+    private JsonNode? _stats;
+    private bool      _offline = false;
+    private Timer?    _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        _timer = new Timer(async _ =>
+        {
+            await LoadAsync();
+            await InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+    }
+
+    private async Task LoadAsync()
+    {
+        var result = await Pi.StatsAsync(BaseUrl);
+        if (result is null)
+        {
+            _offline = true;
+            _stats   = null;
+        }
+        else
+        {
+            _offline = false;
+            _stats   = result;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_timer is not null)
+            await _timer.DisposeAsync();
+    }
+
+    static string CpuClass(double pct)  => pct > 90 ? "val-red" : pct > 70 ? "val-amber" : "val-green";
+    static string MemClass(double pct)  => pct > 90 ? "val-red" : pct > 80 ? "val-amber" : "val-green";
+    static string TempClass(double c)   => c > 80 ? "val-red" : c > 65 ? "val-amber" : "val-green";
+
+    static string FmtDuration(int seconds)
+    {
+        if (seconds < 60)  return $"{seconds}s";
+        if (seconds < 3600) return $"{seconds / 60}m {seconds % 60}s";
+        return $"{seconds / 3600}h {seconds % 3600 / 60}m";
+    }
+}

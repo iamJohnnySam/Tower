@@ -1,0 +1,63 @@
+.tower-rail {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 200px;
+    background-color: #161b22;
+    border-right: 1px solid #30363d;
+    flex-shrink: 0;
+}
+
+.rail-brand {
+    padding: 1rem 1.25rem 0.75rem;
+    border-bottom: 1px solid #30363d;
+    margin-bottom: 0.5rem;
+}
+
+.brand-text {
+    color: #58a6ff;
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.rail-links {
+    display: flex;
+    flex-direction: column;
+    padding: 0.25rem 0;
+}
+
+.rail-link {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.55rem 1.25rem;
+    color: #8b949e;
+    text-decoration: none;
+    font-size: 0.875rem;
+    border-left: 3px solid transparent;
+    transition: color 0.15s, background-color 0.15s;
+}
+
+.rail-link:hover {
+    color: #c9d1d9;
+    background-color: rgba(177, 186, 196, 0.08);
+    text-decoration: none;
+}
+
+.rail-link.active {
+    color: #c9d1d9;
+    background-color: rgba(88, 166, 255, 0.1);
+    border-left-color: #58a6ff;
+}
+
+.rail-icon {
+    font-size: 1rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.rail-label {
+    white-space: nowrap;
+}

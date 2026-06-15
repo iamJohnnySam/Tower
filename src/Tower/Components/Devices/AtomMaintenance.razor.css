@@ -1,0 +1,30 @@
+/* ─── AtomMaintenance component — component-specific selectors only ──────────
+   Shared selectors (btn-danger, btn-danger-outline, btn-secondary, btn-sm,
+   link-accent, maint-badge, maint-status-row, maint-run-result, maint-log,
+   danger-confirm-box, danger-row, atom-section, atom-section-block,
+   atom-block-title, atom-sub, atom-kv-list, atom-row-kv)
+   have been moved to wwwroot/app.css (global).
+   ────────────────────────────────────────────────────────────────────────── */
+
+.atom-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    max-width: 900px;
+}
+
+.atom-section-block {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 1rem 1.1rem;
+}
+
+.atom-block-title {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #8b949e;
+    margin-bottom: 0.75rem;
+}

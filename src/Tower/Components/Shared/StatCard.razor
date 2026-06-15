@@ -1,0 +1,31 @@
+@* StatCard — a single metric panel card used throughout the Home overview *@
+
+<div class="stat-card" style="@(Accent != null ? $"border-top: 2px solid {Accent};" : "")">
+    <div class="stat-title">@Title</div>
+    <div class="stat-value">
+        @if (Value != null)
+        {
+            @Value
+        }
+        else if (ValueText != null)
+        {
+            @ValueText
+        }
+        else
+        {
+            <span class="stat-empty">—</span>
+        }
+    </div>
+    @if (!string.IsNullOrEmpty(Sub))
+    {
+        <div class="stat-sub">@Sub</div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string? ValueText { get; set; }
+    [Parameter] public RenderFragment? Value { get; set; }
+    [Parameter] public string? Sub { get; set; }
+    [Parameter] public string? Accent { get; set; }
+}

@@ -1,0 +1,38 @@
+/* ─── AtomStorage component — component-specific selectors only ─────────────
+   Shared selectors (partition-list, partition-row, partition-header,
+   partition-mount, partition-usage, disk-cards, disk-card, disk-card-header,
+   disk-model, disk-details, du-columns, du-col, du-col-title, du-item,
+   du-name, du-size, atom-section, atom-section-block, atom-block-title,
+   atom-sub, atom-row-kv, mc-bar-wrap, mono)
+   have been moved to wwwroot/app.css (global).
+   ────────────────────────────────────────────────────────────────────────── */
+
+.atom-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    max-width: 1100px;
+}
+
+.atom-section-block {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 1rem 1.1rem;
+}
+
+.atom-block-title {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #8b949e;
+    margin-bottom: 0.75rem;
+}
+
+/* ─── Partition fstype label (unique to AtomStorage) ─────────────────────── */
+
+.partition-fstype {
+    font-size: 0.75rem;
+    color: #8b949e;
+}
