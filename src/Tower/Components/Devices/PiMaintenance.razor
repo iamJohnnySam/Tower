@@ -176,6 +176,7 @@ else
 
     private string     _logsText        = "(loading…)";
     private Timer?     _timer;
+    private bool       _disposed;
 
     protected override async Task OnInitializedAsync()
     {
@@ -183,11 +184,13 @@ else
         _timer = new Timer(async _ =>
         {
             var s = await Pi.StatsAsync(BaseUrl);
+            if (_disposed) return;
             _offline = s is null;
             _stats   = s;
             // Self-heal: if config failed on initial load, retry while device is reachable
             if (_config is null && !_offline)
                 _config = await Pi.ConfigAsync(BaseUrl);
+            if (_disposed) return;
             await InvokeAsync(StateHasChanged);
         }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
     }
@@ -282,6 +285,7 @@ else
 
     public async ValueTask DisposeAsync()
     {
+        _disposed = true;
         if (_timer is not null)
             await _timer.DisposeAsync();
     }

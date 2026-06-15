@@ -125,6 +125,7 @@ else
     private JsonNode? _stats;
     private bool      _offline = false;
     private Timer?    _timer;
+    private bool      _disposed;
 
     protected override async Task OnInitializedAsync()
     {
@@ -132,6 +133,7 @@ else
         _timer = new Timer(async _ =>
         {
             await LoadAsync();
+            if (_disposed) return;
             await InvokeAsync(StateHasChanged);
         }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
     }
@@ -153,6 +155,7 @@ else
 
     public async ValueTask DisposeAsync()
     {
+        _disposed = true;
         if (_timer is not null)
             await _timer.DisposeAsync();
     }

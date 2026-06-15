@@ -4,4 +4,6 @@
 atom ALL=(root) NOPASSWD: /usr/sbin/smartctl
 atom ALL=(root) NOPASSWD: /home/atom/Tower/do_maintenance.sh
 atom ALL=(root) NOPASSWD: /sbin/shutdown
-atom ALL=(root) NOPASSWD: /usr/bin/systemctl start *, /usr/bin/systemctl stop *, /usr/bin/systemctl restart *
+atom ALL=(root) NOPASSWD: /usr/bin/systemctl start mediabox, /usr/bin/systemctl stop mediabox, /usr/bin/systemctl restart mediabox
+atom ALL=(root) NOPASSWD: /usr/bin/systemctl start financetracker, /usr/bin/systemctl stop financetracker, /usr/bin/systemctl restart financetracker
+atom ALL=(root) NOPASSWD: /usr/bin/systemctl start newsdigest, /usr/bin/systemctl stop newsdigest, /usr/bin/systemctl restart newsdigest

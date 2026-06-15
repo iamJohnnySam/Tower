@@ -58,5 +58,5 @@ public static class SystemStats
     /// Returns 0 if seconds &lt;= 0 or if counter wrapped (cur &lt; prev).
     /// </summary>
     public static double RatePerSec(ulong prev, ulong cur, double seconds)
-        => seconds <= 0 ? 0 : Math.Max(0, (cur - prev) / seconds);
+        => seconds <= 0 || cur < prev ? 0 : (cur - prev) / seconds;
 }

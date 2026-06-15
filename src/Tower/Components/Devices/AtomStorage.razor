@@ -195,17 +195,20 @@
 
 @code {
     private System.Threading.Timer? _timer;
+    private bool _disposed;
 
     protected override void OnInitialized()
     {
         _timer = new System.Threading.Timer(async _ =>
         {
+            if (_disposed) return;
             await InvokeAsync(StateHasChanged);
         }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
     }
 
     public async ValueTask DisposeAsync()
     {
+        _disposed = true;
         if (_timer != null)
             await _timer.DisposeAsync();
     }
