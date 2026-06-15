@@ -19,4 +19,4 @@ echo "==> Starting tower service"
 sudo systemctl start tower
 sleep 2
 sudo systemctl status tower --no-pager --lines=5 || true
-echo "==> Done. Tower serving on http://0.0.0.0:8889"
+echo "==> Done. Tower serving on http://0.0.0.0:8888"

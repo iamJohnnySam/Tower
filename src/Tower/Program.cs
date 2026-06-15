@@ -10,8 +10,8 @@ using Tower.Core.Workers;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Bind to HTTP only on 8889 (LAN/Tailscale internal tool; no HTTPS needed)
-builder.WebHost.UseUrls("http://0.0.0.0:8889");
+// Bind to HTTP only on 8888 (LAN/Tailscale internal tool; no HTTPS needed)
+builder.WebHost.UseUrls("http://0.0.0.0:8888");
 
 // ── Strongly-typed config ────────────────────────────────────────────────────
 var towerCfg = builder.Configuration.GetSection("Tower").Get<TowerConfig>() ?? new TowerConfig();
