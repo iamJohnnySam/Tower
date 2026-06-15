@@ -1,3 +1,4 @@
+using System.Net.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Tower.Core.Data;
@@ -10,7 +11,7 @@ namespace Tower.Core.Workers;
 
 public class JellyfinWorker(
     LiveState state,
-    JellyfinClient client,
+    IHttpClientFactory httpFactory,
     IServiceScopeFactory scopes,
     JellyfinOptions opts) : BackgroundService
 {
@@ -37,6 +38,7 @@ public class JellyfinWorker(
 
                 if (configured)
                 {
+                    var client = new JellyfinClient(httpFactory.CreateClient(nameof(JellyfinClient)));
                     var fetched = await client.SessionsAsync(opts.JellyfinUrl, apiKey);
                     if (fetched is null)
                     {

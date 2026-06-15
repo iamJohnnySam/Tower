@@ -1,11 +1,9 @@
 @page "/jellyfin"
 @using Tower.Core.Jellyfin
-@using Tower.Core.Settings
 @using Tower.Core.State
 @using Tower.Core.Models
 @inject LiveState Live
 @inject JellyfinStats JellyfinStatsSvc
-@inject SettingsService SettingsSvc
 @implements IAsyncDisposable
 
 <PageTitle>Tower — Jellyfin</PageTitle>
