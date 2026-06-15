@@ -5,6 +5,8 @@ namespace Tower.Core.State;
 // ─── Small value types used in StatsSnapshot ─────────────────────────────────
 
 public record NicInfo(string Name, bool Up, long SpeedMbps, string Ip, ulong Sent, ulong Recv);
+
+public record SizeInfo(string Name, string Path, long Bytes, bool Exists);
 public record ProcInfo(int Pid, string Name, string User, double Cpu, long MemBytes);
 public record TempInfo(string Chip, string Label, double Temp);
 public record PartitionInfo(string Mount, string Fstype, ulong TotalBytes, ulong UsedBytes, ulong FreeBytes, double Pct);
@@ -81,6 +83,9 @@ public class LiveState
     private List<DuItem> _varSegments     = [];
     private List<DuItem> _projectSizes    = [];
 
+    // ── DB / log file sizes ──
+    private List<SizeInfo> _sizes = [];
+
     // ─── Public read properties ──────────────────────────────────────────────
 
     public StatsSnapshot Stats
@@ -106,6 +111,11 @@ public class LiveState
     public IReadOnlyList<DuItem> ProjectSizes
     {
         get { lock (_lock) return _projectSizes.AsReadOnly(); }
+    }
+
+    public IReadOnlyList<SizeInfo> Sizes
+    {
+        get { lock (_lock) return _sizes.AsReadOnly(); }
     }
 
     // ─── Write methods ───────────────────────────────────────────────────────
@@ -156,6 +166,11 @@ public class LiveState
             _varSegments  = [.. var];
             _projectSizes = [.. projects];
         }
+    }
+
+    public void SetSizes(List<SizeInfo> sizes)
+    {
+        lock (_lock) _sizes = [.. sizes];
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

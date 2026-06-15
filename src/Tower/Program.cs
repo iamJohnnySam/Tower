@@ -39,6 +39,7 @@ builder.Services.AddHostedService<SmartWorker>();
 builder.Services.AddHostedService<DiskUsageWorker>();
 builder.Services.AddHostedService<CpuProfileRecorder>();
 builder.Services.AddHostedService<MaintenanceScheduler>();
+builder.Services.AddHostedService<SizeMonitorWorker>();
 
 // ── Blazor ───────────────────────────────────────────────────────────────────
 builder.Services.AddRazorComponents()
