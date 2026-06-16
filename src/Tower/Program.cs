@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Tower;
 using Tower.Components;
@@ -13,8 +14,12 @@ using Tower.Core.Workers;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Bind to HTTP only on 8888 (LAN/Tailscale internal tool; no HTTPS needed)
-builder.WebHost.UseUrls("http://0.0.0.0:8888");
+// Kestrel: 8888 = HTTP/1.1+2 for Blazor; 5601 = HTTP/2 h2c for gRPC
+builder.WebHost.ConfigureKestrel(o =>
+{
+    o.ListenAnyIP(8888);  // Blazor (HTTP/1.1 + HTTP/2)
+    o.ListenAnyIP(5601, l => l.Protocols = HttpProtocols.Http2);  // gRPC h2c
+});
 
 // ── Strongly-typed config ────────────────────────────────────────────────────
 var towerCfg = builder.Configuration.GetSection("Tower").Get<TowerConfig>() ?? new TowerConfig();
@@ -62,6 +67,9 @@ builder.Services.AddHostedService<CpuProfileRecorder>();
 builder.Services.AddHostedService<MaintenanceScheduler>();
 builder.Services.AddHostedService<SizeMonitorWorker>();
 
+// ── gRPC ─────────────────────────────────────────────────────────────────────
+builder.Services.AddGrpc();
+
 // ── Blazor ───────────────────────────────────────────────────────────────────
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -100,6 +108,7 @@ app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages:
 
 app.UseAntiforgery();
 
+app.MapGrpcService<TowerTelegramService>();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
