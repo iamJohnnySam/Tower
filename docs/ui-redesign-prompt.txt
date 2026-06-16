@@ -1,0 +1,80 @@
+Tower UI Redesign — Prompt for Claude (attach/tag the source code alongside this)
+================================================================================
+
+You are designing a refreshed UI for "Tower" — my self-hosted home-lab command center. The
+source is attached; study the existing Blazor components and CSS before proposing anything,
+then deliver a cohesive, modern, production-grade redesign that maps cleanly onto the current
+component structure.
+
+## What Tower is
+A single-operator home-lab dashboard. ASP.NET Core + Blazor Server (.NET 10), served on a LAN /
+Tailscale at :8888, no auth, single user, viewed mostly on desktop but should be usable on a
+phone. It's a dense, data-rich monitoring + control surface that updates live (SignalR pushes
+data every 2-5s). Current look: dark, GitHub-ish, utilitarian but a bit plain. I want it to feel
+polished, distinctive, and calm — not a generic AI dashboard, not neon "cyberpunk," not flat
+Bootstrap. Think "well-crafted ops console": clear hierarchy, excellent data density, restrained
+color used meaningfully (status, not decoration).
+
+## Information architecture (left nav rail, 7 sections)
+1. Home — overview: 3 devices up/down (a server + 2 Raspberry Pis), key metrics (CPU/mem/net
+   with sparklines), services health grid, active alerts (disk SMART, disk-full, project-down),
+   public IP / dynamic-DNS status.
+2. Devices — 3-level nav: device rail (Atom/Self, AtomTV, AtomMiniTV) -> per-device submenu
+   (System, Maintenance, Configuration; the server also has Storage). System = CPU per-core +
+   load + freq + sparkline, memory/swap bars, network rates + per-NIC, temps, GPU, services grid,
+   top-20 process table. Maintenance = OS-update status, scheduler, run-now, reboot/shutdown
+   (danger actions), log tail. Storage = per-disk SMART cards with alert levels, partition usage
+   bars, disk-usage breakdown.
+3. Projects — cards for background apps (systemd status badge, port open/closed, CPU/mem,
+   start/stop/restart, open, backup-DB, logs) + a top-processes table + backup status.
+4. MediaBox — a managed service: sub-view pills (Downloads w/ progress bars, Library tables,
+   Watchlist, YouTube sources, Settings form, Actions trigger-buttons, Logs) + a status strip.
+5. Communication — Telegram: bot status + an active toggle, subscriber list (kick/block),
+   in/out message log, manual-send composer.
+6. Jellyfin — now-playing/live sessions (transcode reasons), an ffmpeg transcode monitor with
+   sparklines, watch analytics (most-watched, per-user, recent plays).
+7. Settings — API-key status (configured/not, secrets never shown), monitored DB/log sizes,
+   backup schedule, log retention.
+
+## Recurring UI primitives to design as a system
+Nav rail, page header + sub-view pills, stat cards, data tables, status badges/dots
+(active/inactive/failed -> green/amber/red), progress/usage bars, sparklines + small charts,
+gauges for %s, alert banners, danger buttons with confirm states, toggles, key/value config
+forms, log viewers (monospace, scrollable), an "offline/unreachable" empty state.
+
+## Current palette (keep dark; refine, don't replace wholesale)
+bg #0d1117, panels #161b22, borders #30363d, text #c9d1d9 / muted #8b949e, accent #58a6ff,
+green #3fb950, amber #d29922, red #f85149. You may evolve this into a proper token set
+(surface levels, elevation, semantic status colors, focus rings) and add an optional accent.
+
+## Hard constraints (this must be buildable, not just a mockup)
+- Blazor Server with plain CSS only: a global `app.css` (use CSS custom properties / tokens) plus
+  per-component scoped `.razor.css`. No Tailwind, no React, no build step, minimal/no JS.
+  IMPORTANT: Blazor scopes `.razor.css` per component, so SHARED classes (cards, badges, bars,
+  pills, buttons, tables) must live in global `app.css` — design them as a global component library.
+- Must handle live-updating numbers gracefully (no layout shift/flicker on 2-5s refresh; tabular
+  numerals; reserve space).
+- Dense but readable; works at desktop widths and degrades to a single column on a phone.
+- Dark theme is the default and primary; light is optional/nice-to-have.
+
+## What I want back
+1. A short design rationale + the design token set (colors, type scale, spacing, radii, elevation).
+2. The global component library as CSS (cards, badges/dots, bars, sparkline container, pills,
+   buttons incl. danger+confirm, tables, alert banner, toggle, form inputs, empty state) — drop-in
+   `app.css`.
+3. High-fidelity redesigns of 3-4 key screens as self-contained HTML+CSS mockups using that
+   library, with realistic sample data: (a) Home overview, (b) Devices -> System, (c) Projects or
+   MediaBox, (d) Jellyfin. Use real-feeling content and live data viz (sparklines, gauges, bars).
+4. Notes on how each maps back to the existing Blazor components/classes so I can port it.
+
+Prioritize visual hierarchy, scannability, and a coherent system over flashy effects. Show me the
+mockups as artifacts I can view.
+
+--------------------------------------------------------------------------------
+Tips when running this prompt:
+- Tag the key files so the design grounds in reality:
+    src/Tower/wwwroot/app.css
+    src/Tower/Components/Layout/NavMenu.razor (+ .css) and MainLayout.razor
+    a few pages: Home.razor, Devices/AtomSystem.razor, Projects.razor, MediaBox.razor
+- After it produces a design, bring the result back to the Tower repo session to have the CSS
+  ported and the Blazor components restyled.
