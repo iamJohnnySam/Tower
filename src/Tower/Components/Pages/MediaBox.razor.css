@@ -109,3 +109,65 @@
 .mb-library-toggle {
     margin-bottom: 0.75rem;
 }
+
+/* ─── Toolbar (input + button rows above tables) ─────────────────────────── */
+
+.mb-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.mb-toolbar .config-input {
+    flex: 0 1 240px;
+}
+
+/* ─── Transient mutation/trigger result line ──────────────────────────────── */
+
+.mb-result {
+    font-size: 0.8rem;
+    padding: 0.35rem 0;
+}
+
+.mb-result-sm {
+    font-size: 0.72rem;
+    padding-top: 0.25rem;
+}
+
+/* ─── Inline 2-click confirm row (duplicated from Projects.razor.css) ────── */
+
+.mb-confirm-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.mb-btn-amber {
+    border-color: #d29922;
+    color: #d29922;
+}
+
+/* ─── Actions grid ─────────────────────────────────────────────────────────── */
+
+.mb-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.6rem;
+}
+
+.mb-action-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
+    padding: 0.6rem;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    background: #161b22;
+}
+
+.mb-action-btn {
+    width: 100%;
+}

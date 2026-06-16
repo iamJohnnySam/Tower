@@ -1,9 +1,15 @@
 @page "/mediabox"
+@using Microsoft.Extensions.Options
+@using Tower.Core.Projects
 @using MbStatus = global::MediaBox.Control.Grpc.Status
 @using MbDownloadList = global::MediaBox.Control.Grpc.DownloadList
 @using MbMediaList = global::MediaBox.Control.Grpc.MediaList
+@using MbWatchlistItems = global::MediaBox.Control.Grpc.WatchlistItems
+@using MbYouTubeSources = global::MediaBox.Control.Grpc.YouTubeSources
+@using MbSettingsMap = global::MediaBox.Control.Grpc.SettingsMap
 @using MbClient = global::Tower.MediaBox.MediaBoxClient
 @inject MbClient Client
+@inject IOptions<TowerConfig> Cfg
 @implements IAsyncDisposable
 
 <PageTitle>Tower — MediaBox</PageTitle>
@@ -65,6 +71,21 @@
             case "Library":
                 @RenderLibrary
                 break;
+            case "Watchlist":
+                @RenderWatchlist
+                break;
+            case "YouTube":
+                @RenderYouTube
+                break;
+            case "Settings":
+                @RenderSettings
+                break;
+            case "Actions":
+                @RenderActions
+                break;
+            case "Logs":
+                @RenderLogs
+                break;
             default:
                 <div class="mb-notice">@_activeView — coming soon.</div>
                 break;
@@ -83,6 +104,9 @@
     private MbDownloadList _downloads = new();
     private MbMediaList _library = new();
     private string _libraryType = "tv";
+    private MbWatchlistItems _watchlist = new();
+    private MbYouTubeSources _youtube = new();
+    private MbSettingsMap _settings = new();
 
     private System.Threading.Timer? _timer;
     private bool _disposed;
@@ -112,6 +136,23 @@
                 break;
             case "Library":
                 _library = await Client.GetLibraryAsync(_libraryType);
+                break;
+            case "Watchlist":
+                _watchlist = await Client.GetWatchlistAsync();
+                break;
+            case "YouTube":
+                _youtube = await Client.GetYouTubeSourcesAsync();
+                break;
+            case "Settings":
+                // Don't clobber in-progress edits with a fresh fetch from the 5s tick.
+                if (!_settingsEditing)
+                    _settings = await Client.GetSettingsAsync();
+                break;
+            case "Logs":
+                // File IO, not gRPC — load once on first visit; further refreshes are manual
+                // (via the Refresh button) so the 5s tick doesn't hit disk repeatedly.
+                if (!_logsLoaded)
+                    await LogsRefreshAsync();
                 break;
         }
     }
@@ -240,6 +281,474 @@
                     }
                 </tbody>
             </table>
+        }
+    </text>;
+
+    // ── Watchlist sub-view ──────────────────────────────────────────────────
+
+    private string _watchlistAddText = "";
+    private string _watchlistSearchText = "";
+    private bool _watchlistBusy;
+    private (bool Ok, string Msg)? _watchlistResult;
+
+    private async Task WatchlistRemoveAsync(string name)
+    {
+        _watchlistBusy = true;
+        await InvokeAsync(StateHasChanged);
+
+        var (ok, msg) = await Client.RemoveWatchlistAsync(name);
+        _watchlistResult = (ok, msg);
+        _watchlist = await Client.GetWatchlistAsync();
+
+        _watchlistBusy = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task WatchlistAddAsync()
+    {
+        var text = _watchlistAddText.Trim();
+        if (string.IsNullOrEmpty(text)) return;
+
+        _watchlistBusy = true;
+        await InvokeAsync(StateHasChanged);
+
+        var (ok, msg) = await Client.AddWatchlistAsync(text);
+        _watchlistResult = (ok, msg);
+        if (ok) _watchlistAddText = "";
+        _watchlist = await Client.GetWatchlistAsync();
+
+        _watchlistBusy = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task WatchlistSearchAndAddAsync()
+    {
+        var text = _watchlistSearchText.Trim();
+        if (string.IsNullOrEmpty(text)) return;
+
+        _watchlistBusy = true;
+        await InvokeAsync(StateHasChanged);
+
+        var (ok, msg) = await Client.SearchAndAddMovieAsync(text);
+        _watchlistResult = (ok, msg);
+        if (ok) _watchlistSearchText = "";
+        _watchlist = await Client.GetWatchlistAsync();
+
+        _watchlistBusy = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private RenderFragment RenderWatchlist => @<text>
+        <div class="mb-toolbar">
+            <input class="config-input" placeholder="Add to watchlist (title)…"
+                   @bind="_watchlistAddText" @bind:event="oninput" disabled="@_watchlistBusy" />
+            <button class="btn btn-primary btn-sm" disabled="@_watchlistBusy" @onclick="WatchlistAddAsync">Add</button>
+
+            <input class="config-input" placeholder="Search &amp; add movie (title)…"
+                   @bind="_watchlistSearchText" @bind:event="oninput" disabled="@_watchlistBusy" />
+            <button class="btn-secondary btn-sm" disabled="@_watchlistBusy" @onclick="WatchlistSearchAndAddAsync">Search &amp; Add</button>
+        </div>
+
+        @if (_watchlistResult.HasValue)
+        {
+            <div class="@(_watchlistResult.Value.Ok ? "val-green" : "val-red") mb-result">
+                @_watchlistResult.Value.Msg
+            </div>
+        }
+
+        @if (_watchlist.Items.Count == 0)
+        {
+            <div class="mb-notice">Watchlist empty or unreachable.</div>
+        }
+        else
+        {
+            <table class="atom-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Status</th>
+                        <th>Quality</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var w in _watchlist.Items)
+                    {
+                        var name = w.Name;
+                        <tr>
+                            <td>@w.Name</td>
+                            <td>@w.Status</td>
+                            <td>@w.Quality</td>
+                            <td>
+                                <button class="btn-danger btn-sm" disabled="@_watchlistBusy"
+                                        @onclick="@(() => WatchlistRemoveAsync(name))">Remove</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </text>;
+
+    // ── YouTube sub-view ─────────────────────────────────────────────────────
+
+    private bool _youtubeBusy;
+    private string? _youtubeBusySource;
+    private (bool Ok, string Msg)? _youtubeResult;
+
+    private async Task YouTubeDownloadNowAsync()
+    {
+        _youtubeBusy = true;
+        _youtubeBusySource = null;
+        await InvokeAsync(StateHasChanged);
+
+        var (ok, msg) = await Client.YouTubeDownloadAsync();
+        _youtubeResult = (ok, msg);
+        _youtube = await Client.GetYouTubeSourcesAsync();
+
+        _youtubeBusy = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task YouTubeTogglePauseAsync(string title, bool currentlyPaused)
+    {
+        _youtubeBusy = true;
+        _youtubeBusySource = title;
+        await InvokeAsync(StateHasChanged);
+
+        var (ok, msg) = currentlyPaused
+            ? await Client.YouTubeResumeAsync(title)
+            : await Client.YouTubePauseAsync(title);
+        _youtubeResult = (ok, msg);
+        _youtube = await Client.GetYouTubeSourcesAsync();
+
+        _youtubeBusy = false;
+        _youtubeBusySource = null;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private RenderFragment RenderYouTube => @<text>
+        <div class="mb-toolbar">
+            <button class="btn btn-primary btn-sm" disabled="@_youtubeBusy" @onclick="YouTubeDownloadNowAsync">
+                @(_youtubeBusy && _youtubeBusySource == null ? "Downloading…" : "Download now")
+            </button>
+        </div>
+
+        @if (_youtubeResult.HasValue)
+        {
+            <div class="@(_youtubeResult.Value.Ok ? "val-green" : "val-red") mb-result">
+                @_youtubeResult.Value.Msg
+            </div>
+        }
+
+        @if (_youtube.Items.Count == 0)
+        {
+            <div class="mb-notice">No YouTube sources configured, or MediaBox unreachable.</div>
+        }
+        else
+        {
+            <table class="atom-table">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Url</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var y in _youtube.Items)
+                    {
+                        var title = y.Title;
+                        var paused = y.Paused;
+                        var rowBusy = _youtubeBusy && _youtubeBusySource == title;
+                        <tr>
+                            <td class="mb-name-cell">@y.Title</td>
+                            <td class="mb-path-cell">@y.Url</td>
+                            <td>
+                                <span class="svc-dot @(paused ? "svc-off" : "svc-on")"></span>
+                                @(paused ? "Paused" : "Active")
+                            </td>
+                            <td>
+                                <button class="btn-secondary btn-sm" disabled="@(_youtubeBusy)"
+                                        @onclick="@(() => YouTubeTogglePauseAsync(title, paused))">
+                                    @(rowBusy ? "…" : (paused ? "Resume" : "Pause"))
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </text>;
+
+    // ── Settings sub-view ────────────────────────────────────────────────────
+    // NOTE (security): SettingsMap is populated server-side by MediaBox's own
+    // MediaBoxSettingsIo.Read(), which already excludes secrets/tokens — Tower
+    // only renders whatever non-sensitive keys MediaBox chooses to expose. No
+    // secret fields are added or assumed here.
+
+    private bool _settingsEditing;
+    private bool _settingsConfirmPending;
+    private bool _settingsBusy;
+    private (bool Ok, string Msg)? _settingsResult;
+    private Dictionary<string, string> _settingsEdit = new();
+
+    private void SettingsBeginEdit()
+    {
+        _settingsEdit = _settings.Values.ToDictionary(kv => kv.Key, kv => kv.Value);
+        _settingsEditing = true;
+        _settingsConfirmPending = false;
+        StateHasChanged();
+    }
+
+    private void SettingsRequestSave()
+    {
+        _settingsConfirmPending = true;
+        StateHasChanged();
+    }
+
+    private void SettingsCancelConfirm()
+    {
+        _settingsConfirmPending = false;
+        StateHasChanged();
+    }
+
+    private async Task SettingsSaveAsync()
+    {
+        _settingsBusy = true;
+        _settingsConfirmPending = false;
+        await InvokeAsync(StateHasChanged);
+
+        var (ok, msg) = await Client.UpdateSettingsAsync(_settingsEdit);
+        _settingsResult = (ok, msg);
+
+        _settings = await Client.GetSettingsAsync();
+        _settingsEditing = false;
+        _settingsBusy = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void SettingsCancelEdit()
+    {
+        _settingsEditing = false;
+        _settingsConfirmPending = false;
+        StateHasChanged();
+    }
+
+    private RenderFragment RenderSettings => @<text>
+        @if (_settingsResult.HasValue)
+        {
+            <div class="@(_settingsResult.Value.Ok ? "val-green" : "val-red") mb-result">
+                @_settingsResult.Value.Msg
+            </div>
+        }
+
+        @if (!_settingsEditing)
+        {
+            @if (_settings.Values.Count == 0)
+            {
+                <div class="mb-notice">No settings returned, or MediaBox unreachable.</div>
+            }
+            else
+            {
+                <div class="config-form">
+                    @foreach (var kv in _settings.Values.OrderBy(k => k.Key))
+                    {
+                        <div class="config-row">
+                            <label class="config-label">@kv.Key</label>
+                            <div class="config-control">
+                                <span>@kv.Value</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="mb-toolbar">
+                    <button class="btn btn-primary btn-sm" @onclick="SettingsBeginEdit">Edit</button>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="config-form">
+                @foreach (var key in _settingsEdit.Keys.OrderBy(k => k).ToList())
+                {
+                    var k = key;
+                    <div class="config-row">
+                        <label class="config-label">@k</label>
+                        <div class="config-control">
+                            <input class="config-input config-input-wide"
+                                   value="@_settingsEdit[k]"
+                                   disabled="@_settingsBusy"
+                                   @oninput="@(e => _settingsEdit[k] = e.Value?.ToString() ?? string.Empty)" />
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @if (_settingsConfirmPending)
+            {
+                <span class="mb-confirm-row">
+                    <span class="val-amber" style="font-size:0.75rem">Save settings?</span>
+                    <button class="btn-secondary btn-sm mb-btn-amber" disabled="@_settingsBusy"
+                            @onclick="SettingsSaveAsync">Yes</button>
+                    <button class="btn-secondary btn-sm" disabled="@_settingsBusy"
+                            @onclick="SettingsCancelConfirm">No</button>
+                </span>
+            }
+            else
+            {
+                <div class="mb-toolbar">
+                    <button class="btn btn-primary btn-sm" disabled="@_settingsBusy" @onclick="SettingsRequestSave">Save</button>
+                    <button class="btn-secondary btn-sm" disabled="@_settingsBusy" @onclick="SettingsCancelEdit">Cancel</button>
+                </div>
+            }
+        }
+    </text>;
+
+    // ── Actions sub-view ─────────────────────────────────────────────────────
+
+    private sealed class ActionDef
+    {
+        public string Key = "";
+        public string Label = "";
+        public Func<MbClient, Task<(bool ok, string message)>> Run = null!;
+        public bool Destructive;
+    }
+
+    private static readonly ActionDef[] _actions =
+    [
+        new() { Key = "scan",             Label = "Scan",              Run = c => c.ScanAsync() },
+        new() { Key = "organize",         Label = "Organize",          Run = c => c.OrganizeAsync() },
+        new() { Key = "rsscheck",         Label = "RSS Check",         Run = c => c.RssCheckAsync() },
+        new() { Key = "transmissionpoll", Label = "Transmission Poll", Run = c => c.TransmissionPollAsync() },
+        new() { Key = "watchlistcheck",   Label = "Watchlist Check",   Run = c => c.WatchlistCheckAsync() },
+        new() { Key = "youtubedownload",  Label = "YouTube Download",  Run = c => c.YouTubeDownloadAsync() },
+        new() { Key = "resetquality",     Label = "Reset Quality",     Run = c => c.ResetQualityAsync(), Destructive = true },
+        new() { Key = "togglespeedmode",  Label = "Toggle Speed Mode", Run = c => c.ToggleSpeedModeAsync(), Destructive = true },
+    ];
+
+    private readonly Dictionary<string, bool> _actionBusy = new();
+    private readonly Dictionary<string, (bool Ok, string Msg)?> _actionResult = new();
+    private readonly HashSet<string> _actionConfirmPending = new();
+
+    private void ActionRequestConfirm(string key)
+    {
+        _actionConfirmPending.Add(key);
+        StateHasChanged();
+    }
+
+    private Task ActionClickAsync(ActionDef action)
+    {
+        if (action.Destructive)
+        {
+            ActionRequestConfirm(action.Key);
+            return Task.CompletedTask;
+        }
+        return ActionRunAsync(action);
+    }
+
+    private void ActionCancelConfirm(string key)
+    {
+        _actionConfirmPending.Remove(key);
+        StateHasChanged();
+    }
+
+    private async Task ActionRunAsync(ActionDef action)
+    {
+        _actionConfirmPending.Remove(action.Key);
+        _actionBusy[action.Key] = true;
+        _actionResult[action.Key] = null;
+        await InvokeAsync(StateHasChanged);
+
+        var (ok, msg) = await action.Run(Client);
+        _actionResult[action.Key] = (ok, msg);
+
+        _actionBusy[action.Key] = false;
+        await InvokeAsync(StateHasChanged);
+
+        // Auto-clear the result after 8s so the panel doesn't accumulate stale text.
+        await Task.Delay(8000);
+        if (!_disposed)
+        {
+            _actionResult[action.Key] = null;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private RenderFragment RenderActions => @<text>
+        <div class="mb-actions-grid">
+            @foreach (var action in _actions)
+            {
+                var a = action;
+                var busy = _actionBusy.TryGetValue(a.Key, out var b) && b;
+                var confirmPending = _actionConfirmPending.Contains(a.Key);
+                _actionResult.TryGetValue(a.Key, out var result);
+
+                <div class="mb-action-card">
+                    @if (a.Destructive && confirmPending)
+                    {
+                        <span class="mb-confirm-row">
+                            <span class="val-amber" style="font-size:0.75rem">@a.Label?</span>
+                            <button class="btn-secondary btn-sm mb-btn-amber" disabled="@busy"
+                                    @onclick="@(() => ActionRunAsync(a))">Yes</button>
+                            <button class="btn-secondary btn-sm" @onclick="@(() => ActionCancelConfirm(a.Key))">No</button>
+                        </span>
+                    }
+                    else
+                    {
+                        <button class="btn btn-primary btn-sm mb-action-btn" disabled="@busy"
+                                @onclick="@(() => ActionClickAsync(a))">
+                            @(busy ? "Running…" : a.Label)
+                        </button>
+                    }
+
+                    @if (result.HasValue)
+                    {
+                        <div class="@(result.Value.Ok ? "val-green" : "val-red") mb-result mb-result-sm">
+                            @result.Value.Msg
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </text>;
+
+    // ── Logs sub-view ────────────────────────────────────────────────────────
+
+    private string _logsText = "";
+    private bool _logsLoading;
+    private bool _logsLoaded;
+
+    private async Task LogsRefreshAsync()
+    {
+        _logsLoading = true;
+        await InvokeAsync(StateHasChanged);
+
+        var logDir = Cfg.Value.Projects.FirstOrDefault(p =>
+            string.Equals(p.Name, "MediaBox", StringComparison.OrdinalIgnoreCase))?.LogDir;
+
+        _logsText = await Task.Run(() => ProjectControl.ReadLogs(logDir, "mediabox"));
+
+        _logsLoading = false;
+        _logsLoaded = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private RenderFragment RenderLogs => @<text>
+        <div class="mb-toolbar">
+            <button class="btn-secondary btn-sm" disabled="@_logsLoading" @onclick="LogsRefreshAsync">
+                @(_logsLoading ? "Loading…" : "Refresh")
+            </button>
+        </div>
+
+        @if (!_logsLoaded)
+        {
+            <div class="mb-notice">Click Refresh to load MediaBox logs.</div>
+        }
+        else
+        {
+            <pre class="maint-log">@(string.IsNullOrEmpty(_logsText) ? "(no output)" : _logsText)</pre>
         }
     </text>;
 }
