@@ -83,6 +83,9 @@ public sealed class MediaBoxClient
     public Task<(bool ok, string message)> ToggleSpeedModeAsync(CancellationToken ct = default) =>
         RunTrigger(c => c.ToggleSpeedModeAsync(new Empty(), TriggerOpts()), ct);
 
+    public Task<(bool ok, string message)> WatchlistCheckAsync(CancellationToken ct = default) =>
+        RunTrigger(c => c.WatchlistCheckAsync(new Empty(), TriggerOpts()), ct);
+
     // ── Queries ───────────────────────────────────────────────────────────────
 
     public Task<MediaBoxStatus> GetStatusAsync(CancellationToken ct = default) =>

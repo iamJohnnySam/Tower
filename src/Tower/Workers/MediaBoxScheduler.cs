@@ -19,15 +19,7 @@ namespace Tower;
 ///   TransmissionPoll -> MediaBoxJobs.TransmissionPollMinutes -> TransmissionPollAsync
 ///   Scan             -> MediaBoxJobs.ScanHours (*60)         -> ScanAsync
 ///   YouTube          -> MediaBoxJobs.YouTubeMinutes          -> YouTubeDownloadAsync
-///
-/// Watchlist is intentionally NOT wired: the mediabox_control.proto's 9 trigger RPCs are
-/// Scan/Organize/RssCheck/TransmissionPoll/YouTubeDownload/YouTubePause/YouTubeResume/
-/// ResetQuality/ToggleSpeedMode — there is no Watchlist/MovieWatchlist trigger RPC.
-/// MediaBox's MovieWatchlistService periodic check therefore has no gRPC hook for Tower to
-/// drive. This is a known gap (flagged, not invented around): either it's acceptable as-is
-/// (watchlist items are evaluated when added/on MediaBox's own internal cadence) or a future
-/// proto addition (e.g. a WatchlistCheck trigger) is needed. MediaBoxJobsConfig.WatchlistMinutes
-/// is consequently unused by this scheduler.
+///   Watchlist        -> MediaBoxJobs.WatchlistMinutes        -> WatchlistCheckAsync
 ///
 /// YouTube idempotency note: MediaBox's YouTube downloader uses a yt-dlp download archive, so
 /// re-triggering YouTubeDownload on every due tick is safe/idempotent — it just re-checks
@@ -51,6 +43,7 @@ public sealed class MediaBoxScheduler(
         new Job("TransmissionPoll", j => TimeSpan.FromMinutes(j.TransmissionPollMinutes), () => client.TransmissionPollAsync()),
         new Job("Scan",             j => TimeSpan.FromHours(j.ScanHours),                 () => client.ScanAsync()),
         new Job("YouTube",          j => TimeSpan.FromMinutes(j.YouTubeMinutes),          () => client.YouTubeDownloadAsync()),
+        new Job("Watchlist",        j => TimeSpan.FromMinutes(j.WatchlistMinutes),        () => client.WatchlistCheckAsync()),
     };
 
     /// <summary>
