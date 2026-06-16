@@ -1,0 +1,480 @@
+using System.Collections.Concurrent;
+using System.Threading.Channels;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Tower.Core.Data;
+using Tower.Core.Models;
+using Tower.Core.Settings;
+using Tower.Core.State;
+
+namespace Tower.Core.Telegram;
+
+/// <summary>
+/// Singleton coordinator for all Telegram I/O in Tower.
+///
+/// Responsibilities:
+///   - Client registry: gRPC StreamUpdates callers register/unregister here;
+///     inbound updates are fanned-out via System.Threading.Channels.
+///   - Outbound routing: SendAsync / SendPhotoAsync / SendKeyboardAsync /
+///     EditAsync / AnswerCallbackAsync — resolve audience, call TelegramApi,
+///     persist to TelegramMessage log.
+///   - Incoming handling: HandleIncomingAsync — blocked-user gate, subscriber
+///     auto-registration (first subscriber becomes admin, mirroring MediaBox),
+///     persistence, broadcast.
+///   - Poll: PollOnceAsync — single long-poll cycle (called by TelegramPollWorker).
+///   - Snapshot: RefreshSnapshot — refreshes LiveState.Comms from the DB + hub state.
+///
+/// LAYERING: This class lives in Tower.Core and must NOT reference the generated
+/// gRPC proto types. The broadcast type is the existing <see cref="ParsedUpdate"/>
+/// record. The gRPC service (Task 5, web project) converts proto ↔ internal types.
+/// </summary>
+public sealed class TelegramHub(
+    TelegramApi api,
+    IServiceScopeFactory scopes,
+    LiveState state,
+    ILogger<TelegramHub> logger)
+{
+    // ── Offset ────────────────────────────────────────────────────────────────
+
+    private long _offset;
+
+    // ── Last error (for snapshot) ─────────────────────────────────────────────
+
+    private string _lastError = "";
+
+    // ── Client registry ───────────────────────────────────────────────────────
+
+    private readonly ConcurrentDictionary<string, ChannelWriter<ParsedUpdate>> _clients = new();
+
+    /// <summary>
+    /// Registers a new streaming client and returns its Channel so the caller
+    /// can read from it with <c>await foreach</c>.
+    /// </summary>
+    public Channel<ParsedUpdate> RegisterClient(string clientId)
+    {
+        var channel = Channel.CreateUnbounded<ParsedUpdate>(
+            new UnboundedChannelOptions { SingleReader = true });
+        _clients[clientId] = channel.Writer;
+        logger.LogInformation("TelegramHub: client registered [{ClientId}] (total={Count})",
+            clientId, _clients.Count);
+        return channel;
+    }
+
+    /// <summary>
+    /// Unregisters a streaming client and completes its channel writer so the
+    /// reader loop (await foreach) exits cleanly.
+    /// </summary>
+    public void UnregisterClient(string clientId)
+    {
+        if (_clients.TryRemove(clientId, out var writer))
+        {
+            writer.TryComplete();
+            logger.LogInformation("TelegramHub: client unregistered [{ClientId}] (total={Count})",
+                clientId, _clients.Count);
+        }
+    }
+
+    /// <summary>Current number of registered gRPC streaming clients.</summary>
+    public int ClientCount => _clients.Count;
+
+    // ── Broadcast ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Fan-out an inbound update to all registered streaming clients.
+    /// Uses TryWrite (non-blocking, unbounded channel).
+    /// </summary>
+    public void BroadcastUpdate(ParsedUpdate u)
+    {
+        foreach (var (id, writer) in _clients)
+        {
+            if (!writer.TryWrite(u))
+                logger.LogWarning("TelegramHub: failed to write to client [{ClientId}]", id);
+        }
+    }
+
+    // ── Outbound helpers ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Resolves audience → list of target chatIds.
+    /// Returns null if the audience can't be resolved (e.g. Admin with no admin set).
+    /// Each call opens its own scope.
+    /// </summary>
+    private async Task<(string? token, List<long> targets)> ResolveAsync(
+        TgAudience aud, long chatId)
+    {
+        using var scope = scopes.CreateScope();
+        var settings = scope.ServiceProvider.GetRequiredService<SettingsService>();
+        var subscribers = scope.ServiceProvider.GetRequiredService<SubscriberService>();
+
+        var token = settings.Get("telegram.bot_token");
+        if (string.IsNullOrWhiteSpace(token))
+            return (null, []);
+
+        List<long> targets = aud switch
+        {
+            TgAudience.Chat        => [chatId],
+            TgAudience.Admin       => subscribers.GetAdmin() is long a ? [a] : [],
+            TgAudience.Subscribers => subscribers.ListActive().Select(s => s.ChatId).ToList(),
+            _                      => []
+        };
+
+        return (token, targets);
+    }
+
+    /// <summary>
+    /// Persists an outbound log entry. Opens its own scope.
+    /// </summary>
+    private void LogOutbound(long chatId, string text)
+    {
+        try
+        {
+            using var scope = scopes.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
+            db.Messages.Add(new TelegramMessage
+            {
+                Ts        = DateTime.UtcNow,
+                Direction = "out",
+                ChatId    = chatId,
+                Payload   = text
+            });
+            db.SaveChanges();
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "TelegramHub: failed to persist outbound message log");
+        }
+    }
+
+    // ── Public outbound API ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// Sends a text message to the specified audience.
+    /// Returns TgResult for the last successful (or last failed) send.
+    /// Never throws.
+    /// </summary>
+    public async Task<TgResult> SendAsync(
+        TgAudience aud, long chatId, string text, string? parseMode, CancellationToken ct)
+    {
+        try
+        {
+            var (token, targets) = await ResolveAsync(aud, chatId);
+            if (token is null) return TgResult.NoToken;
+            if (targets.Count == 0) return TgResult.NoTarget;
+
+            TgResult last = TgResult.NoTarget;
+            foreach (var target in targets)
+            {
+                var msgId = await api.SendMessageAsync(token, target, text, parseMode, ct);
+                last = TgResult.FromMessageId(msgId);
+                LogOutbound(target, text);
+            }
+            return last;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "TelegramHub.SendAsync failed");
+            return new TgResult(false, 0, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Sends a photo to the specified audience.
+    /// Never throws.
+    /// </summary>
+    public async Task<TgResult> SendPhotoAsync(
+        TgAudience aud,
+        long chatId,
+        string photoUrl,
+        string caption,
+        IReadOnlyList<IReadOnlyList<(string, string)>>? buttons,
+        string? parseMode,
+        CancellationToken ct)
+    {
+        try
+        {
+            var (token, targets) = await ResolveAsync(aud, chatId);
+            if (token is null) return TgResult.NoToken;
+            if (targets.Count == 0) return TgResult.NoTarget;
+
+            TgResult last = TgResult.NoTarget;
+            foreach (var target in targets)
+            {
+                var msgId = await api.SendPhotoAsync(token, target, photoUrl, caption, buttons, parseMode, ct);
+                last = TgResult.FromMessageId(msgId);
+                LogOutbound(target, $"[photo] {caption}");
+            }
+            return last;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "TelegramHub.SendPhotoAsync failed");
+            return new TgResult(false, 0, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Sends an inline keyboard message to a specific chat.
+    /// Returns TgResult with MessageId set (needed for EditAsync later).
+    /// Never throws.
+    /// </summary>
+    public async Task<TgResult> SendKeyboardAsync(
+        long chatId,
+        string text,
+        IReadOnlyList<IReadOnlyList<(string, string)>> buttons,
+        string? parseMode,
+        CancellationToken ct)
+    {
+        try
+        {
+            using var scope = scopes.CreateScope();
+            var settings = scope.ServiceProvider.GetRequiredService<SettingsService>();
+            var token = settings.Get("telegram.bot_token");
+            if (string.IsNullOrWhiteSpace(token)) return TgResult.NoToken;
+
+            var msgId = await api.SendInlineKeyboardAsync(token, chatId, text, buttons, parseMode, ct);
+            var result = TgResult.FromMessageId(msgId);
+            LogOutbound(chatId, text);
+            return result;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "TelegramHub.SendKeyboardAsync failed");
+            return new TgResult(false, 0, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Edits an existing inline-keyboard message.
+    /// Never throws.
+    /// </summary>
+    public async Task<TgResult> EditAsync(
+        long chatId,
+        int messageId,
+        string text,
+        IReadOnlyList<IReadOnlyList<(string, string)>>? buttons,
+        string? parseMode,
+        CancellationToken ct)
+    {
+        try
+        {
+            using var scope = scopes.CreateScope();
+            var settings = scope.ServiceProvider.GetRequiredService<SettingsService>();
+            var token = settings.Get("telegram.bot_token");
+            if (string.IsNullOrWhiteSpace(token)) return TgResult.NoToken;
+
+            var ok = await api.EditMessageAsync(token, chatId, messageId, text, buttons, parseMode, ct);
+            LogOutbound(chatId, $"[edit:{messageId}] {text}");
+            return ok ? new TgResult(true, messageId, null) : new TgResult(false, 0, "edit failed");
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "TelegramHub.EditAsync failed");
+            return new TgResult(false, 0, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Answers a callback query to clear the Telegram spinner.
+    /// Never throws.
+    /// </summary>
+    public async Task<TgResult> AnswerCallbackAsync(
+        string callbackId, string? text, CancellationToken ct)
+    {
+        try
+        {
+            using var scope = scopes.CreateScope();
+            var settings = scope.ServiceProvider.GetRequiredService<SettingsService>();
+            var token = settings.Get("telegram.bot_token");
+            if (string.IsNullOrWhiteSpace(token)) return TgResult.NoToken;
+
+            var ok = await api.AnswerCallbackAsync(token, callbackId, text, ct);
+            return ok ? new TgResult(true, 0, null) : new TgResult(false, 0, "answer callback failed");
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "TelegramHub.AnswerCallbackAsync failed");
+            return new TgResult(false, 0, ex.Message);
+        }
+    }
+
+    // ── Poll ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Performs one long-poll cycle (getUpdates with timeout=30).
+    /// Returns true if the response was successfully parsed (even if empty).
+    /// Returns false if the HTTP call failed (null response).
+    /// </summary>
+    public async Task<bool> PollOnceAsync(string token, CancellationToken ct)
+    {
+        var json = await api.GetUpdatesRawAsync(token, _offset, 30, ct);
+        if (json is null) return false;
+
+        var (newOffset, updates) = UpdateParser.ParseUpdates(json);
+
+        // Advance offset (never go backwards)
+        if (newOffset > _offset)
+            _offset = newOffset;
+
+        foreach (var update in updates)
+        {
+            await HandleIncomingAsync(update, ct);
+        }
+
+        return true;
+    }
+
+    // ── Incoming ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Processes a single inbound update:
+    ///   1. Ignore blocked users (silently).
+    ///   2. Auto-register new users as subscribers; first subscriber becomes admin.
+    ///   3. Persist to TelegramMessage log.
+    ///   4. Broadcast to all registered gRPC streaming clients.
+    /// </summary>
+    public async Task HandleIncomingAsync(ParsedUpdate u, CancellationToken ct)
+    {
+        using var scope = scopes.CreateScope();
+        var subscriberSvc = scope.ServiceProvider.GetRequiredService<SubscriberService>();
+        var db            = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
+
+        // 1. Gate: ignore blocked users
+        if (subscriberSvc.IsBlocked(u.ChatId))
+        {
+            logger.LogDebug("TelegramHub: ignoring message from blocked user {ChatId}", u.ChatId);
+            return;
+        }
+
+        // 2. Auto-registration for non-callback messages from unknown users
+        if (!u.IsCallback && !subscriberSvc.IsActive(u.ChatId))
+        {
+            var displayName = string.IsNullOrWhiteSpace(u.Username)
+                ? string.IsNullOrWhiteSpace(u.FirstName) ? u.ChatId.ToString()
+                : $"{u.FirstName} {u.LastName}".Trim()
+                : $"@{u.Username}";
+
+            subscriberSvc.AddOrReactivate(u.ChatId, displayName);
+            logger.LogInformation("TelegramHub: new subscriber {ChatId} ({Name})", u.ChatId, displayName);
+
+            // First subscriber = admin (mirrors MediaBox TelegramBotService.HandleMessageAsync)
+            if (subscriberSvc.GetAdmin() is null)
+            {
+                subscriberSvc.SetAdmin(u.ChatId);
+                logger.LogInformation("TelegramHub: first subscriber set as admin: {ChatId}", u.ChatId);
+
+                // Send a brief welcome to the new admin
+                var welcomeResult = await SendAsync(
+                    TgAudience.Chat, u.ChatId,
+                    "Welcome to Tower! You have been registered as the Telegram admin.",
+                    null, ct);
+
+                if (!welcomeResult.Ok)
+                    logger.LogWarning("TelegramHub: welcome send failed: {Error}", welcomeResult.Error);
+            }
+            else
+            {
+                // Welcome non-admin subscriber
+                await SendAsync(
+                    TgAudience.Chat, u.ChatId,
+                    "You have been subscribed to Tower notifications.",
+                    null, ct);
+            }
+        }
+
+        // 3. Persist inbound message to log
+        try
+        {
+            string? command = null;
+            if (!u.IsCallback && u.Text.StartsWith('/'))
+            {
+                var firstToken = u.Text.Split(' ', 2)[0];
+                command = firstToken;
+            }
+
+            db.Messages.Add(new TelegramMessage
+            {
+                Ts        = DateTime.UtcNow,
+                Direction = "in",
+                ChatId    = u.ChatId,
+                Command   = command,
+                Payload   = u.IsCallback ? u.CallbackData : u.Text
+            });
+            await db.SaveChangesAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "TelegramHub: failed to persist inbound message log");
+        }
+
+        // 4. Broadcast to registered gRPC clients
+        BroadcastUpdate(u);
+    }
+
+    // ── Snapshot ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Refreshes <see cref="LiveState.Comms"/> from the DB + hub state.
+    /// Safe to call from any thread — opens its own scope.
+    /// </summary>
+    public void RefreshSnapshot()
+    {
+        try
+        {
+            using var scope = scopes.CreateScope();
+            var settings = scope.ServiceProvider.GetRequiredService<SettingsService>();
+            var db       = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
+
+            var active          = settings.Get("telegram.active") == "true";
+            var tokenConfigured = !string.IsNullOrWhiteSpace(settings.Get("telegram.bot_token"));
+
+            // Read last 30 messages (newest first)
+            var rows = db.Messages
+                .OrderByDescending(m => m.Ts)
+                .Take(30)
+                .AsNoTracking()
+                .ToList();
+
+            var log = rows
+                .Select(m => new MsgLogEntry(
+                    m.Ts,
+                    m.Direction,
+                    m.ChatId,
+                    m.Payload ?? m.Command ?? ""))
+                .ToList();
+
+            state.SetComms(new CommsSnapshot(
+                Active:           active,
+                TokenConfigured:  tokenConfigured,
+                ConnectedClients: _clients.Count,
+                LastError:        _lastError,
+                RecentLog:        log,
+                Updated:          DateTime.UtcNow));
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "TelegramHub.RefreshSnapshot failed");
+        }
+    }
+
+    /// <summary>
+    /// Updates the last-error field (used by TelegramPollWorker) and then
+    /// calls <see cref="RefreshSnapshot"/> so the UI reflects the error.
+    /// </summary>
+    public void SetLastError(string error)
+    {
+        _lastError = error;
+        RefreshSnapshot();
+    }
+
+    /// <summary>Clears the last-error field on successful polls.</summary>
+    public void ClearLastError()
+    {
+        _lastError = "";
+    }
+}

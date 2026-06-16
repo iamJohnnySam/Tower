@@ -1,0 +1,50 @@
+{
+  "ok": true,
+  "result": [
+    {
+      "update_id": 1000001,
+      "message": {
+        "message_id": 42,
+        "from": {
+          "id": 111222333,
+          "is_bot": false,
+          "first_name": "John",
+          "last_name": "Doe",
+          "username": "johndoe"
+        },
+        "chat": {
+          "id": 111222333,
+          "first_name": "John",
+          "last_name": "Doe",
+          "username": "johndoe",
+          "type": "private"
+        },
+        "date": 1718500000,
+        "text": "/status"
+      }
+    },
+    {
+      "update_id": 1000002,
+      "callback_query": {
+        "id": "callback-abc-123",
+        "from": {
+          "id": 111222333,
+          "is_bot": false,
+          "first_name": "John",
+          "last_name": "Doe",
+          "username": "johndoe"
+        },
+        "message": {
+          "message_id": 99,
+          "chat": {
+            "id": 111222333,
+            "type": "private"
+          },
+          "date": 1718500010,
+          "text": "Pick something:"
+        },
+        "data": "ms:next"
+      }
+    }
+  ]
+}

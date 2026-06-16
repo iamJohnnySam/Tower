@@ -3,6 +3,27 @@ using Tower.Core.Metrics;
 
 namespace Tower.Core.State;
 
+// ─── Comms / Telegram snapshot ───────────────────────────────────────────────
+
+public record MsgLogEntry(DateTime Ts, string Direction, long ChatId, string Text);
+
+public record CommsSnapshot(
+    bool Active,
+    bool TokenConfigured,
+    int ConnectedClients,
+    string LastError,
+    IReadOnlyList<MsgLogEntry> RecentLog,
+    DateTime Updated)
+{
+    public static CommsSnapshot Default { get; } = new(
+        Active: false,
+        TokenConfigured: false,
+        ConnectedClients: 0,
+        LastError: "",
+        RecentLog: Array.Empty<MsgLogEntry>(),
+        Updated: DateTime.MinValue);
+}
+
 // ─── Project status ───────────────────────────────────────────────────────────
 
 public record ProjectStatus(
@@ -134,6 +155,9 @@ public class LiveState
     // ── Backups ──
     private List<BackupResult> _backups = [];
 
+    // ── Comms / Telegram ──
+    private CommsSnapshot _comms = CommsSnapshot.Default;
+
     // ─── Public read properties ──────────────────────────────────────────────
 
     public StatsSnapshot Stats
@@ -179,6 +203,11 @@ public class LiveState
     public IReadOnlyList<BackupResult> Backups
     {
         get { lock (_lock) return _backups.AsReadOnly(); }
+    }
+
+    public CommsSnapshot Comms
+    {
+        get { lock (_lock) return _comms; }
     }
 
     // ─── Write methods ───────────────────────────────────────────────────────
@@ -244,6 +273,11 @@ public class LiveState
     public void SetProjects(List<ProjectStatus> projects)
     {
         lock (_lock) _projects = [.. projects];
+    }
+
+    public void SetComms(CommsSnapshot s)
+    {
+        lock (_lock) _comms = s;
     }
 
     /// <summary>
