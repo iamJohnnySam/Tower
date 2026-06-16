@@ -21,6 +21,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Tower.Core\Tower.Core.csproj" />
+    <!-- MediaBoxScheduler (Task 8) lives in the Tower web project because it needs the
+         concrete MediaBoxClient type, which is generated/wrapped there alongside the
+         mediabox_control.proto client. Referenced here so MediaBoxSchedulerTests can
+         reach MediaBoxScheduler.IsDue (a pure static) without duplicating it. -->
+    <ProjectReference Include="..\..\src\Tower\Tower.csproj" />
   </ItemGroup>
 
   <ItemGroup>

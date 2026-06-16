@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Tower;
 using Tower.Components;
+using Tower.MediaBox;
 using Tower.Core.Backup;
 using Tower.Core.Data;
 using Tower.Core.Jellyfin;
@@ -76,6 +77,19 @@ builder.Services.AddHostedService<TelegramPollWorker>();
 
 // ── gRPC ─────────────────────────────────────────────────────────────────────
 builder.Services.AddGrpc();
+
+// ── MediaBox control client (Task 7) ─────────────────────────────────────────
+// Singleton: caches the GrpcChannel/client across the process lifetime. Never throws —
+// see MediaBoxClient for the never-throws/safe-default design. MediaBoxScheduler (Task 8)
+// and the MediaBox tab (Tasks 9-10) consume this; nothing wired to it yet runs unless
+// Tower:MediaBoxOrchestrate is explicitly turned on.
+builder.Services.AddSingleton<MediaBoxClient>();
+
+// ── MediaBox scheduler (Task 8) ──────────────────────────────────────────────
+// Idle unless Tower:MediaBoxOrchestrate is true (the explicit-flip safety gate, same
+// pattern as telegram.active). See MediaBoxScheduler for the wired jobs + the dropped
+// Watchlist job (no trigger RPC exists for it).
+builder.Services.AddHostedService<MediaBoxScheduler>();
 
 // ── Blazor ───────────────────────────────────────────────────────────────────
 builder.Services.AddRazorComponents()
