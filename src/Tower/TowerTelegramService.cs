@@ -106,10 +106,18 @@ public sealed class TowerTelegramService(
     {
         try
         {
+            var chatId = request.ChatId;
+            if (chatId == 0)
+            {
+                using var scope = scopes.CreateScope();
+                var svc = scope.ServiceProvider.GetRequiredService<Tower.Core.Telegram.SubscriberService>();
+                chatId = svc.GetAdmin() ?? 0;
+            }
+
             var buttons = ToInternalButtons(request.Buttons)
                 ?? Array.Empty<IReadOnlyList<(string, string)>>();
             var r = await hub.SendKeyboardAsync(
-                request.ChatId,
+                chatId,
                 request.Text,
                 buttons,
                 NullIfEmpty(request.ParseMode),
@@ -128,8 +136,16 @@ public sealed class TowerTelegramService(
     {
         try
         {
+            var chatId = request.ChatId;
+            if (chatId == 0)
+            {
+                using var scope = scopes.CreateScope();
+                var svc = scope.ServiceProvider.GetRequiredService<Tower.Core.Telegram.SubscriberService>();
+                chatId = svc.GetAdmin() ?? 0;
+            }
+
             var r = await hub.EditAsync(
-                request.ChatId,
+                chatId,
                 request.MessageId,
                 request.Text,
                 ToInternalButtons(request.Buttons),
