@@ -8,6 +8,28 @@ public class TowerConfig
     public string MaintenanceScriptPath { get; set; } = "do_maintenance.sh";
     public string MaintenanceLogPath { get; set; } = "maintenance.log";
     public string JellyfinUrl { get; set; } = "http://localhost:8096";
+    public string MediaBoxGrpcUrl { get; set; } = "http://localhost:5602";
+    public bool MediaBoxOrchestrate { get; set; } = false;
+    public MediaBoxJobsConfig MediaBoxJobs { get; set; } = new();
+}
+
+/// <summary>
+/// Job cadences ported from MediaBox's own appsettings.json ("MediaBox" section) so Tower
+/// reproduces today's intervals exactly when it takes over scheduling at cutover (Task 11):
+///   RssFeedCheckMinutes=30, DownloadOrganizerMinutes=10, TransmissionCheckMinutes=5,
+///   MediaScanHours=12, WatchlistCheckHours=6 (-> 360 minutes here).
+/// YouTubeMinutes has no direct MediaBox equivalent — MediaBox schedules YouTube downloads
+/// per-source at fixed times-of-day (NewsSources[].DownloadTime), not a polling interval — so
+/// this uses a reasonable poll cadence for Tower's scheduler to check for due sources.
+/// </summary>
+public class MediaBoxJobsConfig
+{
+    public int RssCheckMinutes { get; set; } = 30;
+    public int OrganizeMinutes { get; set; } = 10;
+    public int TransmissionPollMinutes { get; set; } = 5;
+    public int ScanHours { get; set; } = 12;
+    public int YouTubeMinutes { get; set; } = 60;
+    public int WatchlistMinutes { get; set; } = 360;
 }
 
 public class DeviceConfig

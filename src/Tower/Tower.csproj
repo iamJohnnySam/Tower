@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <Protobuf Include="..\..\protos\tower_telegram.proto" GrpcServices="Server" />
+    <Protobuf Include="..\..\protos\mediabox_control.proto" GrpcServices="Client" />
   </ItemGroup>
 
   <PropertyGroup>
