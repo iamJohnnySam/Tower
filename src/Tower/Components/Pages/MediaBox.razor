@@ -1,0 +1,245 @@
+@page "/mediabox"
+@using MbStatus = global::MediaBox.Control.Grpc.Status
+@using MbDownloadList = global::MediaBox.Control.Grpc.DownloadList
+@using MbMediaList = global::MediaBox.Control.Grpc.MediaList
+@using MbClient = global::Tower.MediaBox.MediaBoxClient
+@inject MbClient Client
+@implements IAsyncDisposable
+
+<PageTitle>Tower — MediaBox</PageTitle>
+
+<div class="mediabox-page">
+
+    <h1 class="page-title">MediaBox</h1>
+
+    @* ── Sub-view pills ───────────────────────────────────────────────────── *@
+    <div class="device-submenu">
+        @foreach (var view in _views)
+        {
+            var isActive = string.Equals(view, _activeView, StringComparison.OrdinalIgnoreCase);
+            <button class="submenu-pill @(isActive ? "active" : "")"
+                    @onclick="@(() => SwitchViewAsync(view))">
+                @view
+            </button>
+        }
+    </div>
+
+    @* ── Status strip (always visible) ───────────────────────────────────── *@
+    @{ var unreachable = IsUnreachable(_status); }
+    @if (unreachable)
+    {
+        <div class="mb-banner mb-banner-red">
+            🔴 MediaBox unreachable (is the service running on :5602?)
+        </div>
+    }
+
+    <div class="atom-cards-grid mb-status-grid">
+        <div class="atom-card">
+            <div class="atom-card-title">TV Shows</div>
+            <div class="atom-big-value">@_status.TvShows</div>
+        </div>
+        <div class="atom-card">
+            <div class="atom-card-title">Movies</div>
+            <div class="atom-big-value">@_status.Movies</div>
+        </div>
+        <div class="atom-card">
+            <div class="atom-card-title">Active Downloads</div>
+            <div class="atom-big-value">@_status.ActiveDownloads</div>
+        </div>
+        <div class="atom-card">
+            <div class="atom-card-title">Speed Mode</div>
+            <div class="atom-big-value">
+                <span class="svc-dot @(_status.SpeedMode ? "svc-on" : "svc-off")"></span>
+                @(_status.SpeedMode ? "On" : "Off")
+            </div>
+        </div>
+    </div>
+
+    @* ── Sub-view body ────────────────────────────────────────────────────── *@
+    <div class="mb-body">
+        @switch (_activeView)
+        {
+            case "Downloads":
+                @RenderDownloads
+                break;
+            case "Library":
+                @RenderLibrary
+                break;
+            default:
+                <div class="mb-notice">@_activeView — coming soon.</div>
+                break;
+        }
+    </div>
+
+</div>
+
+@code {
+    private static readonly string[] _views =
+        ["Downloads", "Library", "Watchlist", "YouTube", "Settings", "Actions", "Logs"];
+
+    private string _activeView = "Downloads";
+
+    private MbStatus _status = new();
+    private MbDownloadList _downloads = new();
+    private MbMediaList _library = new();
+    private string _libraryType = "tv";
+
+    private System.Threading.Timer? _timer;
+    private bool _disposed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+
+        _timer = new System.Threading.Timer(async _ =>
+        {
+            if (_disposed) return;
+            await RefreshAsync();
+            if (!_disposed)
+                await InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+    }
+
+    private async Task RefreshAsync()
+    {
+        // Status is cheap + never-throws — refresh every tick regardless of active view.
+        _status = await Client.GetStatusAsync();
+
+        switch (_activeView)
+        {
+            case "Downloads":
+                _downloads = await Client.GetDownloadsAsync();
+                break;
+            case "Library":
+                _library = await Client.GetLibraryAsync(_libraryType);
+                break;
+        }
+    }
+
+    private async Task SwitchViewAsync(string view)
+    {
+        _activeView = view;
+        await RefreshAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task SwitchLibraryTypeAsync(string type)
+    {
+        _libraryType = type;
+        _library = await Client.GetLibraryAsync(_libraryType);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private static bool IsUnreachable(MbStatus s) =>
+        s.TvShows == 0 && s.Movies == 0 && s.ActiveDownloads == 0 &&
+        !s.SpeedMode && string.IsNullOrEmpty(s.Summary);
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        if (_timer != null)
+            await _timer.DisposeAsync();
+    }
+
+    // ── Downloads sub-view ──────────────────────────────────────────────────
+
+    private RenderFragment RenderDownloads => @<text>
+        @if (_downloads.Items.Count == 0)
+        {
+            <div class="mb-notice">No active downloads.</div>
+        }
+        else
+        {
+            <table class="atom-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Progress</th>
+                        <th>Status</th>
+                        <th>Size</th>
+                        <th>Rate ↓</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var d in _downloads.Items)
+                    {
+                        <tr>
+                            <td class="mb-name-cell">@d.Name</td>
+                            <td class="mb-progress-cell">
+                                <div class="mc-bar">
+                                    <div class="mc-bar-fill" style="width: @($"{Math.Clamp(d.Percent, 0, 100):0.#}%")"></div>
+                                </div>
+                                <span class="mb-progress-label">@($"{d.Percent:0.#}%")</span>
+                            </td>
+                            <td>@d.Status</td>
+                            <td>@Fmt.Bytes(d.SizeBytes)</td>
+                            <td>@Fmt.Rate(d.RateDown)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </text>;
+
+    // ── Library sub-view ────────────────────────────────────────────────────
+
+    private RenderFragment RenderLibrary => @<text>
+        <div class="device-submenu mb-library-toggle">
+            <button class="submenu-pill @(_libraryType == "tv" ? "active" : "")"
+                    @onclick="@(() => SwitchLibraryTypeAsync("tv"))">TV</button>
+            <button class="submenu-pill @(_libraryType == "movies" ? "active" : "")"
+                    @onclick="@(() => SwitchLibraryTypeAsync("movies"))">Movies</button>
+        </div>
+
+        @if (_library.Items.Count == 0)
+        {
+            <div class="mb-notice">Library empty or unreachable.</div>
+        }
+        else if (_libraryType == "tv")
+        {
+            <table class="atom-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Year</th>
+                        <th>Seasons</th>
+                        <th>Path</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in _library.Items)
+                    {
+                        <tr>
+                            <td>@m.Name</td>
+                            <td>@m.Year</td>
+                            <td>@m.Seasons</td>
+                            <td class="mb-path-cell">@m.Path</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <table class="atom-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Year</th>
+                        <th>Path</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in _library.Items)
+                    {
+                        <tr>
+                            <td>@m.Name</td>
+                            <td>@m.Year</td>
+                            <td class="mb-path-cell">@m.Path</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </text>;
+}

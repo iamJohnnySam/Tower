@@ -155,6 +155,12 @@
                                 <a class="btn-secondary btn-sm proj-btn-open" href="@proj.Url" target="_blank">Open</a>
                             }
 
+                            @* Manage (Tower-hosted MediaBox tab) *@
+                            @if (pname == "MediaBox")
+                            {
+                                <a class="btn-secondary btn-sm" href="/mediabox">Manage</a>
+                            }
+
                             @* Backup DB *@
                             @if (hasDb && dbPath != null)
                             {

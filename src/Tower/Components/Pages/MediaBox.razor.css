@@ -1,0 +1,111 @@
+/* MediaBox page — scoped CSS. Global .atom-card/.atom-table/.mc-bar/.svc-dot
+   come from app.css. Blazor CSS isolation means classes scoped to OTHER
+   components (e.g. .device-submenu/.submenu-pill, defined in Devices.razor.css)
+   do NOT apply here, so the pill pattern is duplicated below to match. */
+
+.mediabox-page {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    max-width: 1100px;
+}
+
+.mb-status-grid {
+    margin-bottom: 0.5rem;
+}
+
+/* ─── Horizontal pill submenu (duplicated from Devices.razor.css) ────────── */
+
+.device-submenu {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 1.25rem;
+}
+
+.submenu-pill {
+    padding: 0.3rem 0.9rem;
+    border-radius: 20px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    color: #8b949e;
+    font-size: 0.82rem;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.submenu-pill:hover {
+    background: #21262d;
+    color: #c9d1d9;
+    border-color: #8b949e;
+    text-decoration: none;
+}
+
+.submenu-pill.active {
+    background: #58a6ff;
+    border-color: #58a6ff;
+    color: #fff;
+}
+
+.mb-banner {
+    padding: 0.6rem 0.9rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.mb-banner-red {
+    background: rgba(248, 81, 73, 0.1);
+    border: 1px solid rgba(248, 81, 73, 0.35);
+    color: #f85149;
+}
+
+.mb-body {
+    min-width: 0;
+}
+
+.mb-notice {
+    font-size: 0.82rem;
+    color: #8b949e;
+    padding: 0.5rem 0;
+}
+
+.mb-name-cell {
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mb-path-cell {
+    color: #8b949e;
+    font-size: 0.75rem;
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mb-progress-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 140px;
+}
+
+.mb-progress-cell .mc-bar {
+    flex: 1;
+    min-width: 80px;
+}
+
+.mb-progress-label {
+    font-size: 0.72rem;
+    color: #8b949e;
+    white-space: nowrap;
+}
+
+.mb-library-toggle {
+    margin-bottom: 0.75rem;
+}
