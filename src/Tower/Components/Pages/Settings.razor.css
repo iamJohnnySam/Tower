@@ -11,10 +11,6 @@
     gap: 1.25rem;
 }
 
-.page-title {
-    margin-bottom: 0.25rem;
-}
-
 .settings-section {
     /* sections are stacked by the flex column above */
 }
