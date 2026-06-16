@@ -85,6 +85,12 @@ builder.Services.AddGrpc();
 // Tower:MediaBoxOrchestrate is explicitly turned on.
 builder.Services.AddSingleton<MediaBoxClient>();
 
+// ── MediaBox scheduler (Task 8) ──────────────────────────────────────────────
+// Idle unless Tower:MediaBoxOrchestrate is true (the explicit-flip safety gate, same
+// pattern as telegram.active). See MediaBoxScheduler for the wired jobs + the dropped
+// Watchlist job (no trigger RPC exists for it).
+builder.Services.AddHostedService<MediaBoxScheduler>();
+
 // ── Blazor ───────────────────────────────────────────────────────────────────
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
