@@ -1,0 +1,158 @@
+/* Communication page — component-scoped selectors only.
+   Shared globals used: .atom-cards-grid, .atom-card, .atom-card-title,
+   .atom-table, .val-green, .val-amber, .val-red, .text-muted,
+   .svc-dot, .svc-on, .svc-off, .btn-danger, .btn-secondary, .btn-sm,
+   .config-input, .page-title — all in wwwroot/app.css. */
+
+.comms-page {
+    max-width: 1100px;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+/* Full-width card variant — spans both columns of the grid */
+.comms-card-wide {
+    grid-column: 1 / -1;
+}
+
+/* Key–value status row inside bot status card */
+.comms-status-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.82rem;
+    padding: 3px 0;
+}
+
+.comms-label {
+    min-width: 110px;
+    color: #8b949e;
+    font-size: 0.78rem;
+    flex-shrink: 0;
+}
+
+/* Active badge: dot + text inline */
+.comms-active-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-weight: 600;
+}
+
+/* Confirm row: confirm + cancel buttons inline */
+.comms-confirm-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+/* Warning box for the toggle confirm */
+.comms-warn-box {
+    background: rgba(210, 153, 34, 0.08);
+    border: 1px solid rgba(210, 153, 34, 0.3);
+    border-radius: 6px;
+    padding: 0.55rem 0.8rem;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: #c9d1d9;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+/* Inline result text after toggle / send */
+.comms-result {
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+/* Small "Updated" timestamp */
+.comms-updated {
+    font-size: 0.7rem;
+    color: #4a5568;
+    margin-top: 0.15rem;
+}
+
+/* Admin badge in subscriber table */
+.comms-admin-badge {
+    display: inline-block;
+    background: rgba(88, 166, 255, 0.15);
+    color: #58a6ff;
+    border: 1px solid rgba(88, 166, 255, 0.3);
+    border-radius: 10px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 1px 7px;
+}
+
+/* Kick/Block buttons in subscriber row */
+.comms-action-btns {
+    display: inline-flex;
+    gap: 0.3rem;
+}
+
+/* Monospace cells for IDs and timestamps */
+.comms-mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.75rem;
+}
+
+/* Direction cell — slightly wider so "→ out" / "← in" don't wrap */
+.comms-dir-cell {
+    white-space: nowrap;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+/* Log text cell — ellipsis handled inline via C# truncation */
+.comms-text-cell {
+    font-size: 0.78rem;
+    max-width: 480px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ── Manual send form ──────────────────────────────────────────────────────── */
+
+.comms-send-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.comms-send-row {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.comms-send-textarea-row {
+    align-items: flex-start;
+}
+
+.comms-audience-select {
+    width: 200px;
+}
+
+.comms-textarea {
+    width: 100%;
+    resize: vertical;
+    font-family: inherit;
+}
+
+/* Send button + result badge inline */
+.comms-send-action-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+
+/* Ensure error text in last row doesn't get too long */
+.comms-send-action-row .comms-result {
+    max-width: 400px;
+    word-break: break-word;
+}

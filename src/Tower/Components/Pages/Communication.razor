@@ -1,6 +1,423 @@
 @page "/comms"
+@using Tower.Core.State
+@using Tower.Core.Telegram
+@using Tower.Core.Settings
+@using Tower.Core.Models
+@inject LiveState Live
+@inject SubscriberService Subscribers
+@inject SettingsService SettingsSvc
+@inject TelegramHub Hub
+@implements IAsyncDisposable
 
 <PageTitle>Tower — Communication</PageTitle>
 
-<h1>Communication</h1>
-<p class="text-muted">Communication &mdash; coming in M3.</p>
+<div class="comms-page">
+
+    <h1 class="page-title">Communication</h1>
+
+    @{ var comms = Live.Comms; }
+
+    <div class="atom-cards-grid">
+
+        @* ── 1. Bot Status Card ───────────────────────────────────────────────── *@
+        <div class="atom-card comms-card-wide">
+            <div class="atom-card-title">Bot Status</div>
+
+            @* Token configured? *@
+            <div class="comms-status-row">
+                <span class="comms-label">Token</span>
+                @if (comms.TokenConfigured)
+                {
+                    <span class="val-green">&#10003; Configured</span>
+                }
+                else
+                {
+                    <span class="val-amber">Not configured — set the Telegram bot token in Settings</span>
+                }
+            </div>
+
+            @* Active toggle *@
+            <div class="comms-status-row">
+                <span class="comms-label">Bot Active</span>
+                <span class="@(comms.Active ? "val-green" : "text-muted") comms-active-badge">
+                    <span class="svc-dot @(comms.Active ? "svc-on" : "svc-off")"></span>
+                    @(comms.Active ? "ON" : "OFF")
+                </span>
+                @* Toggle button — 2-click confirm *@
+                @if (_toggleConfirm)
+                {
+                    <span class="comms-confirm-row">
+                        <button class="btn-danger btn-sm" @onclick="ConfirmToggleAsync">Confirm</button>
+                        <button class="btn-secondary btn-sm" @onclick="CancelToggle">Cancel</button>
+                    </span>
+                }
+                else
+                {
+                    <button class="btn-secondary btn-sm" @onclick="RequestToggle"
+                            disabled="@(!comms.TokenConfigured)">
+                        @(comms.Active ? "Deactivate" : "Activate")
+                    </button>
+                }
+            </div>
+
+            @* Toggle warning message shown when confirm is pending *@
+            @if (_toggleConfirm)
+            {
+                <div class="comms-warn-box">
+                    <strong class="val-amber">Coordination required!</strong>
+                    <span>
+                        @if (comms.Active)
+                        {
+                            <text>Deactivating Tower's bot stops Telegram polling. Only do this if you are also disabling UseTowerTelegram in MediaBox — otherwise nobody will handle incoming Telegram messages.</text>
+                        }
+                        else
+                        {
+                            <text>Activating Tower's bot starts Telegram polling. This MUST be coordinated with MediaBox's UseTowerTelegram flag (flip both together) — otherwise you'll get a Telegram 409 conflict. Only enable during the cutover.</text>
+                        }
+                    </span>
+                </div>
+            }
+
+            @* Connected gRPC clients *@
+            <div class="comms-status-row">
+                <span class="comms-label">gRPC Clients</span>
+                <span>@comms.ConnectedClients connected</span>
+            </div>
+
+            @* Last error *@
+            @if (!string.IsNullOrEmpty(comms.LastError))
+            {
+                <div class="comms-status-row">
+                    <span class="comms-label">Last Error</span>
+                    <span class="val-red comms-error-text">@comms.LastError</span>
+                </div>
+            }
+
+            @* Toggle result message *@
+            @if (_toggleResult != null)
+            {
+                <div class="@(_toggleResult.Value.Ok ? "val-green" : "val-red") comms-result">
+                    @_toggleResult.Value.Msg
+                </div>
+            }
+
+            <div class="comms-updated">Updated @comms.Updated.ToLocalTime().ToString("HH:mm:ss")</div>
+        </div>
+
+        @* ── 2. Subscribers Card ──────────────────────────────────────────────── *@
+        <div class="atom-card comms-card-wide">
+            <div class="atom-card-title">Subscribers</div>
+
+            @if (_subscribers.Count == 0)
+            {
+                <div class="text-muted" style="font-size:0.82rem">No active subscribers.</div>
+            }
+            else
+            {
+                <table class="atom-table">
+                    <thead>
+                        <tr>
+                            <th>Chat ID</th>
+                            <th>Name</th>
+                            <th></th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var sub in _subscribers)
+                        {
+                            var id = sub.ChatId; // capture for lambda
+                            var isAdmin = _adminChatId.HasValue && _adminChatId.Value == id;
+                            <tr>
+                                <td class="comms-mono">@id</td>
+                                <td>@(sub.Name ?? "—")</td>
+                                <td>
+                                    @if (isAdmin)
+                                    {
+                                        <span class="comms-admin-badge">Admin</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (_subConfirm.TryGetValue(id, out var confirmAction) && confirmAction == "kick")
+                                    {
+                                        <span class="comms-confirm-row">
+                                            <span class="val-amber" style="font-size:0.72rem">Kick?</span>
+                                            <button class="btn-secondary btn-sm" @onclick="@(() => DoKickAsync(id))">Yes</button>
+                                            <button class="btn-secondary btn-sm" @onclick="@(() => ClearSubConfirm(id))">No</button>
+                                        </span>
+                                    }
+                                    else if (_subConfirm.TryGetValue(id, out var confirmAction2) && confirmAction2 == "block")
+                                    {
+                                        <span class="comms-confirm-row">
+                                            <span class="val-red" style="font-size:0.72rem">Block?</span>
+                                            <button class="btn-danger btn-sm" @onclick="@(() => DoBlockAsync(id))">Yes</button>
+                                            <button class="btn-secondary btn-sm" @onclick="@(() => ClearSubConfirm(id))">No</button>
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="comms-action-btns">
+                                            <button class="btn-secondary btn-sm"
+                                                    disabled="@(_subBusy.TryGetValue(id, out var b1) && b1)"
+                                                    @onclick="@(() => SetSubConfirm(id, "kick"))">Kick</button>
+                                            <button class="btn-danger btn-sm"
+                                                    disabled="@(_subBusy.TryGetValue(id, out var b2) && b2)"
+                                                    @onclick="@(() => SetSubConfirm(id, "block"))">Block</button>
+                                        </span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+
+        @* ── 3. Message Log Card ──────────────────────────────────────────────── *@
+        <div class="atom-card comms-card-wide">
+            <div class="atom-card-title">Message Log</div>
+
+            @if (comms.RecentLog.Count == 0)
+            {
+                <div class="text-muted" style="font-size:0.82rem">No messages logged yet.</div>
+            }
+            else
+            {
+                <table class="atom-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Dir</th>
+                            <th>Chat ID</th>
+                            <th>Text</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var entry in comms.RecentLog)
+                        {
+                            var isOut = entry.Direction == "out";
+                            var displayText = entry.Text.Length > 80
+                                ? entry.Text[..80] + "…"
+                                : entry.Text;
+                            <tr>
+                                <td class="comms-mono">@entry.Ts.ToLocalTime().ToString("HH:mm:ss")</td>
+                                <td class="@(isOut ? "val-green" : "val-amber") comms-dir-cell">
+                                    @(isOut ? "→ out" : "← in")
+                                </td>
+                                <td class="comms-mono">@entry.ChatId</td>
+                                <td class="comms-text-cell" title="@entry.Text">@displayText</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+
+        @* ── 4. Manual Send Card ──────────────────────────────────────────────── *@
+        <div class="atom-card comms-card-wide">
+            <div class="atom-card-title">Manual Send</div>
+
+            @if (!comms.Active)
+            {
+                <div class="text-muted" style="font-size:0.82rem; margin-bottom:0.5rem">
+                    Bot is not active — activate the bot to send messages.
+                </div>
+            }
+
+            <div class="comms-send-form">
+                <div class="comms-send-row">
+                    <label class="comms-label">Audience</label>
+                    <select class="config-input comms-audience-select"
+                            disabled="@(!comms.Active)"
+                            @bind="_sendAudience">
+                        <option value="@TgAudience.Subscribers">Subscribers (all)</option>
+                        <option value="@TgAudience.Admin">Admin</option>
+                        <option value="@TgAudience.Chat">Chat (specific ID)</option>
+                    </select>
+                </div>
+
+                @if (_sendAudience == TgAudience.Chat)
+                {
+                    <div class="comms-send-row">
+                        <label class="comms-label">Chat ID</label>
+                        <input type="number" class="config-input"
+                               disabled="@(!comms.Active)"
+                               placeholder="0"
+                               @bind="_sendChatId" />
+                    </div>
+                }
+
+                <div class="comms-send-row comms-send-textarea-row">
+                    <label class="comms-label">Message</label>
+                    <textarea class="config-input comms-textarea"
+                              rows="3"
+                              disabled="@(!comms.Active)"
+                              placeholder="Enter message (Markdown supported)…"
+                              @bind="_sendText"></textarea>
+                </div>
+
+                <div class="comms-send-row">
+                    <span></span>
+                    <span class="comms-send-action-row">
+                        <button class="btn btn-primary btn-sm"
+                                disabled="@(!comms.Active || _sendBusy || string.IsNullOrWhiteSpace(_sendText))"
+                                @onclick="SendMessageAsync">
+                            @(_sendBusy ? "Sending…" : "Send")
+                        </button>
+                        @if (_sendResult != null)
+                        {
+                            <span class="@(_sendResult.Ok ? "val-green" : "val-red") comms-result">
+                                @(_sendResult.Ok
+                                    ? $"&#10003; Sent (msg id: {_sendResult.MessageId})"
+                                    : $"&#10007; {_sendResult.Error}")
+                            </span>
+                        }
+                    </span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+@code {
+    private System.Threading.Timer? _timer;
+    private bool _disposed;
+
+    // ── Toggle state ──────────────────────────────────────────────────────────
+
+    private bool _toggleConfirm;
+    private (bool Ok, string Msg)? _toggleResult;
+
+    // ── Subscriber table state ────────────────────────────────────────────────
+
+    private List<TelegramSubscriber> _subscribers = [];
+    private long? _adminChatId;
+    private readonly Dictionary<long, string?> _subConfirm = new();
+    private readonly Dictionary<long, bool>    _subBusy    = new();
+
+    // ── Manual send state ─────────────────────────────────────────────────────
+
+    private TgAudience _sendAudience = TgAudience.Subscribers;
+    private long       _sendChatId;
+    private string     _sendText    = "";
+    private bool       _sendBusy;
+    private TgResult?  _sendResult;
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    protected override void OnInitialized()
+    {
+        RefreshSubscribers();
+
+        _timer = new System.Threading.Timer(async _ =>
+        {
+            if (_disposed) return;
+            RefreshSubscribers();
+            await InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+    }
+
+    private void RefreshSubscribers()
+    {
+        _subscribers = Subscribers.ListActive();
+        _adminChatId = Subscribers.GetAdmin();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        if (_timer != null)
+            await _timer.DisposeAsync();
+    }
+
+    // ── Toggle helpers ────────────────────────────────────────────────────────
+
+    private void RequestToggle()
+    {
+        _toggleConfirm = true;
+        _toggleResult  = null;
+        StateHasChanged();
+    }
+
+    private void CancelToggle()
+    {
+        _toggleConfirm = false;
+        StateHasChanged();
+    }
+
+    private async Task ConfirmToggleAsync()
+    {
+        _toggleConfirm = false;
+        var currentlyActive = Live.Comms.Active;
+        SettingsSvc.Set("telegram.active", currentlyActive ? null : "true");
+        _toggleResult = (true, currentlyActive ? "Bot deactivated." : "Bot activated.");
+        await InvokeAsync(StateHasChanged);
+
+        // Auto-clear after 5s
+        await Task.Delay(5000);
+        if (!_disposed)
+        {
+            _toggleResult = null;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    // ── Subscriber action helpers ─────────────────────────────────────────────
+
+    private void SetSubConfirm(long chatId, string action)
+    {
+        _subConfirm[chatId] = action;
+        StateHasChanged();
+    }
+
+    private void ClearSubConfirm(long chatId)
+    {
+        _subConfirm.Remove(chatId);
+        StateHasChanged();
+    }
+
+    private async Task DoKickAsync(long chatId)
+    {
+        _subConfirm.Remove(chatId);
+        _subBusy[chatId] = true;
+        await InvokeAsync(StateHasChanged);
+
+        await Task.Run(() => Subscribers.Kick(chatId));
+
+        _subBusy.Remove(chatId);
+        RefreshSubscribers();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task DoBlockAsync(long chatId)
+    {
+        _subConfirm.Remove(chatId);
+        _subBusy[chatId] = true;
+        await InvokeAsync(StateHasChanged);
+
+        await Task.Run(() => Subscribers.Block(chatId));
+
+        _subBusy.Remove(chatId);
+        RefreshSubscribers();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // ── Manual send ───────────────────────────────────────────────────────────
+
+    private async Task SendMessageAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_sendText)) return;
+
+        _sendBusy   = true;
+        _sendResult = null;
+        await InvokeAsync(StateHasChanged);
+
+        var targetChatId = _sendAudience == TgAudience.Chat ? _sendChatId : 0;
+        var result = await Hub.SendAsync(_sendAudience, targetChatId, _sendText, "Markdown", default);
+        _sendResult = result;
+        _sendBusy   = false;
+
+        await InvokeAsync(StateHasChanged);
+    }
+}
