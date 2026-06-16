@@ -10,6 +10,7 @@ using Tower.Core.Pi;
 using Tower.Core.Projects;
 using Tower.Core.Settings;
 using Tower.Core.State;
+using Tower.Core.Telegram;
 using Tower.Core.Workers;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -66,6 +67,12 @@ builder.Services.AddHostedService<DiskUsageWorker>();
 builder.Services.AddHostedService<CpuProfileRecorder>();
 builder.Services.AddHostedService<MaintenanceScheduler>();
 builder.Services.AddHostedService<SizeMonitorWorker>();
+
+// ── Telegram ──────────────────────────────────────────────────────────────────
+builder.Services.AddHttpClient<TelegramApi>();
+builder.Services.AddScoped<SubscriberService>();
+builder.Services.AddSingleton<TelegramHub>();
+builder.Services.AddHostedService<TelegramPollWorker>();
 
 // ── gRPC ─────────────────────────────────────────────────────────────────────
 builder.Services.AddGrpc();
