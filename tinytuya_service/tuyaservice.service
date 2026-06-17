@@ -1,0 +1,14 @@
+[Unit]
+Description=Tower tinytuya FastAPI service
+After=network.target
+
+[Service]
+Type=simple
+User=atom
+WorkingDirectory=/home/atom/dev/Tower/tinytuya_service
+ExecStart=/usr/bin/python3 -m uvicorn tinytuya_service:app --host 127.0.0.1 --port 6677
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
