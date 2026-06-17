@@ -16,7 +16,8 @@ namespace Tower.Core.Workers;
 public class BackupScheduler(
     IServiceScopeFactory scopes,
     LiveState state,
-    ProjectsOptions projOpts) : BackgroundService
+    ProjectsOptions projOpts,
+    Tower.Core.Backup.DropboxTokenService dropboxToken) : BackgroundService
 {
     // Tracks the calendar date (yyyy-MM-dd) on which the last backup ran.
     private string? _lastBackupDate;
@@ -45,9 +46,8 @@ public class BackupScheduler(
         using var scope = scopes.CreateScope();
         var settings = scope.ServiceProvider.GetRequiredService<SettingsService>();
         var schedule = settings.Get("backup.schedule") ?? "02:00";
-        var token    = settings.Get("dropbox.access_token") ?? "";
 
-        // Skip if no Dropbox token is configured.
+        var token = await dropboxToken.GetAccessTokenAsync(ct);
         if (string.IsNullOrWhiteSpace(token))
             return;
 

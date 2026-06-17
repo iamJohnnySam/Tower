@@ -50,6 +50,8 @@ builder.Services.AddSingleton(new ProjectsOptions
 });
 builder.Services.AddHostedService<ProjectsWorker>();
 builder.Services.AddHttpClient<BackupService>();
+builder.Services.AddHttpClient(nameof(DropboxTokenService));
+builder.Services.AddSingleton<DropboxTokenService>();
 builder.Services.AddHostedService<BackupScheduler>();
 
 // ── Maintenance ──────────────────────────────────────────────────────────────
@@ -133,5 +135,25 @@ app.MapGrpcService<TowerTelegramService>();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+
+// ── Dropbox OAuth callback ────────────────────────────────────────────────────
+app.MapGet("/dropbox/callback", async (
+    string? code, string? error,
+    DropboxTokenService tokenSvc,
+    HttpContext ctx) =>
+{
+    if (!string.IsNullOrEmpty(error))
+        return Results.Redirect("/settings?dropbox_error=" + Uri.EscapeDataString(error));
+
+    if (string.IsNullOrEmpty(code))
+        return Results.Redirect("/settings?dropbox_error=no_code");
+
+    var redirectUri = $"{ctx.Request.Scheme}://{ctx.Request.Host}/dropbox/callback";
+    var (ok, err) = await tokenSvc.ExchangeCodeAsync(code, redirectUri);
+
+    return ok
+        ? Results.Redirect("/settings?dropbox=connected")
+        : Results.Redirect("/settings?dropbox_error=" + Uri.EscapeDataString(err ?? "unknown"));
+});
 
 app.Run();

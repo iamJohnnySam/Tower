@@ -1,8 +1,11 @@
 @page "/settings"
+@using Tower.Core.Backup
 @using Tower.Core.Settings
 @using Tower.Core.State
 @inject SettingsService SettingsSvc
+@inject DropboxTokenService DropboxTokenSvc
 @inject LiveState Live
+@inject NavigationManager Navigation
 @implements IAsyncDisposable
 
 <PageTitle>Tower — Settings</PageTitle>
@@ -50,36 +53,95 @@
                     </div>
                 </div>
 
-                @* ── Dropbox ── *@
+                @* ── Dropbox App Key ── *@
                 <div class="config-row">
-                    <label class="config-label">Dropbox Access Token</label>
+                    <label class="config-label">Dropbox App Key</label>
                     <div class="config-control">
-                        @if (SettingsSvc.IsConfigured("dropbox.access_token") && !_dropboxReplacing)
+                        @if (SettingsSvc.IsConfigured("dropbox.app_key") && !_dropboxKeyReplacing)
                         {
                             <div class="key-configured-row">
                                 <span class="val-green configured-badge">&#10003; Configured</span>
-                                <button class="btn-secondary btn-sm" @onclick="() => _dropboxReplacing = true">Replace</button>
+                                <button class="btn-secondary btn-sm" @onclick="() => _dropboxKeyReplacing = true">Replace</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="key-input-row">
+                                <input type="text" class="config-input config-input-wide"
+                                       placeholder="App Key from Dropbox App Console…"
+                                       @bind="_dropboxKeyValue" @bind:event="oninput" />
+                                <button class="btn btn-primary btn-sm" @onclick="SaveDropboxKey">Save</button>
+                                @if (SettingsSvc.IsConfigured("dropbox.app_key"))
+                                {
+                                    <button class="btn-secondary btn-sm" @onclick="CancelDropboxKey">Cancel</button>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                @* ── Dropbox App Secret ── *@
+                <div class="config-row">
+                    <label class="config-label">Dropbox App Secret</label>
+                    <div class="config-control">
+                        @if (SettingsSvc.IsConfigured("dropbox.app_secret") && !_dropboxSecretReplacing)
+                        {
+                            <div class="key-configured-row">
+                                <span class="val-green configured-badge">&#10003; Configured</span>
+                                <button class="btn-secondary btn-sm" @onclick="() => _dropboxSecretReplacing = true">Replace</button>
                             </div>
                         }
                         else
                         {
                             <div class="key-input-row">
                                 <input type="password" class="config-input config-input-wide"
-                                       placeholder="Paste new token…"
-                                       @bind="_dropboxValue"
-                                       @bind:event="oninput" />
-                                <button class="btn btn-primary btn-sm" @onclick="SaveDropbox">Save</button>
-                                @if (SettingsSvc.IsConfigured("dropbox.access_token"))
+                                       placeholder="App Secret from Dropbox App Console…"
+                                       @bind="_dropboxSecretValue" @bind:event="oninput" />
+                                <button class="btn btn-primary btn-sm" @onclick="SaveDropboxSecret">Save</button>
+                                @if (SettingsSvc.IsConfigured("dropbox.app_secret"))
                                 {
-                                    <button class="btn-secondary btn-sm" @onclick="CancelDropbox">Cancel</button>
+                                    <button class="btn-secondary btn-sm" @onclick="CancelDropboxSecret">Cancel</button>
                                 }
                             </div>
-                            @if (_dropboxSaved)
+                        }
+                    </div>
+                </div>
+
+                @* ── Dropbox Connection ── *@
+                <div class="config-row">
+                    <label class="config-label">Dropbox Connection</label>
+                    <div class="config-control">
+                        @if (SettingsSvc.IsConfigured("dropbox.refresh_token"))
+                        {
+                            <div class="key-configured-row">
+                                <span class="val-green configured-badge">&#10003; Connected</span>
+                                <button class="btn-secondary btn-sm" @onclick="DisconnectDropbox">Disconnect</button>
+                            </div>
+                            @if (_dropboxConnectedMsg)
                             {
-                                <span class="save-confirm">Saved &#10003;</span>
+                                <span class="save-confirm">Authorized &#10003;</span>
                             }
                         }
-                        <span class="config-hint">Used for backup uploads to Dropbox (M2).</span>
+                        else
+                        {
+                            @if (_dropboxConnectError != null)
+                            {
+                                <div class="val-red" style="margin-bottom:0.4rem">&#10007; @_dropboxConnectError</div>
+                            }
+                            @if (SettingsSvc.IsConfigured("dropbox.app_key") && SettingsSvc.IsConfigured("dropbox.app_secret"))
+                            {
+                                <div class="key-input-row">
+                                    <button class="btn btn-primary btn-sm" @onclick="AuthorizeDropbox">Authorize Dropbox</button>
+                                </div>
+                                <span class="config-hint">
+                                    Add <code>@_callbackUri</code> to your Dropbox App's Redirect URIs in the App Console, then click Authorize.
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="config-hint">Save App Key and App Secret above, then authorize.</span>
+                            }
+                        }
                     </div>
                 </div>
 
@@ -232,9 +294,13 @@
     private bool   _jellyfinSaved    = false;
 
     // ── Dropbox ───────────────────────────────────────────────────────────────
-    private string _dropboxValue    = "";
-    private bool   _dropboxReplacing = false;
-    private bool   _dropboxSaved    = false;
+    private string _dropboxKeyValue       = "";
+    private bool   _dropboxKeyReplacing   = false;
+    private string _dropboxSecretValue    = "";
+    private bool   _dropboxSecretReplacing = false;
+    private bool   _dropboxConnectedMsg   = false;
+    private string? _dropboxConnectError  = null;
+    private string _callbackUri           = "";
 
     // ── Telegram ──────────────────────────────────────────────────────────────
     private string _telegramValue    = "";
@@ -257,6 +323,19 @@
     {
         _backupSchedule   = SettingsSvc.Get("backup.schedule") ?? "";
         _logRetentionDays = SettingsSvc.Get("log.retention_days") ?? "30";
+        _callbackUri      = Navigation.BaseUri.TrimEnd('/') + "/dropbox/callback";
+
+        // Check if we just returned from Dropbox OAuth
+        var uri = new Uri(Navigation.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        if (query["dropbox"] == "connected")
+        {
+            _dropboxConnectedMsg = true;
+        }
+        else if (query["dropbox_error"] is { } err)
+        {
+            _dropboxConnectError = err;
+        }
 
         // Refresh the sizes table every 10 s
         _timer = new System.Threading.Timer(_ =>
@@ -291,25 +370,43 @@
 
     // ── Dropbox ───────────────────────────────────────────────────────────────
 
-    private void CancelDropbox()
+    private void CancelDropboxKey()   { _dropboxKeyReplacing   = false; _dropboxKeyValue    = ""; }
+    private void CancelDropboxSecret() { _dropboxSecretReplacing = false; _dropboxSecretValue = ""; }
+
+    private async Task SaveDropboxKey()
     {
-        _dropboxReplacing = false;
-        _dropboxValue     = "";
+        var val = _dropboxKeyValue.Trim();
+        if (string.IsNullOrWhiteSpace(val)) return;
+        SettingsSvc.Set("dropbox.app_key", val);
+        _dropboxKeyValue    = "";
+        _dropboxKeyReplacing = false;
+        StateHasChanged();
+        await Task.Delay(100);
     }
 
-    private async Task SaveDropbox()
+    private async Task SaveDropboxSecret()
     {
-        var val = _dropboxValue.Trim();
+        var val = _dropboxSecretValue.Trim();
         if (string.IsNullOrWhiteSpace(val)) return;
-
-        SettingsSvc.Set("dropbox.access_token", val);
-        _dropboxValue    = "";
-        _dropboxReplacing = false;
-        _dropboxSaved    = true;
+        SettingsSvc.Set("dropbox.app_secret", val);
+        _dropboxSecretValue    = "";
+        _dropboxSecretReplacing = false;
         StateHasChanged();
+        await Task.Delay(100);
+    }
 
-        await Task.Delay(2500);
-        if (!_disposed) { _dropboxSaved = false; await InvokeAsync(StateHasChanged); }
+    private void AuthorizeDropbox()
+    {
+        var appKey  = SettingsSvc.Get("dropbox.app_key");
+        if (string.IsNullOrEmpty(appKey)) return;
+        var authUrl = DropboxTokenSvc.BuildAuthUrl(appKey, _callbackUri);
+        Navigation.NavigateTo(authUrl, forceLoad: true);
+    }
+
+    private void DisconnectDropbox()
+    {
+        DropboxTokenSvc.Disconnect();
+        StateHasChanged();
     }
 
     // ── Telegram ──────────────────────────────────────────────────────────────

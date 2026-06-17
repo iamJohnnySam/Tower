@@ -8,6 +8,7 @@
 @inject IOptions<TowerConfig> Cfg
 @inject BackupService Backup
 @inject SettingsService SettingsSvc
+@inject DropboxTokenService DropboxTokenSvc
 @implements IAsyncDisposable
 
 <PageTitle>Tower — Projects</PageTitle>
@@ -359,7 +360,8 @@
 
     protected override void OnInitialized()
     {
-        _dropboxConfigured = SettingsSvc.IsConfigured("dropbox.access_token");
+        _dropboxConfigured = SettingsSvc.IsConfigured("dropbox.refresh_token")
+                          || SettingsSvc.IsConfigured("dropbox.access_token");
 
         _timer = new System.Threading.Timer(async _ =>
         {
@@ -413,7 +415,7 @@
 
     private async Task BackupDbAsync(string name, string dbPath)
     {
-        var token = SettingsSvc.Get("dropbox.access_token");
+        var token = await DropboxTokenSvc.GetAccessTokenAsync();
         if (string.IsNullOrEmpty(token)) return;
 
         _backupBusy[name]   = true;
