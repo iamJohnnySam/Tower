@@ -6,6 +6,7 @@ using Tower.Core.Jellyfin;
 using Tower.Core.Models;
 using Tower.Core.Settings;
 using Tower.Core.State;
+using Tower.Core.Telegram;
 
 namespace Tower.Core.Workers;
 
@@ -13,9 +14,12 @@ public class JellyfinWorker(
     LiveState state,
     IHttpClientFactory httpFactory,
     IServiceScopeFactory scopes,
-    JellyfinOptions opts) : BackgroundService
+    JellyfinOptions opts,
+    TelegramHub telegram) : BackgroundService
 {
     private readonly Dictionary<string, string> _prevPlaying = new();
+    // Tracks MediaIds we've already alerted on so we don't spam per poll cycle
+    private readonly HashSet<string> _alertedMedia = new();
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
@@ -59,8 +63,12 @@ public class JellyfinWorker(
                             var itemId = string.IsNullOrEmpty(se.MediaId) ? se.Media : se.MediaId;
                             newPrev[se.SessionId] = itemId;
 
-                            if (!_prevPlaying.TryGetValue(se.SessionId, out var prev) || prev != itemId)
+                            bool isNew = !_prevPlaying.TryGetValue(se.SessionId, out var prev) || prev != itemId;
+                            if (isNew)
+                            {
                                 db.PlayHistory.Add(MapPlay(se));
+                                await AlertIfProblematicAsync(se, ct);
+                            }
                         }
 
                         if (db.ChangeTracker.HasChanges())
@@ -110,6 +118,26 @@ public class JellyfinWorker(
             try { await Task.Delay(5000, ct); }
             catch (OperationCanceledException) { break; }
         }
+    }
+
+    private async Task AlertIfProblematicAsync(SessionInfo se, CancellationToken ct)
+    {
+        // Only alert for HEVC 10-bit files that are being transcoded
+        bool isHevc10bit = se.VideoCodec.Equals("hevc", StringComparison.OrdinalIgnoreCase)
+                           && se.VideoBitDepth == 10;
+        bool isTranscoding = se.Method.Equals("Transcode", StringComparison.OrdinalIgnoreCase);
+        if (!isHevc10bit || !isTranscoding) return;
+
+        // Alert once per unique file per server run
+        var mediaId = string.IsNullOrEmpty(se.MediaId) ? se.Media : se.MediaId;
+        if (!_alertedMedia.Add(mediaId)) return;
+
+        var title = string.IsNullOrEmpty(se.SeriesName)
+            ? se.Media
+            : $"{se.SeriesName} S{se.SeasonNumber:D2}E{se.EpisodeNumber:D2} — {se.Media}";
+
+        var msg = $"⚠️ HEVC 10-bit transcode\n{title}\n\nThis file requires live CPU transcoding. Consider converting it offline to H.264 for direct play.";
+        await telegram.SendAsync(TgAudience.Admin, 0, msg, null, ct);
     }
 
     private static PlayHistory MapPlay(SessionInfo s) => new()

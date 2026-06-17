@@ -18,6 +18,10 @@ public class JellyfinClient(HttpClient http) {
                 var reasons = new List<string>();
                 if (ti?["TranscodeReasons"] is JsonArray ra) foreach (var r in ra) if (r is not null) reasons.Add(r.ToString());
                 long bitrate = 0; try { bitrate = ti?["Bitrate"]?.GetValue<long>() ?? 0; } catch { }
+                int? videoBitDepth = null;
+                if (playing && np?["MediaStreams"] is JsonArray streams)
+                    foreach (var s in streams)
+                        if (s?["Type"]?.ToString() == "Video") { try { videoBitDepth = s["BitDepth"]?.GetValue<int>(); } catch { } break; }
                 list.Add(new SessionInfo(
                     SessionId: S(n,"Id"), User: S(n,"UserName"), Client: S(n,"Client"), Device: S(n,"DeviceName"),
                     Playing: playing,
@@ -28,7 +32,8 @@ public class JellyfinClient(HttpClient http) {
                     Container: playing ? S(np,"Container") : "",
                     Method: playing ? S(ps,"PlayMethod") : "",
                     VideoCodec: S(ti,"VideoCodec"), AudioCodec: S(ti,"AudioCodec"),
-                    TranscodeReasons: reasons, Bitrate: bitrate));
+                    TranscodeReasons: reasons, Bitrate: bitrate,
+                    VideoBitDepth: videoBitDepth));
             }
         } catch { return new List<SessionInfo>(); }
         return list;
