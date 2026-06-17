@@ -44,6 +44,7 @@ builder.Services.AddHttpClient<PiHoleClient>();
 // ── Tuya ─────────────────────────────────────────────────────────────────────
 builder.Services.AddHttpClient<TuyaServiceClient>(c =>
     c.BaseAddress = new Uri("http://localhost:6677/"));
+builder.Services.AddScoped<TuyaDeviceService>();
 
 // ── Jellyfin ─────────────────────────────────────────────────────────────────
 builder.Services.AddSingleton(new JellyfinOptions { JellyfinUrl = towerCfg.JellyfinUrl });
