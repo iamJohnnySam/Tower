@@ -23,4 +23,23 @@ public class TowerDbContextTests {
         Assert.Equal(35.5, slot.AvgCpu);
         Assert.Equal(10, slot.SampleCount);
     }
+    [Fact]
+    public void Can_persist_and_read_tuya_device()
+    {
+        using var db = NewDb();
+        db.TuyaDevices.Add(new TuyaDevice
+        {
+            DeviceId   = "bf1234abc",
+            Name       = "Living Room Plug",
+            DeviceType = TuyaDeviceType.Plug,
+            Room       = "Living Room",
+            SortOrder  = 0,
+        });
+        db.SaveChanges();
+
+        var d = db.TuyaDevices.Single(x => x.DeviceId == "bf1234abc");
+        Assert.Equal("Living Room Plug", d.Name);
+        Assert.Equal(TuyaDeviceType.Plug, d.DeviceType);
+        Assert.Equal("Living Room", d.Room);
+    }
 }

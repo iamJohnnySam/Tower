@@ -8,6 +8,7 @@ public class TowerDbContext(DbContextOptions<TowerDbContext> options) : DbContex
     public DbSet<TelegramSubscriber> Subscribers => Set<TelegramSubscriber>();
     public DbSet<TelegramMessage> Messages => Set<TelegramMessage>();
     public DbSet<ProjectConfig> Projects => Set<ProjectConfig>();
+    public DbSet<TuyaDevice>    TuyaDevices  => Set<TuyaDevice>();
     protected override void OnModelCreating(ModelBuilder b) {
         b.Entity<CpuProfileSlot>().HasKey(x => x.Slot);
         b.Entity<CpuProfileSlot>().Property(x => x.Slot).ValueGeneratedNever();
