@@ -1,0 +1,420 @@
+@page "/tuya"
+@using Tower.Core.Models
+@using Tower.Core.Settings
+@using Tower.Core.Tuya
+@inject TuyaDeviceService TuyaSvc
+@inject TuyaServiceClient TuyaClient
+@inject SettingsService SettingsSvc
+@implements IAsyncDisposable
+
+<PageTitle>Tower — Tuya</PageTitle>
+
+<div class="tuya-page">
+
+    <div class="tuya-header">
+        <h1 class="page-title">Tuya</h1>
+        <div class="tuya-header-actions">
+            @if (_devices.Count > 0 && !_loading)
+            {
+                <button class="btn-secondary btn-sm" @onclick="RefreshAsync" disabled="@_busy">Refresh</button>
+            }
+            @if (TuyaSvc.IsConfigured)
+            {
+                <button class="btn-secondary btn-sm" @onclick="StartScanAsync" disabled="@_busy">
+                    @(_scanning ? "Scanning…" : "Scan Devices")
+                </button>
+            }
+        </div>
+    </div>
+
+    @* ── Not configured ─────────────────────────────────────────────────────── *@
+    @if (!TuyaSvc.IsConfigured)
+    {
+        <div class="tuya-notice tuya-notice-info">
+            Set Tuya API credentials in <a href="/settings">Settings</a> to enable device scanning.
+        </div>
+    }
+
+    @* ── Service unreachable ─────────────────────────────────────────────────── *@
+    else if (!_serviceOk)
+    {
+        <div class="tuya-notice tuya-notice-warn">
+            Cannot reach tinytuya service at localhost:6677. Make sure <code>tuyaservice.service</code> is running:
+            <code>sudo systemctl start tuyaservice</code>
+        </div>
+    }
+
+    @* ── Scan error ──────────────────────────────────────────────────────────── *@
+    @if (_scanError is not null)
+    {
+        <div class="tuya-notice tuya-notice-warn">@_scanError</div>
+    }
+
+    @* ── Scan assignment panel ───────────────────────────────────────────────── *@
+    @if (_scanResults.Count > 0)
+    {
+        <div class="tuya-scan-panel">
+            <div class="tuya-scan-title">Assign discovered devices</div>
+            <table class="atom-table tuya-scan-table">
+                <thead>
+                    <tr>
+                        <th>Device ID</th>
+                        <th>IP</th>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Room</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var a in _assignments)
+                    {
+                        <tr>
+                            <td class="mono text-muted" style="font-size:0.8rem">@a.DeviceId</td>
+                            <td class="mono text-muted" style="font-size:0.8rem">@a.Ip</td>
+                            <td>
+                                <input class="config-input" type="text"
+                                       placeholder="e.g. Living Room Plug"
+                                       @bind="a.Name" @bind:event="oninput" />
+                            </td>
+                            <td>
+                                <select class="config-input" value="@a.DeviceType"
+                                        @onchange="e => a.DeviceType = Enum.Parse<TuyaDeviceType>(e.Value!.ToString()!)">
+                                    <option value="Plug">Plug</option>
+                                    <option value="Light">Light</option>
+                                    <option value="AcRemote">AC Remote</option>
+                                </select>
+                            </td>
+                            <td>
+                                <input class="config-input" type="text"
+                                       placeholder="e.g. Bedroom"
+                                       @bind="a.Room" @bind:event="oninput" />
+                            </td>
+                            <td>
+                                <input type="checkbox" @bind="a.Include" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <div class="tuya-scan-actions">
+                <button class="btn btn-primary btn-sm" @onclick="SaveAssignmentsAsync"
+                        disabled="@(!_assignments.Any(a => a.Include && !string.IsNullOrWhiteSpace(a.Name)))">
+                    Save Selected
+                </button>
+                <button class="btn-secondary btn-sm" @onclick="CancelScan">Cancel</button>
+            </div>
+        </div>
+    }
+
+    @* ── Loading ─────────────────────────────────────────────────────────────── *@
+    @if (_loading)
+    {
+        <div class="tuya-notice tuya-notice-idle">Loading…</div>
+    }
+
+    @* ── No devices yet ───────────────────────────────────────────────────────── *@
+    else if (_devices.Count == 0 && TuyaSvc.IsConfigured && _serviceOk && _scanResults.Count == 0)
+    {
+        <div class="tuya-notice tuya-notice-info">
+            No devices configured yet. Click <strong>Scan Devices</strong> to discover devices on your network.
+        </div>
+    }
+
+    @* ── Device grid ──────────────────────────────────────────────────────────── *@
+    else if (_devices.Count > 0)
+    {
+        @foreach (var group in _devices.GroupBy(d => d.Room ?? "").OrderBy(g => g.Key))
+        {
+            @if (!string.IsNullOrEmpty(group.Key))
+            {
+                <div class="tuya-room-label">@group.Key</div>
+            }
+            <div class="tuya-grid">
+                @foreach (var dev in group)
+                {
+                    @if (dev.DeviceType == TuyaDeviceType.Plug)
+                    {
+                        <div class="tuya-card @(dev.Reachable ? "" : "tuya-card-unreachable")">
+                            <div class="tuya-card-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                                </svg>
+                            </div>
+                            <div class="tuya-card-name">@dev.Name</div>
+                            @if (!dev.Reachable)
+                            {
+                                <span class="tuya-unreachable-badge">Unreachable</span>
+                            }
+                            else
+                            {
+                                <button class="tuya-toggle @(GetPower(dev) ? "tuya-toggle-on" : "tuya-toggle-off")"
+                                        disabled="@IsBusy(dev.DeviceId)"
+                                        @onclick="() => TogglePowerAsync(dev)">
+                                    @(GetPower(dev) ? "ON" : "OFF")
+                                </button>
+                            }
+                        </div>
+                    }
+                    else if (dev.DeviceType == TuyaDeviceType.Light)
+                    {
+                        <div class="tuya-card @(dev.Reachable ? "" : "tuya-card-unreachable")">
+                            <div class="tuya-card-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/>
+                                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                                    <line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/>
+                                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                                    <circle cx="12" cy="12" r="5"/>
+                                </svg>
+                            </div>
+                            <div class="tuya-card-name">@dev.Name</div>
+                            @if (!dev.Reachable)
+                            {
+                                <span class="tuya-unreachable-badge">Unreachable</span>
+                            }
+                            else
+                            {
+                                <button class="tuya-toggle @(GetPower(dev) ? "tuya-toggle-on" : "tuya-toggle-off")"
+                                        disabled="@IsBusy(dev.DeviceId)"
+                                        @onclick="() => TogglePowerAsync(dev)">
+                                    @(GetPower(dev) ? "ON" : "OFF")
+                                </button>
+                                @if (GetPower(dev))
+                                {
+                                    <div class="tuya-brightness-row">
+                                        <span class="tuya-dim-label">Dim</span>
+                                        <input type="range" min="10" max="1000"
+                                               value="@GetBrightness(dev)"
+                                               disabled="@IsBusy(dev.DeviceId)"
+                                               @onchange="e => SetBrightnessAsync(dev, int.Parse(e.Value!.ToString()!))" />
+                                        <span class="tuya-dim-label">Bright</span>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    }
+                    else if (dev.DeviceType == TuyaDeviceType.AcRemote)
+                    {
+                        <div class="tuya-card tuya-card-ac @(dev.Reachable ? "" : "tuya-card-unreachable")">
+                            <div class="tuya-card-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="1" y="3" width="22" height="9" rx="2"/>
+                                    <path d="M7 12v4M12 12v6M17 12v4M3 21h18"/>
+                                </svg>
+                            </div>
+                            <div class="tuya-card-name">@dev.Name</div>
+                            @if (!dev.Reachable)
+                            {
+                                <span class="tuya-unreachable-badge">Unreachable</span>
+                            }
+                            else
+                            {
+                                <button class="tuya-toggle @(GetPower(dev) ? "tuya-toggle-on" : "tuya-toggle-off")"
+                                        disabled="@IsBusy(dev.DeviceId)"
+                                        @onclick="() => TogglePowerAsync(dev)">
+                                    @(GetPower(dev) ? "ON" : "OFF")
+                                </button>
+                                @if (GetPower(dev))
+                                {
+                                    <div class="tuya-ac-temp-row">
+                                        <button class="tuya-temp-btn" disabled="@IsBusy(dev.DeviceId)"
+                                                @onclick="() => AdjustTempAsync(dev, -1)">−</button>
+                                        <span class="tuya-temp-value">@GetTemp(dev)°C</span>
+                                        <button class="tuya-temp-btn" disabled="@IsBusy(dev.DeviceId)"
+                                                @onclick="() => AdjustTempAsync(dev, +1)">+</button>
+                                    </div>
+                                    <div class="tuya-ac-mode-row">
+                                        @foreach (var mode in new[] { "cool", "heat", "fan", "dry", "auto" })
+                                        {
+                                            <button class="tuya-mode-btn @(GetMode(dev) == mode ? "tuya-mode-active" : "")"
+                                                    disabled="@IsBusy(dev.DeviceId)"
+                                                    @onclick="() => SetModeAsync(dev, mode)">
+                                                @char.ToUpper(mode[0])@mode[1..]
+                                            </button>
+                                        }
+                                    </div>
+                                }
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        }
+        <div class="tuya-updated">Updated: @_updatedAt.ToString("HH:mm:ss")</div>
+    }
+
+</div>
+
+@code {
+    private bool                    _serviceOk   = true;
+    private bool                    _loading     = true;
+    private bool                    _busy        = false;
+    private bool                    _scanning    = false;
+    private List<TuyaDeviceView>    _devices     = [];
+    private List<ScannedDevice>     _scanResults = [];
+    private List<DeviceAssignment>  _assignments = [];
+    private string?                 _scanError;
+    private DateTime                _updatedAt   = DateTime.Now;
+    private readonly HashSet<string> _busyDevices = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!TuyaSvc.IsConfigured) { _loading = false; return; }
+        _serviceOk = await TuyaClient.HealthAsync();
+        if (_serviceOk) await LoadAsync();
+        else _loading = false;
+    }
+
+    private async Task RefreshAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _devices    = await TuyaSvc.GetDeviceViewsAsync();
+        _updatedAt  = DateTime.Now;
+        _loading    = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // ── Scan ──────────────────────────────────────────────────────────────────
+
+    private async Task StartScanAsync()
+    {
+        _scanning = true; _scanError = null;
+        StateHasChanged();
+
+        var (devices, error) = await TuyaSvc.ScanAsync();
+        _scanning    = false;
+        _scanError   = error;
+        _scanResults = devices;
+        _assignments = devices.Select(d => new DeviceAssignment
+        {
+            DeviceId = d.Id, Ip = d.Ip, Version = d.Version,
+            Name     = d.Name, Include = true
+        }).ToList();
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task SaveAssignmentsAsync()
+    {
+        _busy = true;
+        StateHasChanged();
+
+        int order = _devices.Count;
+        foreach (var a in _assignments.Where(a => a.Include && !string.IsNullOrWhiteSpace(a.Name)))
+        {
+            await TuyaSvc.SaveDeviceAsync(new TuyaDevice
+            {
+                DeviceId   = a.DeviceId,
+                Name       = a.Name.Trim(),
+                DeviceType = a.DeviceType,
+                Room       = string.IsNullOrWhiteSpace(a.Room) ? null : a.Room.Trim(),
+                SortOrder  = order++,
+            });
+        }
+
+        _scanResults = []; _assignments = [];
+        _busy = false;
+        await LoadAsync();
+    }
+
+    private void CancelScan() { _scanResults = []; _assignments = []; }
+
+    // ── Commands ──────────────────────────────────────────────────────────────
+
+    private async Task TogglePowerAsync(TuyaDeviceView dev)
+    {
+        var current = GetPower(dev);
+        await SendAsync(dev.DeviceId, new TuyaCommandRequest(
+            Dps: new Dictionary<string, object> { ["1"] = !current }));
+        await LoadAsync();
+    }
+
+    private async Task SetBrightnessAsync(TuyaDeviceView dev, int value)
+    {
+        await SendAsync(dev.DeviceId, new TuyaCommandRequest(
+            Dps: new Dictionary<string, object> { ["22"] = value }));
+    }
+
+    private async Task AdjustTempAsync(TuyaDeviceView dev, int delta)
+    {
+        var current = GetTemp(dev);
+        var next = Math.Clamp(current + delta, 16, 30);
+        await SendAsync(dev.DeviceId, new TuyaCommandRequest(
+            Ac: new AcCommandPayload(Temp: next)));
+        await LoadAsync();
+    }
+
+    private async Task SetModeAsync(TuyaDeviceView dev, string mode)
+    {
+        await SendAsync(dev.DeviceId, new TuyaCommandRequest(
+            Ac: new AcCommandPayload(Mode: mode)));
+        await LoadAsync();
+    }
+
+    private async Task SendAsync(string deviceId, TuyaCommandRequest cmd)
+    {
+        _busyDevices.Add(deviceId);
+        StateHasChanged();
+        await TuyaSvc.SendCommandAsync(deviceId, cmd);
+        _busyDevices.Remove(deviceId);
+    }
+
+    // ── DPS helpers ───────────────────────────────────────────────────────────
+
+    private static bool GetPower(TuyaDeviceView dev)
+    {
+        if (dev.Dps.TryGetValue("1", out var v) || dev.Dps.TryGetValue("20", out v))
+            return v.ValueKind == System.Text.Json.JsonValueKind.True;
+        return false;
+    }
+
+    private static int GetBrightness(TuyaDeviceView dev)
+    {
+        if (dev.Dps.TryGetValue("22", out var v) && v.ValueKind == System.Text.Json.JsonValueKind.Number)
+            return v.GetInt32();
+        if (dev.Dps.TryGetValue("4", out v) && v.ValueKind == System.Text.Json.JsonValueKind.Number)
+            return v.GetInt32() * 4; // 0-255 → 0-1000 approx
+        return 500;
+    }
+
+    private static int GetTemp(TuyaDeviceView dev)
+    {
+        if (dev.Dps.TryGetValue("3", out var v) && v.ValueKind == System.Text.Json.JsonValueKind.Number)
+            return v.GetInt32();
+        return 24;
+    }
+
+    private static string GetMode(TuyaDeviceView dev)
+    {
+        if (dev.Dps.TryGetValue("2", out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String)
+        {
+            var raw = v.GetString() ?? "";
+            return raw switch { "cold" => "cool", "hot" => "heat", "wind" => "fan", "wet" => "dry", _ => raw };
+        }
+        return "cool";
+    }
+
+    private bool IsBusy(string deviceId) => _busy || _busyDevices.Contains(deviceId);
+
+    // ── Scan assignment model ─────────────────────────────────────────────────
+
+    private class DeviceAssignment
+    {
+        public string          DeviceId   { get; set; } = "";
+        public string          Ip         { get; set; } = "";
+        public string          Version    { get; set; } = "";
+        public string          Name       { get; set; } = "";
+        public TuyaDeviceType  DeviceType { get; set; } = TuyaDeviceType.Plug;
+        public string          Room       { get; set; } = "";
+        public bool            Include    { get; set; } = true;
+    }
+
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+}

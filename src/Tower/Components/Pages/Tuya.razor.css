@@ -1,0 +1,227 @@
+.tuya-page {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 0 1rem 2rem;
+}
+
+.tuya-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.tuya-header .page-title { margin-bottom: 0; }
+
+.tuya-header-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-left: auto;
+}
+
+/* Notice banners */
+.tuya-notice {
+    padding: 0.6rem 1rem;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+.tuya-notice-info {
+    background: rgba(88, 166, 255, 0.1);
+    border: 1px solid rgba(88, 166, 255, 0.25);
+    color: #58a6ff;
+}
+
+.tuya-notice-warn {
+    background: rgba(210, 153, 34, 0.1);
+    border: 1px solid rgba(210, 153, 34, 0.3);
+    color: #d29922;
+}
+
+.tuya-notice-idle {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #8b949e;
+}
+
+/* Room label */
+.tuya-room-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #6e7681;
+    margin: 1.5rem 0 0.5rem;
+}
+
+/* Device grid */
+.tuya-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+/* Device card */
+.tuya-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+    transition: border-color 0.15s;
+}
+
+.tuya-card:hover { border-color: rgba(255, 255, 255, 0.15); }
+
+.tuya-card-ac { min-width: 200px; }
+
+.tuya-card-unreachable { opacity: 0.5; }
+
+.tuya-card-icon { color: #8b949e; }
+
+.tuya-card-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #e6edf3;
+    line-height: 1.2;
+}
+
+.tuya-unreachable-badge {
+    font-size: 0.72rem;
+    color: #6e7681;
+    font-style: italic;
+}
+
+/* Toggle button */
+.tuya-toggle {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    padding: 4px 14px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.1s;
+}
+
+.tuya-toggle:disabled { opacity: 0.5; cursor: default; }
+
+.tuya-toggle-on {
+    background: rgba(63, 185, 80, 0.15);
+    border-color: rgba(63, 185, 80, 0.35);
+    color: #3fb950;
+}
+
+.tuya-toggle-off {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #6e7681;
+}
+
+/* Brightness */
+.tuya-brightness-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    width: 100%;
+}
+
+.tuya-brightness-row input[type=range] { flex: 1; }
+
+.tuya-dim-label {
+    font-size: 0.68rem;
+    color: #6e7681;
+}
+
+/* AC controls */
+.tuya-ac-temp-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.tuya-temp-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.05);
+    color: #e6edf3;
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tuya-temp-btn:hover { background: rgba(255, 255, 255, 0.1); }
+.tuya-temp-btn:disabled { opacity: 0.4; cursor: default; }
+
+.tuya-temp-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #e6edf3;
+    min-width: 52px;
+    text-align: center;
+}
+
+.tuya-ac-mode-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.tuya-mode-btn {
+    font-size: 0.7rem;
+    padding: 3px 8px;
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+    color: #8b949e;
+    cursor: pointer;
+}
+
+.tuya-mode-btn:hover { color: #e6edf3; border-color: rgba(255, 255, 255, 0.2); }
+.tuya-mode-btn:disabled { opacity: 0.4; cursor: default; }
+
+.tuya-mode-active {
+    background: rgba(88, 166, 255, 0.15);
+    border-color: rgba(88, 166, 255, 0.35);
+    color: #58a6ff;
+}
+
+/* Scan panel */
+.tuya-scan-panel {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+}
+
+.tuya-scan-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #8b949e;
+    margin-bottom: 0.75rem;
+}
+
+.tuya-scan-table { margin-bottom: 0.75rem; }
+
+.tuya-scan-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.tuya-updated {
+    font-size: 0.75rem;
+    color: #6e7681;
+    margin-top: 0.5rem;
+}
