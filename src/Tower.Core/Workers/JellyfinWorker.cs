@@ -18,8 +18,8 @@ public class JellyfinWorker(
     TelegramHub telegram) : BackgroundService
 {
     private readonly Dictionary<string, string> _prevPlaying = new();
-    // Tracks MediaIds we've already alerted on so we don't spam per poll cycle
     private readonly HashSet<string> _alertedMedia = new();
+    private readonly HashSet<string> _alertedRepeat = new();
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
@@ -122,23 +122,42 @@ public class JellyfinWorker(
 
     private async Task AlertIfProblematicAsync(SessionInfo se, CancellationToken ct)
     {
-        // Only alert for HEVC 10-bit files that are being transcoded
+        if (!se.Method.Equals("Transcode", StringComparison.OrdinalIgnoreCase)) return;
+
+        var mediaId = string.IsNullOrEmpty(se.MediaId) ? se.Media : se.MediaId;
+
+        // Count previous transcode plays (fresh scope — current play not saved yet)
+        int prevTranscodes;
+        using (var scope = scopes.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
+            prevTranscodes = string.IsNullOrEmpty(se.MediaId)
+                ? db.PlayHistory.Count(p => p.MediaName == se.Media && p.PlayMethod == "Transcode")
+                : db.PlayHistory.Count(p => p.MediaId == mediaId && p.PlayMethod == "Transcode");
+        }
+
+        // Alert on 3rd+ transcode (>2), suppress further alerts for same file this run
+        if (prevTranscodes >= 2 && _alertedRepeat.Add(mediaId))
+        {
+            var msg = $"🔁 Repeatedly transcoded ({prevTranscodes + 1}×)\n{BuildTitle(se)}\n\nConsider converting offline to avoid repeated live CPU transcoding.";
+            await telegram.SendAsync(TgAudience.Admin, 0, msg, null, ct);
+            return;
+        }
+
+        // First-play alert for HEVC 10-bit
         bool isHevc10bit = se.VideoCodec.Equals("hevc", StringComparison.OrdinalIgnoreCase)
                            && se.VideoBitDepth == 10;
-        bool isTranscoding = se.Method.Equals("Transcode", StringComparison.OrdinalIgnoreCase);
-        if (!isHevc10bit || !isTranscoding) return;
+        if (isHevc10bit && _alertedMedia.Add(mediaId))
+        {
+            var msg = $"⚠️ HEVC 10-bit transcode\n{BuildTitle(se)}\n\nThis file requires live CPU transcoding. Consider converting it offline to H.264 for direct play.";
+            await telegram.SendAsync(TgAudience.Admin, 0, msg, null, ct);
+        }
+    }
 
-        // Alert once per unique file per server run
-        var mediaId = string.IsNullOrEmpty(se.MediaId) ? se.Media : se.MediaId;
-        if (!_alertedMedia.Add(mediaId)) return;
-
-        var title = string.IsNullOrEmpty(se.SeriesName)
+    private static string BuildTitle(SessionInfo se) =>
+        string.IsNullOrEmpty(se.SeriesName)
             ? se.Media
             : $"{se.SeriesName} S{se.SeasonNumber:D2}E{se.EpisodeNumber:D2} — {se.Media}";
-
-        var msg = $"⚠️ HEVC 10-bit transcode\n{title}\n\nThis file requires live CPU transcoding. Consider converting it offline to H.264 for direct play.";
-        await telegram.SendAsync(TgAudience.Admin, 0, msg, null, ct);
-    }
 
     private static PlayHistory MapPlay(SessionInfo s) => new()
     {
