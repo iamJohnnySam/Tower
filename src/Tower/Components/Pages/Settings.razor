@@ -167,6 +167,39 @@
                     </div>
                 </div>
 
+                @* ── PiHole ── *@
+                <div class="config-row">
+                    <label class="config-label">PiHole Password</label>
+                    <div class="config-control">
+                        @if (SettingsSvc.IsConfigured("pihole.password") && !_piholeReplacing)
+                        {
+                            <div class="key-configured-row">
+                                <span class="val-green configured-badge">&#10003; Configured</span>
+                                <button class="btn-secondary btn-sm" @onclick="() => _piholeReplacing = true">Replace</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="key-input-row">
+                                <input type="password" class="config-input config-input-wide"
+                                       placeholder="PiHole web interface password…"
+                                       @bind="_piholeValue"
+                                       @bind:event="oninput" />
+                                <button class="btn btn-primary btn-sm" @onclick="SavePiHole">Save</button>
+                                @if (SettingsSvc.IsConfigured("pihole.password"))
+                                {
+                                    <button class="btn-secondary btn-sm" @onclick="CancelPiHole">Cancel</button>
+                                }
+                            </div>
+                            @if (_piholeSaved)
+                            {
+                                <span class="save-confirm">Saved &#10003;</span>
+                            }
+                        }
+                        <span class="config-hint">Used by the PiHole tab to fetch DNS stats.</span>
+                    </div>
+                </div>
+
                 @* ── Telegram ── *@
                 <div class="config-row">
                     <label class="config-label">Telegram Bot Token</label>
@@ -326,6 +359,11 @@
     private string _manualCode             = "";
     private bool   _authorizing            = false;
 
+    // ── PiHole ───────────────────────────────────────────────────────────────
+    private string _piholeValue    = "";
+    private bool   _piholeReplacing = false;
+    private bool   _piholeSaved    = false;
+
     // ── Telegram ──────────────────────────────────────────────────────────────
     private string _telegramValue    = "";
     private bool   _telegramReplacing = false;
@@ -451,6 +489,29 @@
     {
         DropboxTokenSvc.Disconnect();
         StateHasChanged();
+    }
+
+    // ── PiHole ───────────────────────────────────────────────────────────────
+
+    private void CancelPiHole()
+    {
+        _piholeReplacing = false;
+        _piholeValue     = "";
+    }
+
+    private async Task SavePiHole()
+    {
+        var val = _piholeValue.Trim();
+        if (string.IsNullOrWhiteSpace(val)) return;
+
+        SettingsSvc.Set("pihole.password", val);
+        _piholeValue    = "";
+        _piholeReplacing = false;
+        _piholeSaved    = true;
+        StateHasChanged();
+
+        await Task.Delay(2500);
+        if (!_disposed) { _piholeSaved = false; await InvokeAsync(StateHasChanged); }
     }
 
     // ── Telegram ──────────────────────────────────────────────────────────────

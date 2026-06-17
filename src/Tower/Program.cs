@@ -6,6 +6,7 @@ using Tower.MediaBox;
 using Tower.Core.Backup;
 using Tower.Core.Data;
 using Tower.Core.Jellyfin;
+using Tower.Core.PiHole;
 using Tower.Core.Maintenance;
 using Tower.Core.Pi;
 using Tower.Core.Projects;
@@ -35,6 +36,9 @@ builder.Services.AddScoped<SettingsService>();
 // ── Live state & collectors ──────────────────────────────────────────────────
 builder.Services.AddSingleton<LiveState>();
 builder.Services.AddHttpClient<PiAgentClient>();
+
+// ── PiHole ───────────────────────────────────────────────────────────────────
+builder.Services.AddHttpClient<PiHoleClient>();
 
 // ── Jellyfin ─────────────────────────────────────────────────────────────────
 builder.Services.AddSingleton(new JellyfinOptions { JellyfinUrl = towerCfg.JellyfinUrl });

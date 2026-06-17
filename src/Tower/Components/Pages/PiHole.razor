@@ -1,0 +1,142 @@
+@page "/pihole"
+@using Tower.Core.PiHole
+@using Tower.Core.Settings
+@inject PiHoleClient PiHoleClient
+@inject SettingsService SettingsSvc
+@implements IAsyncDisposable
+
+<PageTitle>Tower — PiHole</PageTitle>
+
+<div class="pihole-page">
+
+    <div class="pihole-header">
+        <h1 class="page-title">PiHole</h1>
+        @if (_configured && !_loading)
+        {
+            <button class="btn-secondary btn-sm" @onclick="RefreshAsync" disabled="@_loading">Refresh</button>
+        }
+    </div>
+
+    @if (!_configured)
+    {
+        <div class="ph-notice ph-notice-info">
+            Set the PiHole password in <a href="/settings">Settings</a> to enable DNS stats.
+        </div>
+    }
+    else if (_loading)
+    {
+        <div class="ph-notice ph-notice-idle">Loading…</div>
+    }
+    else if (_data is not null && _data.Error is not null)
+    {
+        <div class="ph-notice ph-notice-warn">@_data.Error</div>
+    }
+    else if (_data is not null)
+    {
+        @* ── Status ─────────────────────────────────────────────────────────── *@
+        <section class="ph-section">
+            <h2 class="section-title">Status</h2>
+            <div class="ph-status-row">
+                <span class="ph-blocking-badge @(_data.BlockingEnabled ? "ph-badge-on" : "ph-badge-off")">
+                    @(_data.BlockingEnabled ? "Blocking ON" : "Blocking OFF")
+                </span>
+            </div>
+            <div class="ph-metrics-row">
+                <div class="ph-metric">
+                    <span class="ph-metric-value">@_data.Stats.QueriesToday.ToString("N0")</span>
+                    <span class="ph-metric-label">Queries Today</span>
+                </div>
+                <div class="ph-metric">
+                    <span class="ph-metric-value val-amber">@_data.Stats.BlockedToday.ToString("N0")</span>
+                    <span class="ph-metric-label">Blocked</span>
+                </div>
+                <div class="ph-metric">
+                    <span class="ph-metric-value @BlockedPctClass(_data.Stats.BlockedPercent)">@($"{_data.Stats.BlockedPercent:0.1}%")</span>
+                    <span class="ph-metric-label">% Blocked</span>
+                </div>
+                <div class="ph-metric">
+                    <span class="ph-metric-value">@_data.Stats.UniqueClients</span>
+                    <span class="ph-metric-label">Clients</span>
+                </div>
+                <div class="ph-metric">
+                    <span class="ph-metric-value">@_data.Stats.GravityDomains.ToString("N0")</span>
+                    <span class="ph-metric-label">Gravity Domains</span>
+                </div>
+            </div>
+        </section>
+
+        @* ── Top Blocked Domains ─────────────────────────────────────────────── *@
+        @if (_data.TopBlockedDomains.Count > 0)
+        {
+            <section class="ph-section">
+                <h2 class="section-title">Top Blocked Domains</h2>
+                <table class="atom-table">
+                    <thead>
+                        <tr><th>Domain</th><th>Hits</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var d in _data.TopBlockedDomains)
+                        {
+                            <tr>
+                                <td class="ph-domain">@d.Domain</td>
+                                <td>@d.Hits.ToString("N0")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </section>
+        }
+
+        @* ── Upstream DNS ────────────────────────────────────────────────────── *@
+        @if (_data.UpstreamServers.Count > 0)
+        {
+            <section class="ph-section">
+                <h2 class="section-title">Upstream DNS</h2>
+                <div class="ph-upstream-list">
+                    @foreach (var u in _data.UpstreamServers)
+                    {
+                        <span class="ph-upstream-item">@u</span>
+                    }
+                </div>
+            </section>
+        }
+
+        <div class="ph-updated">Updated: @_data.FetchedAt.ToString("HH:mm:ss")</div>
+    }
+
+</div>
+
+@code {
+    private bool        _configured;
+    private bool        _loading = true;
+    private PiHoleData? _data;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _configured = SettingsSvc.IsConfigured("pihole.password");
+        if (_configured)
+            await LoadAsync();
+        else
+            _loading = false;
+    }
+
+    private async Task RefreshAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var password = SettingsSvc.Get("pihole.password") ?? "";
+        _data    = await PiHoleClient.FetchAsync(password);
+        _loading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
+    static string BlockedPctClass(double pct) => pct > 20 ? "val-red" : pct > 10 ? "val-amber" : "val-green";
+}

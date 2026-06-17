@@ -1,0 +1,137 @@
+.pihole-page {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 1rem 2rem;
+}
+
+.pihole-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.pihole-header .page-title {
+    margin-bottom: 0;
+}
+
+.ph-section {
+    margin-bottom: 2rem;
+}
+
+/* Notice banners */
+.ph-notice {
+    padding: 0.6rem 1rem;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+.ph-notice-info {
+    background: rgba(88, 166, 255, 0.1);
+    border: 1px solid rgba(88, 166, 255, 0.25);
+    color: #58a6ff;
+}
+
+.ph-notice-warn {
+    background: rgba(210, 153, 34, 0.1);
+    border: 1px solid rgba(210, 153, 34, 0.3);
+    color: #d29922;
+}
+
+.ph-notice-idle {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #8b949e;
+}
+
+/* Blocking badge */
+.ph-status-row {
+    margin-bottom: 1rem;
+}
+
+.ph-blocking-badge {
+    display: inline-block;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 6px;
+}
+
+.ph-badge-on {
+    background: rgba(63, 185, 80, 0.15);
+    border: 1px solid rgba(63, 185, 80, 0.35);
+    color: #3fb950;
+}
+
+.ph-badge-off {
+    background: rgba(248, 81, 73, 0.15);
+    border: 1px solid rgba(248, 81, 73, 0.35);
+    color: #f85149;
+}
+
+/* Metrics row */
+.ph-metrics-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.ph-metric {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 0.75rem 1.25rem;
+    min-width: 120px;
+}
+
+.ph-metric-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: #e6edf3;
+}
+
+.ph-metric-label {
+    font-size: 0.72rem;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 0.2rem;
+}
+
+/* Domain table */
+.ph-domain {
+    font-family: monospace;
+    font-size: 0.88rem;
+    color: #c9d1d9;
+}
+
+/* Upstream DNS */
+.ph-upstream-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.ph-upstream-item {
+    font-family: monospace;
+    font-size: 0.88rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 5px;
+    padding: 4px 10px;
+    color: #c9d1d9;
+}
+
+/* Updated timestamp */
+.ph-updated {
+    font-size: 0.75rem;
+    color: #6e7681;
+    margin-top: -1rem;
+}
