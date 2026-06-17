@@ -320,8 +320,9 @@
         }
 
         _scanResults = []; _assignments = [];
-        _busy = false;
         await LoadAsync();
+        _busy = false;
+        StateHasChanged();
     }
 
     private void CancelScan() { _scanResults = []; _assignments = []; }
@@ -331,8 +332,9 @@
     private async Task TogglePowerAsync(TuyaDeviceView dev)
     {
         var current = GetPower(dev);
+        var powerKey = dev.Dps.ContainsKey("20") ? "20" : "1";
         await SendAsync(dev.DeviceId, new TuyaCommandRequest(
-            Dps: new Dictionary<string, object> { ["1"] = !current }));
+            Dps: new Dictionary<string, object> { [powerKey] = !current }));
         await LoadAsync();
     }
 
@@ -340,6 +342,7 @@
     {
         await SendAsync(dev.DeviceId, new TuyaCommandRequest(
             Dps: new Dictionary<string, object> { ["22"] = value }));
+        await LoadAsync();
     }
 
     private async Task AdjustTempAsync(TuyaDeviceView dev, int delta)
@@ -364,6 +367,7 @@
         StateHasChanged();
         await TuyaSvc.SendCommandAsync(deviceId, cmd);
         _busyDevices.Remove(deviceId);
+        await InvokeAsync(StateHasChanged);
     }
 
     // ── DPS helpers ───────────────────────────────────────────────────────────
