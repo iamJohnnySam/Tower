@@ -139,8 +139,7 @@ app.MapRazorComponents<App>()
 // ── Dropbox OAuth callback ────────────────────────────────────────────────────
 app.MapGet("/dropbox/callback", async (
     string? code, string? error,
-    DropboxTokenService tokenSvc,
-    HttpContext ctx) =>
+    DropboxTokenService tokenSvc) =>
 {
     if (!string.IsNullOrEmpty(error))
         return Results.Redirect("/settings?dropbox_error=" + Uri.EscapeDataString(error));
@@ -148,8 +147,7 @@ app.MapGet("/dropbox/callback", async (
     if (string.IsNullOrEmpty(code))
         return Results.Redirect("/settings?dropbox_error=no_code");
 
-    var redirectUri = $"{ctx.Request.Scheme}://{ctx.Request.Host}/dropbox/callback";
-    var (ok, err) = await tokenSvc.ExchangeCodeAsync(code, redirectUri);
+    var (ok, err) = await tokenSvc.ExchangeCodeAsync(code);
 
     return ok
         ? Results.Redirect("/settings?dropbox=connected")

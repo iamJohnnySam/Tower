@@ -122,25 +122,47 @@
                                 <span class="save-confirm">Authorized &#10003;</span>
                             }
                         }
-                        else
+                        else if (SettingsSvc.IsConfigured("dropbox.app_key") && SettingsSvc.IsConfigured("dropbox.app_secret"))
                         {
                             @if (_dropboxConnectError != null)
                             {
                                 <div class="val-red" style="margin-bottom:0.4rem">&#10007; @_dropboxConnectError</div>
                             }
-                            @if (SettingsSvc.IsConfigured("dropbox.app_key") && SettingsSvc.IsConfigured("dropbox.app_secret"))
-                            {
-                                <div class="key-input-row">
-                                    <button class="btn btn-primary btn-sm" @onclick="AuthorizeDropbox">Authorize Dropbox</button>
-                                </div>
-                                <span class="config-hint">
-                                    Add <code>@_callbackUri</code> to your Dropbox App's Redirect URIs in the App Console, then click Authorize.
-                                </span>
-                            }
-                            else
-                            {
-                                <span class="config-hint">Save App Key and App Secret above, then authorize.</span>
-                            }
+
+                            @* Step 1 — register redirect URI *@
+                            <div class="config-hint" style="margin-bottom:0.5rem">
+                                <strong>Step 1:</strong> In the <a href="https://www.dropbox.com/developers/apps" target="_blank">Dropbox App Console</a>,
+                                add this Redirect URI: <code>@DropboxTokenService.RedirectUri</code>
+                            </div>
+
+                            @* Step 2 — open auth link *@
+                            <div class="config-hint" style="margin-bottom:0.5rem">
+                                <strong>Step 2:</strong>
+                                <a class="btn btn-primary btn-sm" href="@_authUrl" target="_blank">Open Dropbox Authorization</a>
+                                &nbsp; Log in and click Allow.
+                            </div>
+
+                            @* Step 3 — paste code *@
+                            <div class="config-hint" style="margin-bottom:0.4rem">
+                                <strong>Step 3:</strong> After authorizing, you'll be redirected to
+                                <code>localhost:8888</code>. If that page loads, authorization is complete automatically.
+                                If it fails (you accessed Tower remotely), copy the <code>code=…</code> value
+                                from the browser URL bar and paste it here:
+                            </div>
+                            <div class="key-input-row">
+                                <input type="text" class="config-input config-input-wide"
+                                       placeholder="Paste authorization code…"
+                                       @bind="_manualCode" @bind:event="oninput" />
+                                <button class="btn btn-primary btn-sm"
+                                        disabled="@(string.IsNullOrWhiteSpace(_manualCode) || _authorizing)"
+                                        @onclick="CompleteAuthorizationAsync">
+                                    @(_authorizing ? "Connecting…" : "Complete")
+                                </button>
+                            </div>
+                        }
+                        else
+                        {
+                            <span class="config-hint">Save App Key and App Secret above to enable authorization.</span>
                         }
                     </div>
                 </div>
@@ -294,13 +316,15 @@
     private bool   _jellyfinSaved    = false;
 
     // ── Dropbox ───────────────────────────────────────────────────────────────
-    private string _dropboxKeyValue       = "";
-    private bool   _dropboxKeyReplacing   = false;
-    private string _dropboxSecretValue    = "";
+    private string _dropboxKeyValue        = "";
+    private bool   _dropboxKeyReplacing    = false;
+    private string _dropboxSecretValue     = "";
     private bool   _dropboxSecretReplacing = false;
-    private bool   _dropboxConnectedMsg   = false;
-    private string? _dropboxConnectError  = null;
-    private string _callbackUri           = "";
+    private bool   _dropboxConnectedMsg    = false;
+    private string? _dropboxConnectError   = null;
+    private string _authUrl                = "";
+    private string _manualCode             = "";
+    private bool   _authorizing            = false;
 
     // ── Telegram ──────────────────────────────────────────────────────────────
     private string _telegramValue    = "";
@@ -323,9 +347,12 @@
     {
         _backupSchedule   = SettingsSvc.Get("backup.schedule") ?? "";
         _logRetentionDays = SettingsSvc.Get("log.retention_days") ?? "30";
-        _callbackUri      = Navigation.BaseUri.TrimEnd('/') + "/dropbox/callback";
 
-        // Check if we just returned from Dropbox OAuth
+        var appKey = SettingsSvc.Get("dropbox.app_key");
+        if (!string.IsNullOrEmpty(appKey))
+            _authUrl = DropboxTokenSvc.BuildAuthUrl(appKey);
+
+        // Check if we just returned from Dropbox OAuth (localhost auto-redirect path)
         var uri = new Uri(Navigation.Uri);
         var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
         if (query["dropbox"] == "connected")
@@ -378,6 +405,7 @@
         var val = _dropboxKeyValue.Trim();
         if (string.IsNullOrWhiteSpace(val)) return;
         SettingsSvc.Set("dropbox.app_key", val);
+        _authUrl            = DropboxTokenSvc.BuildAuthUrl(val);
         _dropboxKeyValue    = "";
         _dropboxKeyReplacing = false;
         StateHasChanged();
@@ -395,12 +423,28 @@
         await Task.Delay(100);
     }
 
-    private void AuthorizeDropbox()
+    private async Task CompleteAuthorizationAsync()
     {
-        var appKey  = SettingsSvc.Get("dropbox.app_key");
-        if (string.IsNullOrEmpty(appKey)) return;
-        var authUrl = DropboxTokenSvc.BuildAuthUrl(appKey, _callbackUri);
-        Navigation.NavigateTo(authUrl, forceLoad: true);
+        var code = _manualCode.Trim();
+        if (string.IsNullOrEmpty(code)) return;
+
+        _authorizing        = true;
+        _dropboxConnectError = null;
+        StateHasChanged();
+
+        var (ok, err) = await DropboxTokenSvc.ExchangeCodeAsync(code);
+
+        _authorizing = false;
+        if (ok)
+        {
+            _dropboxConnectedMsg = true;
+            _manualCode          = "";
+        }
+        else
+        {
+            _dropboxConnectError = err;
+        }
+        StateHasChanged();
     }
 
     private void DisconnectDropbox()

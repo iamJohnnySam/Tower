@@ -8,19 +8,26 @@ namespace Tower.Core.Backup;
 /// Manages Dropbox OAuth tokens. Stores app_key/app_secret/refresh_token in the DB.
 /// Caches the short-lived access token in memory and auto-refreshes it when it expires.
 /// Falls back to the old raw access_token setting if no refresh_token is stored.
+///
+/// Dropbox only allows http: for localhost redirect URIs, so we always use
+/// http://localhost:8888/dropbox/callback. The user registers this once in the
+/// Dropbox App Console. If the redirect doesn't fire (remote browser), the user
+/// copies the code from the browser URL bar and pastes it into Settings.
 /// </summary>
 public class DropboxTokenService(IServiceScopeFactory scopes, IHttpClientFactory httpFactory)
 {
+    public const string RedirectUri = "http://localhost:8888/dropbox/callback";
+
     private string? _cachedToken;
     private DateTime _tokenExpiry = DateTime.MinValue;
     private readonly SemaphoreSlim _lock = new(1, 1);
 
-    public string BuildAuthUrl(string appKey, string redirectUri) =>
+    public string BuildAuthUrl(string appKey) =>
         "https://www.dropbox.com/oauth2/authorize" +
         $"?client_id={Uri.EscapeDataString(appKey)}" +
         "&response_type=code" +
         "&token_access_type=offline" +
-        $"&redirect_uri={Uri.EscapeDataString(redirectUri)}";
+        $"&redirect_uri={Uri.EscapeDataString(RedirectUri)}";
 
     public async Task<string?> GetAccessTokenAsync(CancellationToken ct = default)
     {
@@ -68,7 +75,7 @@ public class DropboxTokenService(IServiceScopeFactory scopes, IHttpClientFactory
     }
 
     public async Task<(bool Ok, string? Error)> ExchangeCodeAsync(
-        string code, string redirectUri, CancellationToken ct = default)
+        string code, CancellationToken ct = default)
     {
         using var scope = scopes.CreateScope();
         var settings = scope.ServiceProvider.GetRequiredService<SettingsService>();
@@ -85,7 +92,7 @@ public class DropboxTokenService(IServiceScopeFactory scopes, IHttpClientFactory
             ["grant_type"]    = "authorization_code",
             ["client_id"]     = appKey,
             ["client_secret"] = appSecret,
-            ["redirect_uri"]  = redirectUri,
+            ["redirect_uri"]  = RedirectUri,
         });
 
         var resp = await http.PostAsync("https://api.dropboxapi.com/oauth2/token", form, ct);
