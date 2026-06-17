@@ -7,6 +7,7 @@ using Tower.Core.Backup;
 using Tower.Core.Data;
 using Tower.Core.Jellyfin;
 using Tower.Core.PiHole;
+using Tower.Core.Tuya;
 using Tower.Core.Maintenance;
 using Tower.Core.Pi;
 using Tower.Core.Projects;
@@ -39,6 +40,10 @@ builder.Services.AddHttpClient<PiAgentClient>();
 
 // ── PiHole ───────────────────────────────────────────────────────────────────
 builder.Services.AddHttpClient<PiHoleClient>();
+
+// ── Tuya ─────────────────────────────────────────────────────────────────────
+builder.Services.AddHttpClient<TuyaServiceClient>(c =>
+    c.BaseAddress = new Uri("http://localhost:6677/"));
 
 // ── Jellyfin ─────────────────────────────────────────────────────────────────
 builder.Services.AddSingleton(new JellyfinOptions { JellyfinUrl = towerCfg.JellyfinUrl });
