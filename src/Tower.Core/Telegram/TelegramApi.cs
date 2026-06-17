@@ -139,13 +139,18 @@ public class TelegramApi(HttpClient http, ILogger<TelegramApi> logger)
         string? parseMode,
         CancellationToken ct)
     {
+        // Always include reply_markup: send updated buttons, or an empty keyboard to clear any
+        // existing inline keyboard. Omitting reply_markup from editMessageText leaves the old
+        // keyboard in place, which is never the desired behaviour when editing to show a result.
         var payload = new Dictionary<string, object?> {
             ["chat_id"] = chatId,
             ["message_id"] = messageId,
-            ["text"] = text
+            ["text"] = text,
+            ["reply_markup"] = buttons != null
+                ? BuildKeyboard(buttons)
+                : new Dictionary<string, object[]> { ["inline_keyboard"] = [] }
         };
         if (parseMode != null) payload["parse_mode"] = parseMode;
-        if (buttons != null) payload["reply_markup"] = BuildKeyboard(buttons);
 
         var result = await PostAsync(token, "editMessageText", payload, ct);
         return result.HasValue;
