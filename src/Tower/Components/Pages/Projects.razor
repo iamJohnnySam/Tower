@@ -206,9 +206,18 @@
                         @if (bkpResult != null)
                         {
                             <div class="@(bkpResult.Success ? "val-green" : "val-red") proj-result">
-                                @(bkpResult.Success
-                                    ? $"✓ backed up, {Fmt.Bytes(bkpResult.Size)}"
-                                    : $"✗ {bkpResult.Error}")
+                                @if (bkpResult.Success)
+                                {
+                                    @($"✓ backed up, {Fmt.Bytes(bkpResult.Size)}")
+                                }
+                                else if (IsTokenExpiredError(bkpResult.Error))
+                                {
+                                    <span>✗ Dropbox token expired — <a href="/settings">update it in Settings</a></span>
+                                }
+                                else
+                                {
+                                    @($"✗ {bkpResult.Error}")
+                                }
                             </div>
                         }
 
@@ -263,6 +272,10 @@
                                 @if (b.Success)
                                 {
                                     <span class="val-green">✓ OK</span>
+                                }
+                                else if (IsTokenExpiredError(b.Error))
+                                {
+                                    <span class="val-red">✗ Token expired — <a href="/settings">update in Settings</a></span>
                                 }
                                 else
                                 {
@@ -395,6 +408,9 @@
 
     // ── Backup ───────────────────────────────────────────────────────────────
 
+    private static bool IsTokenExpiredError(string? error) =>
+        error != null && (error.Contains("401") || error.Contains("expired_access_token"));
+
     private async Task BackupDbAsync(string name, string dbPath)
     {
         var token = SettingsSvc.Get("dropbox.access_token");
@@ -408,6 +424,7 @@
 
         _backupBusy[name]   = false;
         _backupResult[name] = result;
+        Live.SetBackup(result);
         await InvokeAsync(StateHasChanged);
     }
 
