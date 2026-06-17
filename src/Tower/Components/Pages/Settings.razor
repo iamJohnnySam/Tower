@@ -237,6 +237,90 @@
         </div>
     </section>
 
+    @* ── D) Tuya ─────────────────────────────────────────────────────────────── *@
+<section class="settings-section">
+    <div class="atom-section-block">
+        <div class="atom-block-title">Tuya Devices</div>
+        <div class="config-form">
+
+            @* ── API Key ── *@
+            <div class="config-row">
+                <label class="config-label">API Key</label>
+                <div class="config-control">
+                    @if (SettingsSvc.IsConfigured("tuya.api_key") && !_tuyaKeyReplacing)
+                    {
+                        <div class="key-configured-row">
+                            <span class="val-green configured-badge">&#10003; Configured</span>
+                            <button class="btn-secondary btn-sm" @onclick="() => _tuyaKeyReplacing = true">Replace</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="key-input-row">
+                            <input type="password" class="config-input config-input-wide"
+                                   placeholder="Tuya IoT API key…"
+                                   @bind="_tuyaKeyValue" @bind:event="oninput" />
+                            <button class="btn btn-primary btn-sm" @onclick="SaveTuyaKey">Save</button>
+                            @if (SettingsSvc.IsConfigured("tuya.api_key"))
+                            {
+                                <button class="btn-secondary btn-sm" @onclick="CancelTuyaKey">Cancel</button>
+                            }
+                        </div>
+                        @if (_tuyaKeySaved) { <span class="save-confirm">Saved &#10003;</span> }
+                    }
+                    <span class="config-hint">From iot.tuya.com → Cloud → Projects → your project → Authorization Key.</span>
+                </div>
+            </div>
+
+            @* ── API Secret ── *@
+            <div class="config-row">
+                <label class="config-label">API Secret</label>
+                <div class="config-control">
+                    @if (SettingsSvc.IsConfigured("tuya.api_secret") && !_tuyaSecretReplacing)
+                    {
+                        <div class="key-configured-row">
+                            <span class="val-green configured-badge">&#10003; Configured</span>
+                            <button class="btn-secondary btn-sm" @onclick="() => _tuyaSecretReplacing = true">Replace</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="key-input-row">
+                            <input type="password" class="config-input config-input-wide"
+                                   placeholder="Tuya IoT API secret…"
+                                   @bind="_tuyaSecretValue" @bind:event="oninput" />
+                            <button class="btn btn-primary btn-sm" @onclick="SaveTuyaSecret">Save</button>
+                            @if (SettingsSvc.IsConfigured("tuya.api_secret"))
+                            {
+                                <button class="btn-secondary btn-sm" @onclick="CancelTuyaSecret">Cancel</button>
+                            }
+                        </div>
+                        @if (_tuyaSecretSaved) { <span class="save-confirm">Saved &#10003;</span> }
+                    }
+                </div>
+            </div>
+
+            @* ── Region ── *@
+            <div class="config-row">
+                <label class="config-label">Region</label>
+                <div class="config-control">
+                    <select class="config-input" value="@_tuyaRegion" @onchange="OnTuyaRegionChanged">
+                        <option value="us">US (us)</option>
+                        <option value="eu">Europe (eu)</option>
+                        <option value="cn">China (cn)</option>
+                        <option value="in">India (in)</option>
+                    </select>
+                    <div class="config-label"></div>
+                    <button class="btn btn-primary btn-sm" style="margin-top:0.4rem" @onclick="SaveTuyaRegion">Save</button>
+                    @if (_tuyaRegionSaved) { <span class="save-confirm">Saved &#10003;</span> }
+                    <span class="config-hint">Match the region your Tuya developer account is registered in.</span>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</section>
+
     @* ── B) Backup ────────────────────────────────────────────────────────────── *@
     <section class="settings-section">
         <div class="atom-section-block">
@@ -369,6 +453,16 @@
     private bool   _telegramReplacing = false;
     private bool   _telegramSaved    = false;
 
+    // ── Tuya ──────────────────────────────────────────────────────────────────
+    private string _tuyaKeyValue      = "";
+    private bool   _tuyaKeyReplacing  = false;
+    private bool   _tuyaKeySaved      = false;
+    private string _tuyaSecretValue   = "";
+    private bool   _tuyaSecretReplacing = false;
+    private bool   _tuyaSecretSaved   = false;
+    private string _tuyaRegion        = "us";
+    private bool   _tuyaRegionSaved   = false;
+
     // ── Backup ────────────────────────────────────────────────────────────────
     private string _backupSchedule = "";
     private bool   _backupSaved    = false;
@@ -385,6 +479,7 @@
     {
         _backupSchedule   = SettingsSvc.Get("backup.schedule") ?? "";
         _logRetentionDays = SettingsSvc.Get("log.retention_days") ?? "30";
+        _tuyaRegion = SettingsSvc.Get("tuya.region") ?? "us";
 
         var appKey = SettingsSvc.Get("dropbox.app_key");
         if (!string.IsNullOrEmpty(appKey))
@@ -535,6 +630,47 @@
 
         await Task.Delay(2500);
         if (!_disposed) { _telegramSaved = false; await InvokeAsync(StateHasChanged); }
+    }
+
+    // ── Tuya ──────────────────────────────────────────────────────────────────
+
+    private void CancelTuyaKey()   { _tuyaKeyReplacing = false; _tuyaKeyValue = ""; }
+    private void CancelTuyaSecret() { _tuyaSecretReplacing = false; _tuyaSecretValue = ""; }
+
+    private async Task SaveTuyaKey()
+    {
+        var val = _tuyaKeyValue.Trim();
+        if (string.IsNullOrWhiteSpace(val)) return;
+        SettingsSvc.Set("tuya.api_key", val);
+        _tuyaKeyValue = ""; _tuyaKeyReplacing = false; _tuyaKeySaved = true;
+        StateHasChanged();
+        await Task.Delay(2500);
+        if (!_disposed) { _tuyaKeySaved = false; await InvokeAsync(StateHasChanged); }
+    }
+
+    private async Task SaveTuyaSecret()
+    {
+        var val = _tuyaSecretValue.Trim();
+        if (string.IsNullOrWhiteSpace(val)) return;
+        SettingsSvc.Set("tuya.api_secret", val);
+        _tuyaSecretValue = ""; _tuyaSecretReplacing = false; _tuyaSecretSaved = true;
+        StateHasChanged();
+        await Task.Delay(2500);
+        if (!_disposed) { _tuyaSecretSaved = false; await InvokeAsync(StateHasChanged); }
+    }
+
+    private void OnTuyaRegionChanged(ChangeEventArgs e)
+    {
+        _tuyaRegion = e.Value?.ToString() ?? "us";
+    }
+
+    private async Task SaveTuyaRegion()
+    {
+        SettingsSvc.Set("tuya.region", _tuyaRegion);
+        _tuyaRegionSaved = true;
+        StateHasChanged();
+        await Task.Delay(2500);
+        if (!_disposed) { _tuyaRegionSaved = false; await InvokeAsync(StateHasChanged); }
     }
 
     // ── Backup ────────────────────────────────────────────────────────────────
