@@ -48,7 +48,7 @@ public class TuyaServiceClient(HttpClient http)
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var resp = await http.PostAsJsonAsync($"devices/{deviceId}/command", cmd, cts.Token);
+            var resp = await http.PostAsJsonAsync($"devices/{deviceId}/command", cmd, _opts, cts.Token);
             return resp.IsSuccessStatusCode;
         }
         catch { return false; }
