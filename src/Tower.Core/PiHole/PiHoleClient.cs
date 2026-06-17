@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
 
@@ -18,8 +17,9 @@ public class PiHoleClient(HttpClient http)
             if (sid is null)
                 return Error("Authentication failed — check PiHole password in Settings");
 
-            using var handler = BuildHandler(sid);
-            using var client  = new HttpClient(handler, disposeHandler: false) { BaseAddress = new Uri(BaseUrl) };
+            // PiHole v6 uses X-FTL-SID header for session auth
+            using var client = new HttpClient { BaseAddress = new Uri(BaseUrl) };
+            client.DefaultRequestHeaders.Add("X-FTL-SID", sid);
 
             // Fetch all four endpoints in parallel
             var summaryTask  = GetStringAsync(client, "/api/stats/summary");
@@ -78,19 +78,12 @@ public class PiHoleClient(HttpClient http)
     {
         try
         {
-            using var handler = BuildHandler(sid);
-            using var client  = new HttpClient(handler, disposeHandler: false) { BaseAddress = new Uri(BaseUrl) };
-            using var cts     = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            using var client = new HttpClient { BaseAddress = new Uri(BaseUrl) };
+            client.DefaultRequestHeaders.Add("X-FTL-SID", sid);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
             await client.DeleteAsync("/api/auth", cts.Token);
         }
         catch { }
-    }
-
-    private static HttpClientHandler BuildHandler(string sid)
-    {
-        var cookies = new CookieContainer();
-        cookies.Add(new Uri(BaseUrl), new Cookie("SID", sid));
-        return new HttpClientHandler { CookieContainer = cookies };
     }
 
     private static async Task<string?> GetStringAsync(HttpClient client, string path)

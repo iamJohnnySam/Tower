@@ -46,11 +46,19 @@ public class PiHoleParserTests
     // ── ParseBlocking ─────────────────────────────────────────────────────────
 
     [Fact]
-    public void ParseBlocking_returns_true_when_enabled()
+    public void ParseBlocking_returns_true_for_enabled_string()
+        => Assert.True(PiHoleParser.ParseBlocking("{\"blocking\":\"enabled\"}"));
+
+    [Fact]
+    public void ParseBlocking_returns_false_for_disabled_string()
+        => Assert.False(PiHoleParser.ParseBlocking("{\"blocking\":\"disabled\"}"));
+
+    [Fact]
+    public void ParseBlocking_still_handles_boolean_true()
         => Assert.True(PiHoleParser.ParseBlocking("{\"blocking\":true}"));
 
     [Fact]
-    public void ParseBlocking_returns_false_when_disabled()
+    public void ParseBlocking_still_handles_boolean_false()
         => Assert.False(PiHoleParser.ParseBlocking("{\"blocking\":false}"));
 
     [Fact]
@@ -70,9 +78,10 @@ public class PiHoleParserTests
     [Fact]
     public void ParseTopDomains_parses_entries()
     {
+        // PiHole v6 uses "domains" key
         var json = """
         {
-          "top_domains": [
+          "domains": [
             {"domain": "ads.evil.com", "count": 99},
             {"domain": "tracker.io",   "count": 42}
           ]

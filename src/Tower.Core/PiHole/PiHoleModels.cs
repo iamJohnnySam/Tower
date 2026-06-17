@@ -45,7 +45,12 @@ public static class PiHoleParser
         try
         {
             var root = JsonNode.Parse(json);
-            return root?["blocking"]?.GetValue<bool>();
+            var val = root?["blocking"]?.ToString();
+            if (val is null) return null;
+            // PiHole v6 returns "enabled"/"disabled" string
+            if (val == "enabled")  return true;
+            if (val == "disabled") return false;
+            return bool.TryParse(val, out var b) ? b : null;
         }
         catch { return null; }
     }
@@ -56,7 +61,9 @@ public static class PiHoleParser
         try
         {
             var root = JsonNode.Parse(json);
-            if (root?["top_domains"] is not JsonArray arr) return list;
+            // PiHole v6 uses "domains" key (not "top_domains")
+            var arr = root?["domains"] as JsonArray ?? root?["top_domains"] as JsonArray;
+            if (arr is null) return list;
             foreach (var n in arr)
             {
                 var domain = n?["domain"]?.ToString();
