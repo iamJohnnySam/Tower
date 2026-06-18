@@ -1,0 +1,242 @@
+/* ============================================================================
+   TOWER — "Cool Slate Console"  ·  global app.css
+   Drop-in replacement for src/Tower/wwwroot/app.css
+   Dark-first home-lab command center. All SHARED primitives live here so they
+   are reusable across components (Blazor scopes .razor.css per component).
+   ========================================================================== */
+
+/* ── 1. DESIGN TOKENS ─────────────────────────────────────────────────────── */
+:root {
+  /* surfaces (elevation low → high) */
+  --bg:          #0b0e14;   /* app background            */
+  --surface-1:   #11151e;   /* cards, rail               */
+  --surface-2:   #161b26;   /* inset rows, inputs        */
+  --surface-3:   #1b2130;   /* hover / raised            */
+  --surface-sunken:#0e121b; /* table header strip        */
+
+  /* borders / lines */
+  --border:      #222a38;   /* default hairline          */
+  --border-2:    #2f3849;   /* stronger / interactive    */
+  --line-faint:  #1a202c;   /* table row divider         */
+
+  /* text */
+  --text-strong: #eef2f9;   /* headings, numbers         */
+  --text:        #cdd6e4;   /* body                      */
+  --muted:       #8a93a6;   /* labels, secondary         */
+  --faint:       #5b6577;   /* meta, units, disabled     */
+
+  /* brand accent (interactive / selected — NOT decoration) */
+  --accent:      #4dabf7;
+  --accent-fg:   #9ccbf5;   /* accent text on dark       */
+  --accent-bg:   rgba(77,171,247,.13);
+  --accent-bd:   rgba(77,171,247,.40);
+
+  /* semantic status */
+  --ok:    #3fd07a;  --ok-bg:   rgba(63,208,122,.10);  --ok-bd:  rgba(63,208,122,.30);
+  --warn:  #e7a93a;  --warn-bg: rgba(231,169,58,.10);  --warn-bd:rgba(231,169,58,.30);
+  --err:   #f76d6d;  --err-bg:  rgba(247,109,109,.09); --err-bd: rgba(247,109,109,.28);
+  --info:  #a78bfa;  /* secondary chart hue (memory)    */
+
+  /* focus ring */
+  --focus: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-bd);
+
+  /* type */
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* type scale */
+  --fs-display: 26px;  --fs-h1: 19px;  --fs-h2: 15px;
+  --fs-body: 14px;     --fs-sm: 12.5px; --fs-xs: 11.5px; --fs-2xs: 10.5px;
+
+  /* spacing scale (4pt) */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 20px; --s6: 24px; --s8: 32px;
+
+  /* radii */
+  --r:    10px;   /* cards   */
+  --r-sm: 6px;    /* buttons, chips, inset rows */
+  --r-xs: 4px;    /* checkboxes, tiny chips */
+  --r-pill: 20px;
+
+  /* elevation */
+  --shadow-1: 0 1px 2px rgba(0,0,0,.30);
+  --shadow-2: 0 6px 22px rgba(0,0,0,.38);
+}
+
+/* ── 2. RESET / BASE ──────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;          /* critical: no width jump on live updates */
+  -webkit-font-smoothing: antialiased;
+}
+h1,h2,h3,p { margin: 0; }
+button { font: inherit; cursor: pointer; }
+:focus-visible { outline: none; box-shadow: var(--focus); }
+
+/* tabular numerals helper — put on any element showing live-updating numbers */
+.num, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* scrollbars */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: #2a3445; border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover { background: #36425a; background-clip: padding-box; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* ── 3. LAYOUT SHELL ──────────────────────────────────────────────────────── */
+.tower-layout { display: flex; height: 100vh; min-height: 0; }
+.tower-main   { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100%; }
+.tower-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: var(--s6) 26px 56px; }
+.tower-page   { max-width: 1320px; display: flex; flex-direction: column; gap: var(--s6); }
+
+/* nav rail (shared chrome lives here; NavMenu.razor.css can stay thin) */
+.tower-rail { width: 216px; flex-shrink: 0; background: var(--surface-1); border-right: 1px solid var(--border); display: flex; flex-direction: column; height: 100%; }
+.rail-link  { display: flex; align-items: center; gap: 11px; width: 100%; padding: 8px 11px; border: none; border-radius: var(--r-sm); background: transparent; color: var(--muted); text-align: left; position: relative; }
+.rail-link:hover  { background: rgba(255,255,255,.04); color: var(--text); }
+.rail-link.active { background: var(--accent-bg); color: var(--text-strong); font-weight: 600; }
+.rail-link.active::before { content:""; position:absolute; left:-10px; top:50%; transform:translateY(-50%); width:3px; height:17px; border-radius:0 2px 2px 0; background:var(--accent); }
+
+/* page header + sub-view pills */
+.page-header { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 14px 26px; border-bottom: 1px solid var(--border); background: color-mix(in oklab, var(--surface-1) 55%, transparent); }
+.page-title  { font-size: var(--fs-h1); font-weight: 700; color: var(--text-strong); letter-spacing: -.01em; }
+.page-sub    { font-size: 13px; color: var(--muted); }
+
+.pills { display: inline-flex; gap: 4px; background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 3px; }
+.pill  { padding: 5px 13px; border-radius: var(--r-sm); border: none; background: transparent; color: var(--muted); font-size: var(--fs-sm); font-weight: 600; }
+.pill:hover  { color: var(--text); }
+.pill.active { background: var(--accent-bg); color: var(--accent-fg); }
+
+/* ── 4. CARD ──────────────────────────────────────────────────────────────── */
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r); padding: var(--s4); }
+.card--flush { padding: 0; overflow: hidden; }      /* for cards wrapping a table */
+.card--danger { border-color: var(--err-bd); }
+.card-head { display: flex; align-items: center; gap: 9px; margin-bottom: var(--s3); }
+.card-title { font-size: var(--fs-xs); font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; }
+.card-meta  { margin-left: auto; font-size: var(--fs-xs); color: var(--faint); }
+.stat { font-size: 22px; font-weight: 700; color: var(--text-strong); }
+.stat--lg { font-size: var(--fs-display); }
+
+/* ── 5. STATUS DOTS & BADGES ──────────────────────────────────────────────── */
+.dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+.dot--ok   { background: var(--ok);   box-shadow: 0 0 0 3px var(--ok-bg); }
+.dot--warn { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-bg); }
+.dot--err  { background: var(--err); }
+.dot--err.is-live { animation: tower-pulse 1.6s ease-in-out infinite; }
+.dot--idle { background: var(--muted); }
+
+.badge { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); font-weight: 600; border-radius: var(--r-pill); padding: 2px 9px; border: 1px solid; }
+.badge::before { content:""; width:6px; height:6px; border-radius:50%; background: currentColor; }
+.badge--ok   { color: var(--ok);   background: var(--ok-bg);   border-color: var(--ok-bd); }
+.badge--warn { color: var(--warn); background: var(--warn-bg); border-color: var(--warn-bd); }
+.badge--err  { color: var(--err);  background: var(--err-bg);  border-color: var(--err-bd); }
+.badge--idle { color: var(--muted);background: rgba(138,147,166,.10); border-color: rgba(138,147,166,.28); }
+
+/* ── 6. PROGRESS / USAGE BARS ─────────────────────────────────────────────── */
+.bar { height: 7px; border-radius: var(--r-xs); background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; }
+.bar > i { display: block; height: 100%; border-radius: var(--r-xs); background: var(--accent); transition: width .4s ease; }
+.bar--ok  > i { background: var(--ok); }
+.bar--warn> i { background: var(--warn); }
+.bar--err > i { background: var(--err); }
+
+/* ── 7. SPARKLINE / CHART CONTAINER ───────────────────────────────────────── */
+.spark { display: block; overflow: visible; }       /* inline <svg> sets width/height */
+.chart { width: 100%; display: block; }              /* responsive area/line charts   */
+.chart-legend { display: flex; align-items: center; gap: 5px; font-size: var(--fs-xs); color: var(--muted); }
+.chart-legend > i { width: 8px; height: 2px; display: inline-block; }
+
+/* ── 8. BUTTONS ───────────────────────────────────────────────────────────── */
+.btn { display: inline-flex; align-items: center; gap: 7px; padding: 6px 13px; border-radius: var(--r-sm); border: 1px solid var(--border-2); background: transparent; color: var(--muted); font-size: var(--fs-sm); font-weight: 500; }
+.btn:hover { color: var(--text); border-color: var(--border-2); background: var(--surface-3); }
+.btn--primary { border-color: var(--accent-bd); background: var(--accent-bg); color: var(--accent-fg); font-weight: 600; }
+.btn--primary:hover { background: rgba(77,171,247,.20); }
+.btn--sm { padding: 4px 11px; font-size: var(--fs-xs); }
+
+/* danger button with two-step confirm.
+   Markup: <button class="btn btn--danger" data-confirm> … toggle .is-armed in code */
+.btn--danger { border-color: var(--err-bd); background: var(--err-bg); color: var(--err); font-weight: 600; }
+.btn--danger:hover { background: rgba(247,109,109,.16); }
+.confirm { display: flex; align-items: center; gap: 8px; background: var(--err-bg); border: 1px solid var(--err-bd); border-radius: var(--r-sm); padding: 7px 9px; }
+.confirm-msg { font-size: var(--fs-xs); color: var(--err); font-weight: 600; }
+.btn--confirm { margin-left: auto; padding: 4px 12px; border-radius: 5px; border: 1px solid var(--err); background: var(--err); color: #fff; font-size: var(--fs-xs); font-weight: 600; }
+
+/* ── 9. TABLES ────────────────────────────────────────────────────────────── */
+.table { width: 100%; }
+.table-head, .table-row { display: grid; align-items: center; padding: 9px 16px; }
+.table-head { font-size: var(--fs-2xs); font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; background: var(--surface-sunken); border-bottom: 1px solid var(--border); }
+.table-row { font-size: var(--fs-sm); border-bottom: 1px solid var(--line-faint); }
+.table-row:last-child { border-bottom: none; }
+.table-row:hover { background: var(--surface-2); }
+.table .num { color: var(--muted); }     /* numeric cells use mono + muted by default */
+
+/* ── 10. ALERT BANNER ─────────────────────────────────────────────────────── */
+.alert { display: flex; align-items: flex-start; gap: 10px; padding: 10px 11px; border-radius: 7px; }
+.alert--err  { background: var(--err-bg);  border-left: 3px solid var(--err); }
+.alert--warn { background: var(--warn-bg); border-left: 3px solid var(--warn); }
+.alert--info { background: var(--accent-bg); border-left: 3px solid var(--accent); }
+.alert-title { font-size: var(--fs-sm); color: var(--text-strong); font-weight: 600; }
+.alert-desc  { font-size: var(--fs-xs); color: var(--muted); }
+/* full-width inline banner variant (device unreachable, snapshot stale) */
+.banner { display: flex; align-items: center; gap: 11px; padding: 11px 15px; border-radius: 9px; background: var(--err-bg); border: 1px solid var(--err-bd); }
+
+/* ── 11. TOGGLE ───────────────────────────────────────────────────────────── */
+.toggle { position: relative; width: 38px; height: 22px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border-2); flex-shrink: 0; transition: background .15s; }
+.toggle::after { content:""; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:var(--faint); transition: transform .15s, background .15s; }
+.toggle.is-on { background: var(--accent-bg); border-color: var(--accent-bd); }
+.toggle.is-on::after { transform: translateX(16px); background: var(--accent); }
+
+/* ── 12. FORM INPUTS / KEY-VALUE ──────────────────────────────────────────── */
+.input { width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 8px 11px; color: var(--text); font-size: var(--fs-sm); }
+.input::placeholder { color: var(--faint); }
+.input:focus { outline: none; border-color: var(--accent-bd); box-shadow: var(--focus); }
+.field { display: grid; grid-template-columns: 180px 1fr; align-items: center; gap: var(--s4); padding: 11px 0; border-bottom: 1px solid var(--line-faint); }
+.field-label { font-size: var(--fs-sm); color: var(--muted); }
+
+/* checkbox (to-do, selections) */
+.check { width: 16px; height: 16px; border-radius: var(--r-xs); border: 1.5px solid #4a5468; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; }
+.check.is-done { background: var(--ok); border-color: var(--ok); }
+
+/* ── 13. TO-DO ITEM ───────────────────────────────────────────────────────── */
+.todo { display: flex; align-items: center; gap: 11px; padding: 9px 11px; border-radius: 7px; background: var(--surface-2); border: 1px solid var(--border); }
+.todo--overdue { background: var(--err-bg); border-color: var(--err-bd); }
+.todo--done { opacity: .55; }
+.todo--done .todo-text { text-decoration: line-through; color: var(--muted); }
+.todo-pri { width: 3px; height: 15px; border-radius: 2px; flex-shrink: 0; }
+.todo-pri--high { background: var(--err); }
+.todo-pri--med  { background: var(--warn); }
+.todo-pri--low  { background: var(--accent); }
+.todo-text { font-size: 13px; color: var(--text-strong); flex: 1; }
+.todo-due  { font-size: var(--fs-2xs); font-family: var(--mono); color: var(--muted); }
+.todo-due--overdue { color: var(--err); font-weight: 600; }
+
+/* ── 14. EMPTY / OFFLINE STATE ────────────────────────────────────────────── */
+.empty { padding: 70px 0; text-align: center; color: var(--faint); }
+.empty-title { font-size: 15px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+.empty-desc  { font-size: 13px; }
+
+/* ── 15. LOG VIEWER ───────────────────────────────────────────────────────── */
+.log { font-family: var(--mono); font-size: 12px; line-height: 1.7; color: var(--text); background: var(--surface-sunken); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 12px 14px; max-height: 320px; overflow: auto; white-space: pre; }
+.log .lvl-err  { color: var(--err); }
+.log .lvl-warn { color: var(--warn); }
+.log .lvl-info { color: var(--accent-fg); }
+.log .ts { color: var(--faint); }
+
+/* ── 16. KEYFRAMES ────────────────────────────────────────────────────────── */
+@keyframes tower-pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+/* ── 17. RESPONSIVE (degrade to single column on phone) ───────────────────── */
+@media (max-width: 720px) {
+  .tower-rail { width: 64px; }                 /* icon-only rail */
+  .rail-link span:last-child { display: none; }
+  .tower-scroll { padding: var(--s4) var(--s4) 48px; }
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr !important; }
+}
+
+/* convenience grid utilities used by pages */
+.grid-2 { display: grid; grid-template-columns: repeat(2,1fr); gap: var(--s4); }
+.grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: var(--s4); }
+.grid-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: var(--s4); }

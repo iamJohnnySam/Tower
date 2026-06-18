@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+@keyframes towerPulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+*::-webkit-scrollbar { width:10px; height:10px }
+*::-webkit-scrollbar-thumb { background:#2a3445; border-radius:6px; border:2px solid transparent; background-clip:padding-box }
+*::-webkit-scrollbar-thumb:hover { background:#36425a; background-clip:padding-box }
+*::-webkit-scrollbar-track { background:transparent }
+input::placeholder { color:#5b6577 }
+</style>
+</helmet>
+
+<div style="display:flex;height:100vh;min-height:0;background:#0b0e14;color:#cdd6e4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased">
+
+  <!-- ════ NAV RAIL ════ -->
+  <aside style="width:216px;flex-shrink:0;background:#11151e;border-right:1px solid #222a38;display:flex;flex-direction:column;height:100%">
+    <div style="display:flex;align-items:center;gap:11px;padding:18px 18px 16px">
+      <div style="width:26px;height:26px;border-radius:7px;background:rgba(77,171,247,.16);border:1px solid rgba(77,171,247,.45);display:flex;flex-direction:column;justify-content:center;gap:3px;padding:5px 6px">
+        <span style="height:2px;border-radius:2px;background:#4dabf7;display:block"></span>
+        <span style="height:2px;border-radius:2px;background:#4dabf7;opacity:.6;display:block"></span>
+        <span style="height:2px;border-radius:2px;background:#4dabf7;opacity:.3;display:block"></span>
+      </div>
+      <span style="font-weight:700;font-size:15px;letter-spacing:.14em;color:#eef2f9">TOWER</span>
+    </div>
+
+    <nav style="display:flex;flex-direction:column;gap:2px;padding:6px 10px;flex:1;min-height:0">
+      <sc-for list="{{ navLinks }}" as="link" hint-placeholder-count="7">
+        <button onClick="{{ link.onSelect }}" style="display:flex;align-items:center;gap:11px;width:100%;padding:8px 11px;border:none;border-radius:6px;background:{{ link.bg }};color:{{ link.fg }};cursor:pointer;font:inherit;text-align:left;position:relative">
+          <span style="position:absolute;left:-4px;top:50%;transform:translateY(-50%);width:3px;height:17px;border-radius:0 2px 2px 0;background:{{ link.bar }}"></span>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ link.fg }}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{ link.icon }}"></path></svg>
+          <span style="font-size:13px;font-weight:{{ link.weight }};letter-spacing:.005em">{{ link.label }}</span>
+        </button>
+      </sc-for>
+    </nav>
+
+    <div style="padding:12px 16px;border-top:1px solid #222a38;display:flex;flex-direction:column;gap:7px">
+      <div style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:#8a93a6">
+        <span style="width:7px;height:7px;border-radius:50%;background:#3fd07a;box-shadow:0 0 0 3px rgba(63,208,122,.18)"></span>
+        3 hosts · 11 services up
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:#5b6577">
+        <span style="font-family:ui-monospace,Menlo,monospace">v0.9.2</span><span>·</span><span>:8888</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ════ MAIN ════ -->
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column;height:100%">
+    <header style="flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:14px 26px;border-bottom:1px solid #222a38;background:rgba(17,21,30,.55)">
+      <div style="display:flex;align-items:baseline;gap:13px;min-width:0">
+        <h1 style="margin:0;font-size:19px;font-weight:700;color:#eef2f9;letter-spacing:-.01em">{{ headerTitle }}</h1>
+        <span style="font-size:13px;color:#8a93a6">{{ headerSub }}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px">
+        <div style="display:flex;align-items:center;gap:7px;font-size:12px;color:#8a93a6">
+          <span style="width:7px;height:7px;border-radius:50%;background:#3fd07a;animation:towerPulse 2.4s ease-in-out infinite"></span>
+          Live · updated 2s ago
+        </div>
+        <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:#5b6577">17 Jun · 14:32</span>
+      </div>
+    </header>
+
+    <div style="flex:1;min-height:0;overflow-y:auto;padding:24px 26px 56px">
+      <div style="max-width:1320px">
+
+      <!-- ════════════ HOME ════════════ -->
+      <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:24px">
+
+        <!-- quick-action widgets -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+
+          <!-- shutdown all pis (danger + confirm) -->
+          <div style="background:#11151e;border:1px solid #222a38;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;gap:9px">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f76d6d" stroke-width="1.8" stroke-linecap="round"><path d="M12 4v8M7.5 7a7 7 0 109 0"></path></svg>
+              <span style="font-size:12.5px;font-weight:600;color:#eef2f9">Shutdown all Pis</span>
+              <span style="margin-left:auto;font-size:11px;color:#5b6577;font-family:ui-monospace,Menlo,monospace">2 hosts</span>
+            </div>
+            <span style="font-size:11.5px;color:#8a93a6">AtomTV · AtomMiniTV — graceful halt</span>
+            <div style="display:flex;align-items:center;gap:8px;background:rgba(247,109,109,.09);border:1px solid rgba(247,109,109,.3);border-radius:6px;padding:7px 9px">
+              <span style="font-size:11.5px;color:#f76d6d;font-weight:600">Confirm shutdown?</span>
+              <button style="margin-left:auto;padding:4px 12px;border-radius:5px;border:1px solid #f76d6d;background:#f76d6d;color:#fff;font:inherit;font-size:11.5px;font-weight:600;cursor:pointer">Yes</button>
+              <button style="padding:4px 10px;border-radius:5px;border:1px solid #2f3849;background:transparent;color:#8a93a6;font:inherit;font-size:11.5px;cursor:pointer">No</button>
+            </div>
+          </div>
+
+          <!-- backup all dbs -->
+          <div style="background:#11151e;border:1px solid #222a38;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;gap:9px">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4dabf7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 7v10c0 1.7 3.6 3 8 3s8-1.3 8-3V7M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"></path></svg>
+              <span style="font-size:12.5px;font-weight:600;color:#eef2f9">Backup all DBs</span>
+              <span style="margin-left:auto;font-size:11px;color:#5b6577;font-family:ui-monospace,Menlo,monospace">6 dbs</span>
+            </div>
+            <span style="font-size:11.5px;color:#8a93a6">Last run 04:00 · all OK · → Dropbox</span>
+            <div style="display:flex;align-items:center;gap:10px">
+              <button style="padding:6px 14px;border-radius:6px;border:1px solid rgba(77,171,247,.4);background:rgba(77,171,247,.13);color:#9ccbf5;font:inherit;font-size:12px;font-weight:600;cursor:pointer">Run backup now</button>
+              <span style="font-size:11px;color:#5b6577">~40s</span>
+            </div>
+          </div>
+
+          <!-- wake / ping devices -->
+          <div style="background:#11151e;border:1px solid #222a38;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;gap:9px">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3fd07a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5a10 10 0 0114 0M8 15.5a6 6 0 018 0M12 18.5h.01"></path></svg>
+              <span style="font-size:12.5px;font-weight:600;color:#eef2f9">Wake / ping devices</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;align-items:center;gap:8px;font-size:11.5px"><span style="width:6px;height:6px;border-radius:50%;background:#3fd07a"></span><span style="color:#cdd6e4">Atom</span><span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;color:#8a93a6">0.4ms</span></div>
+              <div style="display:flex;align-items:center;gap:8px;font-size:11.5px"><span style="width:6px;height:6px;border-radius:50%;background:#3fd07a"></span><span style="color:#cdd6e4">AtomTV</span><span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;color:#8a93a6">1.2ms</span></div>
+              <div style="display:flex;align-items:center;gap:8px;font-size:11.5px"><span style="width:6px;height:6px;border-radius:50%;background:#f76d6d"></span><span style="color:#cdd6e4">AtomMiniTV</span><button style="margin-left:auto;padding:2px 9px;border-radius:4px;border:1px solid #2f3849;background:transparent;color:#9ccbf5;font:inherit;font-size:10.5px;cursor:pointer">Wake</button></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- devices + metrics row -->
+        <div style="display:grid;grid-template-columns:1fr 1.55fr;gap:16px">
+
+          <!-- devices status -->
+          <div style="background:#11151e;border:1px solid #222a38;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:13px">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <span style="font-size:12px;font-weight:600;color:#8a93a6;text-transform:uppercase;letter-spacing:.07em">Devices</span>
+              <span style="font-size:11px;color:#5b6577">2 up · 1 down</span>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:12px;padding:11px;border-radius:8px;background:#161b26;border:1px solid #222a38">
+              <span style="width:9px;height:9px;border-radius:50%;background:#3fd07a;box-shadow:0 0 0 3px rgba(63,208,122,.16);flex-shrink:0"></span>
+              <div style="display:flex;flex-direction:column;gap:1px;min-width:0">
+                <span style="font-size:13px;font-weight:600;color:#eef2f9">Atom <span style="font-weight:400;color:#5b6577;font-size:11px">· server</span></span>
+                <span style="font-size:11px;color:#8a93a6;font-family:ui-monospace,Menlo,monospace">cpu 33% · up 41d</span>
+              </div>
+              <div style="margin-left:auto">{{ charts.dCpu1 }}</div>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:12px;padding:11px;border-radius:8px;background:#161b26;border:1px solid #222a38">
+              <span style="width:9px;height:9px;border-radius:50%;background:#3fd07a;box-shadow:0 0 0 3px rgba(63,208,122,.16);flex-shrink:0"></span>
+              <div style="display:flex;flex-direction:column;gap:1px;min-width:0">
+                <span style="font-size:13px;font-weight:600;color:#eef2f9">AtomTV <span style="font-weight:400;color:#5b6577;font-size:11px">· Pi 4</span></span>
+                <span style="font-size:11px;color:#8a93a6;font-family:ui-monospace,Menlo,monospace">cpu 11% · up 12d</span>
+              </div>
+              <div style="margin-left:auto">{{ charts.dCpu2 }}</div>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:12px;padding:11px;border-radius:8px;background:rgba(247,109,109,.06);border:1px solid rgba(247,109,109,.26)">
+              <span style="width:9px;height:9px;border-radius:50%;background:#f76d6d;flex-shrink:0;animation:towerPulse 1.6s ease-in-out infinite"></span>
+              <div style="display:flex;flex-direction:column;gap:1px;min-width:0">
+                <span style="font-size:13px;font-weight:600;color:#eef2f9">AtomMiniTV <span style="font-weight:400;color:#5b6577;font-size:11px">· Pi Zero 2</span></span>
+                <span style="font-size:11px;color:#f76d6d;font-family:ui-monospace,Menlo,monospace">unreachable · 3m</span>
+              </div>
+              <button style="margin-left:auto;padding:4px 11px;border-radius:5px;border:1px solid #2f3849;background:transparent;color:#9ccbf5;font:inherit;font-size:11px;cursor:pointer">Retry</button>
+            </div>
+          </div>
+
+          <!-- key metrics -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div style="background:#11151e;border:1px solid #222a38;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:11.5px;font-weight:600;color:#8a93a6;text-transform:uppercase;letter-spacing:.06em">CPU</span><span style="margin-left:auto;font-size:22px;font-weight:700;color:#eef2f9">49%</span></div>
+              <div>{{ charts.cpuArea }}</div>
+              <span style="font-size:11px;color:#5b6577;font-family:ui-monospace,Menlo,monospace">load 2.1 · 8 cores · 3.4 GHz</span>
+            </div>
+            <div style="background:#11151e;border:1px solid #222a38;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:11.5px;font-weight:600;color:#8a93a6;text-transform:uppercase;letter-spacing:.06em">Memory</span><span style="margin-left:auto;font-size:22px;font-weight:700;color:#eef2f9">67%</span></div>
+              <div>{{ charts.memArea }}</div>
+              <span style="font-size:11px;color:#5b6577;font-family:ui-monospace,Menlo,monospace">21.4 / 32 GB · swap 0%</span>
+            </div>
+            <div style="grid-column:1/3;background:#11151e;border:1px solid #222a38;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:center;gap:14px">
+                <span style="font-size:11.5px;font-weight:600;color:#8a93a6;text-transform:uppercase;letter-spacing:.06em">Network</span>
+                <span style="display:flex;align-items:center;gap:5px;font-size:11px;color:#8a93a6"><span style="width:8px;height:2px;background:#4dabf7;display:inline-block"></span>↓ 24.1 Mb/s</span>
+                <span style="display:flex;align-items:center;gap:5px;font-size:11px;color:#8a93a6"><span style="width:8px;height:2px;background:#3fd07a;display:inline-block"></span>↑ 6.4 Mb/s</span>
+                <span style="margin-left:auto;font-size:11px;color:#5b6577;font-family:ui-monospace,Menlo,monospace">eth0 · 1 Gb</span>
+              </div>
+              <div>{{ charts.net }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- todo + alerts + services -->
+        <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:16px">
+
+          <!-- TO-DO -->
+          <div style="background:#11151e;border:1px solid #222a38;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:13px">
+            <div style="display:flex;align-items:center;gap:9px">
+              <span style="font-size:12px;font-weight:600;color:#8a93a6;text-transform:uppercase;letter-spacing:.07em">To-Do</span>
+              <span style="font-size:11px;color:#f76d6d;background:rgba(247,109,109,.1);border:1px solid rgba(247,109,109,.28);border-radius:20px;padding:1px 8px;font-weight:600">1 overdue</span>
+              <span style="margin-left:auto;font-size:11px;color:#5b6577">4 open</span>
+            </div>
+
+            <!-- add row -->
+            <div style="display:flex;align-items:center;gap:8px;background:#161b26;border:1px solid #222a38;border-radius:7px;padding:6px 8px 6px 11px">
+              <input value="" placeholder="Add a task…" style="flex:1;background:transparent;border:none;outline:none;color:#cdd6e4;font:inherit;font-size:12.5px" />
+              <span style="font-size:10.5px;color:#5b6577;font-family:ui-monospace,Menlo,monospace;border:1px solid #2f3849;border-radius:4px;padding:2px 6px">20 Jun</span>
+              <button style="padding:4px 11px;border-radius:5px;border:1px solid rgba(77,171,247,.4);background:rgba(77,171,247,.13);color:#9ccbf5;font:inherit;font-size:11.5px;font-weight:600;cursor:pointer">Add</button>
+            </div>
+
+            <!-- items -->
+            <div style="display:flex;flex-direction:column;gap:7px">
+              <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px;background:rgba(247,109,109,.06);border:1px solid rgba(247,109,109,.24)">
+                <span style="width:16px;height:16px;border-radius:4px;border:1.5px solid #4a5468;flex-shrink:0"></span>
+                <span style="width:3px;height:15px;border-radius:2px;background:#f76d6d;flex-shrink:0"></span>
+                <span style="font-size:13px;color:#eef2f9;flex:1">Replace failing SMART disk in Atom</span>
+                <span style="font-size:10.5px;color:#f76d6d;font-weight:600;font-family:ui-monospace,Menlo,monospace">overdue 2d</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px;background:#161b26;border:1px solid #222a38">
+                <span style="width:16px;height:16px;border-radius:4px;border:1.5px solid #4a5468;flex-shrink:0"></span>
+                <span style="width:3px;height:15px;border-radius:2px;background:#e7a93a;flex-shrink:0"></span>
+                <span style="font-size:13px;color:#cdd6e4;flex:1">Renew Tailscale auth key</span>
+                <span style="font-size:10.5px;color:#e7a93a;font-family:ui-monospace,Menlo,monospace">today</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px;background:#161b26;border:1px solid #222a38">
+                <span style="width:16px;height:16px;border-radius:4px;border:1.5px solid #4a5468;flex-shrink:0"></span>
+                <span style="width:3px;height:15px;border-radius:2px;background:#4dabf7;flex-shrink:0"></span>
+                <span style="font-size:13px;color:#cdd6e4;flex:1">Upgrade Jellyfin to 10.9</span>
+                <span style="font-size:10.5px;color:#8a93a6;font-family:ui-monospace,Menlo,monospace">23 Jun</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px;background:#161b26;border:1px solid #222a38;opacity:.55">
+                <span style="width:16px;height:16px;border-radius:4px;background:#3fd07a;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#0b0e14" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 6"></path></svg></span>
+                <span style="width:3px;height:15px;border-radius:2px;background:#5b6577;flex-shrink:0"></span>
+                <span style="font-size:13px;color:#8a93a6;flex:1;text-decoration:line-through">Move backups off-site</span>
+                <span style="font-size:10.5px;color:#5b6577;font-family:ui-monospace,Menlo,monospace">done</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- alerts + services -->
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div style="background:#11151e;border:1px solid #222a38;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:11px">
+              <div style="display:flex;align-items:center;gap:9px">
+                <span style="font-size:12px;font-weight:600;color:#8a93a6;text-transform:uppercase;letter-spacing:.07em">Active alerts</span>
+                <span style="margin-left:auto;font-size:11px;color:#5b6577">3</span>
+              </div>
+              <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 11px;border-radius:7px;background:rgba(247,109,109,.07);border-left:3px solid #f76d6d">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f76d6d" stroke-width="1.8" style="flex-shrink:0;margin-top:1px"><path d="M12 8v5M12 16h.01M10.3 3.9 2.4 18a2 2 0 001.7 3h15.8a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"></path></svg>
+                <div style="display:flex;flex-direction:column;gap:1px"><span style="font-size:12.5px;color:#eef2f9;font-weight:600">SMART failure — /dev/sdb</span><span style="font-size:11px;color:#8a93a6">Reallocated sectors 248 · replace soon</span></div>
+              </div>
+              <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 11px;border-radius:7px;background:rgba(231,169,58,.07);border-left:3px solid #e7a93a">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#e7a93a" stroke-width="1.8" style="flex-shrink:0;margin-top:1px"><path d="M12 8v5M12 16h.01M10.3 3.9 2.4 18a2 2 0 001.7 3h15.8a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"></path></svg>
+                <div style="display:flex;flex-direction:column;gap:1px"><span style="font-size:12.5px;color:#eef2f9;font-weight:600">Disk 78% full — media</span><span style="font-size:11px;color:#8a93a6">1.6 / 2 TB · 312 GB free</span></div>
+              </div>
+              <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 11px;border-radius:7px;background:rgba(247,109,109,.07);border-left:3px solid #f76d6d">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f76d6d" stroke-width="1.8" style="flex-shrink:0;margin-top:1px"><path d="M12 8v5M12 16h.01M10.3 3.9 2.4 18a2 2 0 001.7 3h15.8a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"></path></svg>
+                <div style="display:flex;flex-direction:column;gap:1px"><span style="font-size:12.5px;color:#eef2f9;font-weight:600">Project down — paperless</span><span style="font-size:11px;color:#8a93a6">systemd inactive · exit 1 · 8m ago</span></div>
+              </div>
+            </div>
+
+            <div style="background:#11151e;border:1px solid #222a38;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:11px">
+              <div style="display:flex;align-items:center;gap:9px">
+                <span style="font-size:12px;font-weight:600;color:#8a93a6;text-transform:uppercase;letter-spacing:.07em">Services</span>
+                <span style="margin-left:auto;font-size:11px;color:#5b6577">11 / 12 up</span>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+                <sc-for list="{{ services }}" as="s" hint-placeholder-count="12">
+                  <div style="display:flex;align-items:center;gap:7px;padding:7px 9px;border-radius:6px;background:#161b26;border:1px solid #222a38">
+                    <span style="width:7px;height:7px;border-radius:50%;background:{{ s.color }};flex-shrink:0"></span>
+                    <span style="font-size:11.5px;color:#cdd6e4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.name }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- public ip / ddns -->
+        <div style="display:flex;align-items:center;gap:20px;background:#11151e;border:1px solid #222a38;border-radius:10px;padding:13px 18px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:9px"><span style="width:7px;height:7px;border-radius:50%;background:#3fd07a"></span><span style="font-size:12px;color:#8a93a6">Public IP</span><span style="font-size:12.5px;color:#eef2f9;font-family:ui-monospace,Menlo,monospace">81.42.190.7</span></div>
+          <div style="width:1px;height:18px;background:#222a38"></div>
+          <div style="display:flex;align-items:center;gap:9px"><span style="font-size:12px;color:#8a93a6">DDNS</span><span style="font-size:12.5px;color:#eef2f9;font-family:ui-monospace,Menlo,monospace">atom.duckdns.org</span><span style="font-size:11px;color:#3fd07a">· synced 2m ago</span></div>
+          <div style="width:1px;height:18px;background:#222a38"></div>
+          <div style="display:flex;align-items:center;gap:9px"><span style="font-size:12px;color:#8a93a6">Tailscale</span><span style="font-size:12.5px;color:#3fd07a;font-family:ui-monospace,Menlo,monospace">connected · 3 peers</span></div>
+        </div>
+
+      </div>
+      </sc-if>
+
+      <!-- ════════════ DEVICES → SYSTEM ════════════ -->
+      <sc-if value="{{ isSystem }}" hint-placeholder-val="{{ true }}">{{ systemScreen }}</sc-if>
+
+      <!-- ════════════ PROJECTS ════════════ -->
+      <sc-if value="{{ isProjects }}" hint-placeholder-val="{{ true }}">{{ projectsScreen }}</sc-if>
+
+      <!-- ════════════ STUB ════════════ -->
+      <sc-if value="{{ isStub }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:90px 0;text-align:center">
+          <div style="font-size:15px;font-weight:600;color:#8a93a6;margin-bottom:6px">{{ stubName }}</div>
+          <div style="font-size:13px;color:#5b6577">Built in the full system — see Home, Devices → System, and Projects in this mockup.</div>
+        </div>
+      </sc-if>
+
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900}}">
+const I = {
+  home:'M3 11.5 12 4l9 7.5M5.5 10v9.5h13V10',
+  devices:'M4 5h16v11H4zM2 20h20M9 20v-2M15 20v-2',
+  projects:'M4 6h7l2 2h7v10H4zM4 6v12',
+  mediabox:'M4 5h16v14H4zM9 9l6 3-6 3z',
+  comms:'M21 12a8 8 0 11-3-6.2L21 4l-1 4',
+  jellyfin:'M12 3c-2 4-2 7 0 9 2-2 2-5 0-9zM7 12c0 4 2.5 7 5 8 2.5-1 5-4 5-8',
+  settings:'M12 9a3 3 0 100 6 3 3 0 000-6zM19 12l1.5 1-1.2 2.8-1.8-.4-1.6 1-.4 1.9h-3l-.4-1.9-1.6-1-1.8.4L5.5 15 7 12l-1.5-1L6.7 8.2l1.8.4 1.6-1L10.5 4h3l.4 1.6 1.6 1 1.8-.4L18.5 9z'
+};
+
+class Component extends DCLogic {
+  state = { tab:'home' };
+
+  // ── tiny chart helpers ───────────────────────────────
+  spark(data, color, { w=120, h=34, fill=true, strokeW=1.6 } = {}) {
+    const min = Math.min(...data), max = Math.max(...data), span = (max-min)||1;
+    const pts = data.map((v,i)=>[ (i/(data.length-1))*w, h - 3 - ((v-min)/span)*(h-6) ]);
+    const line = pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+    const area = `${line} L ${w} ${h} L 0 ${h} Z`;
+    const id = 'g'+Math.random().toString(36).slice(2,8);
+    return React.createElement('svg',{width:w,height:h,viewBox:`0 0 ${w} ${h}`,style:{display:'block',overflow:'visible'}},
+      React.createElement('defs',null,React.createElement('linearGradient',{id,x1:0,y1:0,x2:0,y2:1},
+        React.createElement('stop',{offset:'0%',stopColor:color,stopOpacity:.30}),
+        React.createElement('stop',{offset:'100%',stopColor:color,stopOpacity:0}))),
+      fill && React.createElement('path',{d:area,fill:`url(#${id})`}),
+      React.createElement('path',{d:line,fill:'none',stroke:color,strokeWidth:strokeW,strokeLinejoin:'round',strokeLinecap:'round'}),
+      React.createElement('circle',{cx:pts[pts.length-1][0],cy:pts[pts.length-1][1],r:2.4,fill:color}));
+  }
+
+  donut(pct, color, { size=92, track='#222a38', label, sub } = {}) {
+    const r=size/2-7, c=2*Math.PI*r, off=c*(1-pct/100);
+    return React.createElement('div',{style:{position:'relative',width:size,height:size,flexShrink:0}},
+      React.createElement('svg',{width:size,height:size,viewBox:`0 0 ${size} ${size}`,style:{transform:'rotate(-90deg)'}},
+        React.createElement('circle',{cx:size/2,cy:size/2,r,fill:'none',stroke:track,strokeWidth:7}),
+        React.createElement('circle',{cx:size/2,cy:size/2,r,fill:'none',stroke:color,strokeWidth:7,strokeLinecap:'round',strokeDasharray:c,strokeDashoffset:off})),
+      React.createElement('div',{style:{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'1px'}},
+        React.createElement('span',{style:{fontSize:'19px',fontWeight:700,color:'#eef2f9',fontVariantNumeric:'tabular-nums'}},label),
+        sub && React.createElement('span',{style:{fontSize:'10px',color:'#8a93a6'}},sub)));
+  }
+
+  navLinks() {
+    const items=[['home','Home',I.home],['devices','Devices',I.devices],['projects','Projects',I.projects],
+      ['mediabox','MediaBox',I.mediabox],['comms','Communication',I.comms],['jellyfin','Jellyfin',I.jellyfin],['settings','Settings',I.settings]];
+    return items.map(([id,label,icon])=>{
+      const active=this.state.tab===id;
+      return { label, icon, onSelect:()=>this.setState({tab:id}),
+        bg: active?'rgba(77,171,247,.13)':'transparent',
+        fg: active?'#eef2f9':'#8a93a6',
+        bar: active?'#4dabf7':'transparent',
+        weight: active?600:500 };
+    });
+  }
+
+  // multi-series net chart (down + up)
+  netChart(down, up, { w=300, h=84 } = {}) {
+    const all=[...down,...up], max=Math.max(...all)||1;
+    const mk=(data)=>data.map((v,i)=>[(i/(data.length-1))*w, h-4-(v/max)*(h-12)]);
+    const dpts=mk(down), upts=mk(up);
+    const line=(pts)=>pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+    const area=(pts)=>`${line(pts)} L ${w} ${h} L 0 ${h} Z`;
+    const id1='nd'+Math.random().toString(36).slice(2,7), id2='nu'+Math.random().toString(36).slice(2,7);
+    return React.createElement('svg',{width:'100%',height:h,viewBox:`0 0 ${w} ${h}`,preserveAspectRatio:'none',style:{display:'block'}},
+      React.createElement('defs',null,
+        React.createElement('linearGradient',{id:id1,x1:0,y1:0,x2:0,y2:1},React.createElement('stop',{offset:'0%',stopColor:'#4dabf7',stopOpacity:.26}),React.createElement('stop',{offset:'100%',stopColor:'#4dabf7',stopOpacity:0})),
+        React.createElement('linearGradient',{id:id2,x1:0,y1:0,x2:0,y2:1},React.createElement('stop',{offset:'0%',stopColor:'#3fd07a',stopOpacity:.20}),React.createElement('stop',{offset:'100%',stopColor:'#3fd07a',stopOpacity:0}))),
+      React.createElement('path',{d:area(dpts),fill:`url(#${id1})`}),
+      React.createElement('path',{d:area(upts),fill:`url(#${id2})`}),
+      React.createElement('path',{d:line(dpts),fill:'none',stroke:'#4dabf7',strokeWidth:1.6,strokeLinejoin:'round'}),
+      React.createElement('path',{d:line(upts),fill:'none',stroke:'#3fd07a',strokeWidth:1.6,strokeLinejoin:'round'}));
+  }
+
+  // per-core mini bars
+  coreBars(cores){
+    return React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(8,1fr)',gap:'7px'}},
+      cores.map((v,i)=>{
+        const col=v>80?'#e7a93a':v>92?'#f76d6d':'#4dabf7';
+        return React.createElement('div',{key:i,style:{display:'flex',flexDirection:'column',gap:'4px'}},
+          React.createElement('div',{style:{height:'46px',borderRadius:'3px',background:'#161b26',display:'flex',alignItems:'flex-end',overflow:'hidden',border:'1px solid #222a38'}},
+            React.createElement('div',{style:{width:'100%',height:v+'%',background:col,opacity:.85}})),
+          React.createElement('span',{style:{fontSize:'9.5px',color:'#5b6577',textAlign:'center',fontFamily:'ui-monospace,Menlo,monospace'}},v));
+      }));
+  }
+
+  // ── compact element helpers ──
+  el(tag,style,...kids){ return React.createElement(tag,{style},...kids); }
+  card(style,...kids){ return React.createElement('div',{style:Object.assign({background:'#11151e',border:'1px solid #222a38',borderRadius:'10px',padding:'16px'},style)},...kids); }
+  label(txt){ return React.createElement('span',{style:{fontSize:'12px',fontWeight:600,color:'#8a93a6',textTransform:'uppercase',letterSpacing:'.07em'}},txt); }
+  mono(txt,color='#8a93a6',size='11px'){ return React.createElement('span',{style:{fontFamily:'ui-monospace,Menlo,monospace',fontSize:size,color}},txt); }
+
+  bar(pct,color){
+    return React.createElement('div',{style:{flex:1,height:'7px',borderRadius:'4px',background:'#161b26',overflow:'hidden',border:'1px solid #222a38'}},
+      React.createElement('div',{style:{width:pct+'%',height:'100%',background:color,borderRadius:'4px'}}));
+  }
+
+  badge(text,kind){
+    const map={ok:['#3fd07a','rgba(63,208,122,.1)','rgba(63,208,122,.3)'],warn:['#e7a93a','rgba(231,169,58,.1)','rgba(231,169,58,.3)'],err:['#f76d6d','rgba(247,109,109,.1)','rgba(247,109,109,.3)'],idle:['#8a93a6','rgba(138,147,166,.1)','rgba(138,147,166,.28)']};
+    const [c,bg,bd]=map[kind];
+    return React.createElement('span',{style:{display:'inline-flex',alignItems:'center',gap:'6px',fontSize:'11px',fontWeight:600,color:c,background:bg,border:'1px solid '+bd,borderRadius:'20px',padding:'2px 9px'}},
+      React.createElement('span',{style:{width:'6px',height:'6px',borderRadius:'50%',background:c}}), text);
+  }
+
+  // ════ DEVICES → SYSTEM ════
+  renderSystem(charts){
+    const E=React.createElement;
+    const subnav=['System','Maintenance','Configuration'];
+    const devRail=[['Atom','server','ok'],['AtomTV','Pi 4','ok'],['AtomMiniTV','Pi Zero 2','err']];
+    const procs=[
+      ['jellyfin','1.2 GB','38%','12480','media'],['postgres','842 MB','9%','991','postgres'],
+      ['ffmpeg','momentary','61%','22104','media'],['dotnet Tower','318 MB','6%','1043','root'],
+      ['syncthing','206 MB','4%','1188','syncthing'],['redis-server','94 MB','2%','1002','redis'],
+      ['nginx','38 MB','1%','870','www-data'],['node exporter','22 MB','1%','905','prometheus'],
+    ];
+    return E('div',{style:{display:'flex',flexDirection:'column',gap:'20px'}},
+      // device rail + subnav
+      E('div',{style:{display:'flex',alignItems:'center',gap:'10px',flexWrap:'wrap'}},
+        ...devRail.map(([n,k,st])=>E('div',{key:n,style:{display:'flex',alignItems:'center',gap:'9px',padding:'8px 13px',borderRadius:'8px',cursor:'pointer',
+          background:n==='AtomMiniTV'?'rgba(77,171,247,.1)':'#11151e',border:'1px solid '+(n==='AtomMiniTV'?'rgba(77,171,247,.4)':'#222a38')}},
+          E('span',{style:{width:'8px',height:'8px',borderRadius:'50%',background:st==='ok'?'#3fd07a':'#f76d6d'}}),
+          E('div',{style:{display:'flex',flexDirection:'column',lineHeight:1.25}},
+            E('span',{style:{fontSize:'12.5px',fontWeight:600,color:'#eef2f9'}},n),
+            E('span',{style:{fontSize:'10px',color:'#5b6577'}},k)))),
+        E('div',{style:{marginLeft:'auto',display:'flex',gap:'4px',background:'#11151e',border:'1px solid #222a38',borderRadius:'8px',padding:'3px'}},
+          ...subnav.map((s,i)=>E('button',{key:s,style:{padding:'5px 13px',borderRadius:'6px',border:'none',cursor:'pointer',font:'inherit',fontSize:'12px',fontWeight:600,
+            background:i===0?'rgba(77,171,247,.14)':'transparent',color:i===0?'#9ccbf5':'#8a93a6'}},s)))),
+
+      // unreachable banner for AtomMiniTV context? It's actually down — show reconnect note
+      E('div',{style:{display:'flex',alignItems:'center',gap:'11px',padding:'11px 15px',borderRadius:'9px',background:'rgba(247,109,109,.07)',border:'1px solid rgba(247,109,109,.26)'}},
+        E('span',{style:{width:'8px',height:'8px',borderRadius:'50%',background:'#f76d6d',animation:'towerPulse 1.6s ease-in-out infinite'}}),
+        E('span',{style:{fontSize:'12.5px',color:'#eef2f9',fontWeight:600}},'AtomMiniTV unreachable — showing last snapshot (3m old)'),
+        E('button',{style:{marginLeft:'auto',padding:'5px 13px',borderRadius:'6px',border:'1px solid #2f3849',background:'transparent',color:'#9ccbf5',font:'inherit',fontSize:'11.5px',cursor:'pointer'}},'Reconnect')),
+
+      // cpu big + cores
+      E('div',{style:{display:'grid',gridTemplateColumns:'1.5fr 1fr',gap:'16px'}},
+        this.card({display:'flex',flexDirection:'column',gap:'12px'},
+          E('div',{style:{display:'flex',alignItems:'baseline',gap:'12px'}},this.label('CPU'),
+            E('span',{style:{marginLeft:'auto',fontSize:'26px',fontWeight:700,color:'#eef2f9'}},'47%'),
+            this.mono('load 1.8 · 1.9 · 2.1','#5b6577','11px')),
+          E('div',null,charts.sysCpuArea),
+          E('div',{style:{display:'flex',gap:'18px'}},this.mono('8 cores @ 1.4 GHz','#8a93a6'),this.mono('freq 1.39 GHz','#8a93a6'),this.mono('uptime 12d 4h','#8a93a6'))),
+        this.card({display:'flex',flexDirection:'column',gap:'12px'},
+          this.label('Per-core'),
+          charts.cores,
+          E('div',{style:{display:'flex',gap:'8px',marginTop:'2px'}},
+            E('span',{style:{display:'flex',alignItems:'center',gap:'5px',fontSize:'10.5px',color:'#8a93a6'}},E('span',{style:{width:'8px',height:'8px',borderRadius:'2px',background:'#4dabf7'}}),'<80%'),
+            E('span',{style:{display:'flex',alignItems:'center',gap:'5px',fontSize:'10.5px',color:'#8a93a6'}},E('span',{style:{width:'8px',height:'8px',borderRadius:'2px',background:'#e7a93a'}}),'80–92%')))),
+
+      // mem/swap donuts + temps + gpu
+      E('div',{style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'16px'}},
+        this.card({display:'flex',alignItems:'center',gap:'14px'},charts.sMem,
+          E('div',{style:{display:'flex',flexDirection:'column',gap:'4px'}},this.label('Memory'),this.mono('4.3 / 8 GB','#cdd6e4','12px'),this.mono('cache 1.1 GB','#5b6577'))),
+        this.card({display:'flex',alignItems:'center',gap:'14px'},charts.sSwap,
+          E('div',{style:{display:'flex',flexDirection:'column',gap:'4px'}},this.label('Swap'),this.mono('0.2 / 2 GB','#cdd6e4','12px'),this.mono('low pressure','#5b6577'))),
+        this.card({display:'flex',flexDirection:'column',gap:'9px'},
+          E('div',{style:{display:'flex',alignItems:'baseline'}},this.label('Temp'),E('span',{style:{marginLeft:'auto',fontSize:'20px',fontWeight:700,color:'#e7a93a'}},'59°')),
+          E('div',null,charts.tempSpark),
+          E('div',{style:{display:'flex',justifyContent:'space-between'}},this.mono('cpu 59°','#8a93a6'),this.mono('nvme 44°','#8a93a6'),this.mono('gpu 51°','#8a93a6'))),
+        this.card({display:'flex',flexDirection:'column',gap:'10px'},
+          this.label('GPU'),
+          E('div',{style:{display:'flex',alignItems:'baseline',gap:'8px'}},E('span',{style:{fontSize:'20px',fontWeight:700,color:'#eef2f9'}},'34%'),this.mono('iGPU · VAAPI','#5b6577')),
+          E('div',{style:{display:'flex',alignItems:'center',gap:'8px'}},this.mono('mem','#8a93a6'),this.bar(28,'#4dabf7'),this.mono('0.4/1.5 GB','#8a93a6'))),
+      ),
+
+      // network per-nic + services
+      E('div',{style:{display:'grid',gridTemplateColumns:'1fr 1.2fr',gap:'16px'}},
+        this.card({display:'flex',flexDirection:'column',gap:'13px'},
+          E('div',{style:{display:'flex',alignItems:'center'}},this.label('Network'),this.mono('eth0 + wlan0','#5b6577')),
+          ...[['eth0','↓ 22.4','↑ 6.1','#3fd07a'],['wlan0','↓ 1.7','↑ 0.3','#8a93a6']].map(([nic,d,u,c])=>
+            E('div',{key:nic,style:{display:'flex',alignItems:'center',gap:'11px',padding:'9px 11px',borderRadius:'7px',background:'#161b26',border:'1px solid #222a38'}},
+              E('span',{style:{width:'7px',height:'7px',borderRadius:'50%',background:c}}),
+              E('span',{style:{fontSize:'12.5px',fontWeight:600,color:'#eef2f9',width:'52px'}},nic),
+              this.mono(d+' Mb/s','#4dabf7','12px'),this.mono(u+' Mb/s','#3fd07a','12px'),
+              E('span',{style:{marginLeft:'auto'}},this.mono('1 Gb','#5b6577'))))),
+        this.card({display:'flex',flexDirection:'column',gap:'11px'},
+          E('div',{style:{display:'flex',alignItems:'center'}},this.label('Services'),E('span',{style:{marginLeft:'auto'}},this.mono('6 active','#5b6577'))),
+          E('div',{style:{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'8px'}},
+            ...[['jellyfin','ok'],['transmission','ok'],['samba','ok'],['ssh','ok'],['cron','ok'],['ufw','ok']].map(([n,s])=>
+              E('div',{key:n,style:{display:'flex',alignItems:'center',gap:'7px',padding:'7px 9px',borderRadius:'6px',background:'#161b26',border:'1px solid #222a38'}},
+                E('span',{style:{width:'7px',height:'7px',borderRadius:'50%',background:'#3fd07a'}}),
+                E('span',{style:{fontSize:'11.5px',color:'#cdd6e4',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},n)))))),
+
+      // top processes table
+      this.card({display:'flex',flexDirection:'column',gap:'0',padding:'0',overflow:'hidden'},
+        E('div',{style:{display:'flex',alignItems:'center',padding:'14px 16px',borderBottom:'1px solid #222a38'}},this.label('Top processes'),E('span',{style:{marginLeft:'auto'}},this.mono('by CPU · 142 total','#5b6577'))),
+        E('div',{style:{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1fr 1fr',gap:'0',padding:'9px 16px',fontSize:'10.5px',fontWeight:600,color:'#5b6577',textTransform:'uppercase',letterSpacing:'.05em',borderBottom:'1px solid #222a38',background:'#0e121b'}},
+          E('span',null,'Process'),E('span',null,'Memory'),E('span',null,'CPU'),E('span',null,'PID'),E('span',null,'User')),
+        ...procs.map((p,i)=>E('div',{key:i,style:{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1fr 1fr',gap:'0',padding:'9px 16px',fontSize:'12.5px',alignItems:'center',borderBottom:i<procs.length-1?'1px solid #1a202c':'none'}},
+          E('span',{style:{color:'#eef2f9',fontWeight:500}},p[0]),
+          this.mono(p[1],'#8a93a6','12px'),
+          E('span',{style:{display:'flex',alignItems:'center',gap:'8px'}},this.mono(p[2],parseInt(p[2])>50?'#e7a93a':'#cdd6e4','12px')),
+          this.mono(p[3],'#5b6577','12px'),this.mono(p[4],'#5b6577','12px')))),
+    );
+  }
+
+  // ════ PROJECTS ════
+  renderProjects(charts){
+    const E=React.createElement;
+    const projects=[
+      ['paperless','Document archive','err',':8000 open','318 MB','6%','p1'],
+      ['vaultwarden','Password vault','ok',':8222 open','94 MB','2%','p2'],
+      ['gitea','Git server','ok',':3000 open','206 MB','4%','p3'],
+      ['uptime-kuma','Status monitor','ok',':3001 open','142 MB','3%','p4'],
+      ['miniflux','RSS reader','ok',':8080 open','61 MB','1%','p1'],
+      ['linkding','Bookmarks','idle',':9090 closed','—','0%','p2'],
+    ];
+    const stMap={ok:['Running','ok'],err:['Failed','err'],idle:['Stopped','idle']};
+    return E('div',{style:{display:'flex',flexDirection:'column',gap:'20px'}},
+      // status strip
+      E('div',{style:{display:'flex',alignItems:'center',gap:'22px',background:'#11151e',border:'1px solid #222a38',borderRadius:'10px',padding:'13px 18px',flexWrap:'wrap'}},
+        ...[['4','Running','#3fd07a'],['1','Stopped','#8a93a6'],['1','Failed','#f76d6d'],['04:00','Last backup','#4dabf7']].map(([n,l,c])=>
+          E('div',{key:l,style:{display:'flex',alignItems:'center',gap:'9px'}},
+            E('span',{style:{fontSize:'19px',fontWeight:700,color:c}},n),
+            E('span',{style:{fontSize:'12px',color:'#8a93a6'}},l))),
+        E('button',{style:{marginLeft:'auto',padding:'7px 14px',borderRadius:'7px',border:'1px solid rgba(77,171,247,.4)',background:'rgba(77,171,247,.13)',color:'#9ccbf5',font:'inherit',fontSize:'12px',fontWeight:600,cursor:'pointer'}},'Backup all DBs')),
+
+      // project cards grid
+      E('div',{style:{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'16px'}},
+        ...projects.map((p,i)=>{
+          const [stTxt,stKind]=stMap[p[2]];
+          const failed=p[2]==='err', idle=p[2]==='idle';
+          return this.card({display:'flex',flexDirection:'column',gap:'13px',borderColor:failed?'rgba(247,109,109,.28)':'#222a38'},
+            E('div',{style:{display:'flex',alignItems:'flex-start',gap:'10px'}},
+              E('div',{style:{display:'flex',flexDirection:'column',gap:'2px',minWidth:0}},
+                E('span',{style:{fontSize:'14px',fontWeight:700,color:'#eef2f9'}},p[0]),
+                E('span',{style:{fontSize:'11.5px',color:'#8a93a6'}},p[1])),
+              E('span',{style:{marginLeft:'auto'}},this.badge(stTxt,stKind))),
+            E('div',{style:{display:'flex',alignItems:'center',gap:'12px'}},
+              E('span',{style:{display:'flex',alignItems:'center',gap:'6px'}},
+                E('span',{style:{width:'6px',height:'6px',borderRadius:'50%',background:idle?'#8a93a6':'#3fd07a'}}),
+                this.mono(p[3],'#8a93a6')),
+              E('span',{style:{marginLeft:'auto'}},charts[p[6]])),
+            E('div',{style:{display:'flex',gap:'14px'}},
+              E('span',{style:{display:'flex',flexDirection:'column'}},this.mono('CPU','#5b6577','10px'),E('span',{style:{fontSize:'13px',fontWeight:600,color:'#cdd6e4',fontFamily:'ui-monospace,Menlo,monospace'}},p[5])),
+              E('span',{style:{display:'flex',flexDirection:'column'}},this.mono('MEM','#5b6577','10px'),E('span',{style:{fontSize:'13px',fontWeight:600,color:'#cdd6e4',fontFamily:'ui-monospace,Menlo,monospace'}},p[4]))),
+            E('div',{style:{display:'flex',gap:'7px',borderTop:'1px solid #1a202c',paddingTop:'12px',flexWrap:'wrap'}},
+              ...(failed?[['Restart','accent'],['Logs','ghost']]:idle?[['Start','accent'],['Logs','ghost']]:[['Restart','ghost'],['Stop','ghost'],['Open','ghost'],['Logs','ghost']]).map(([b,kind])=>
+                E('button',{key:b,style:{padding:'5px 11px',borderRadius:'5px',font:'inherit',fontSize:'11.5px',fontWeight:kind==='accent'?600:500,cursor:'pointer',
+                  border:'1px solid '+(kind==='accent'?'rgba(77,171,247,.4)':'#2f3849'),
+                  background:kind==='accent'?'rgba(77,171,247,.13)':'transparent',
+                  color:kind==='accent'?'#9ccbf5':'#8a93a6'}},b))));
+        })),
+
+      // top processes table (compact)
+      this.card({display:'flex',flexDirection:'column',padding:'0',overflow:'hidden'},
+        E('div',{style:{display:'flex',alignItems:'center',padding:'14px 16px',borderBottom:'1px solid #222a38'}},this.label('Project processes'),E('span',{style:{marginLeft:'auto'}},this.mono('by memory','#5b6577'))),
+        ...[['paperless · gunicorn','318 MB','6%','PID 991'],['gitea','206 MB','4%','PID 1188'],['uptime-kuma · node','142 MB','3%','PID 1402'],['vaultwarden','94 MB','2%','PID 1002'],['miniflux','61 MB','1%','PID 1510']].map((p,i,a)=>
+          E('div',{key:i,style:{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1fr',padding:'9px 16px',fontSize:'12.5px',alignItems:'center',borderBottom:i<a.length-1?'1px solid #1a202c':'none'}},
+            E('span',{style:{color:'#eef2f9',fontWeight:500}},p[0]),this.mono(p[1],'#8a93a6','12px'),this.mono(p[2],'#cdd6e4','12px'),this.mono(p[3],'#5b6577','12px')))),
+    );
+  }
+
+  renderVals() {
+    const t=this.state.tab;
+    const titles={home:['Overview','Atom home-lab · 3 hosts'],devices:['Devices · AtomMiniTV','System'],
+      projects:['Projects','7 background apps'],mediabox:['MediaBox',''],comms:['Communication',''],jellyfin:['Jellyfin',''],settings:['Settings','']};
+    const [headerTitle,headerSub]=titles[t]||['',''];
+
+    const C='#4dabf7', G='#3fd07a', A='#e7a93a', R='#f76d6d';
+    const charts = {
+      // home device sparks
+      dCpu1:this.spark([22,28,24,31,26,35,30,38,34,29,33,31],C,{w:108,h:30}),
+      dCpu2:this.spark([12,9,14,11,8,13,10,15,9,12,7,11],C,{w:108,h:30}),
+      dCpu3:this.spark([44,52,48,61,55,67,72,64,58,69,74,63],A,{w:108,h:30}),
+      // home aggregate metrics
+      cpuArea:this.spark([34,41,38,46,42,52,48,58,44,51,47,55,49,53,46,57],C,{w:300,h:64}),
+      memArea:this.spark([61,62,60,63,64,62,65,66,64,67,65,68,66,69,67,68],'#a78bfa',{w:300,h:64}),
+      net:this.netChart([8,14,9,22,18,30,24,16,28,20,12,26,19,33,21,17],[3,5,4,8,6,11,7,5,9,6,4,8,5,12,7,6]),
+      // donuts
+      gMem:this.donut(67,'#a78bfa',{label:'67%',sub:'21/32 GB'}),
+      gDisk:this.donut(78,A,{label:'78%',sub:'1.6/2 TB'}),
+      // system page
+      sysCpuArea:this.spark([28,35,31,42,38,49,45,55,41,48,44,52,46,50,43,54,47,51,45,53],C,{w:560,h:120}),
+      cores:this.coreBars([38,52,44,61,29,47,55,33]),
+      sMem:this.donut(54,'#a78bfa',{size:104,label:'54%',sub:'4.3/8 GB'}),
+      sSwap:this.donut(12,C,{size:104,label:'12%',sub:'.2/2 GB'}),
+      tempSpark:this.spark([48,50,49,52,54,53,56,58,55,57,59,56],A,{w:120,h:30,fill:false}),
+      // projects sparks
+      p1:this.spark([12,18,14,22,16,24,19,15],C,{w:80,h:24,fill:false}),
+      p2:this.spark([4,6,5,8,5,7,6,9],G,{w:80,h:24,fill:false}),
+      p3:this.spark([30,42,38,55,48,61,52,44],A,{w:80,h:24,fill:false}),
+      p4:this.spark([8,11,9,14,10,12,11,13],C,{w:80,h:24,fill:false}),
+    };
+
+    const svc=(name,st)=>({name,color:st==='ok'?G:st==='warn'?A:R});
+    const services=[svc('nginx','ok'),svc('postgres','ok'),svc('redis','ok'),svc('grafana','ok'),
+      svc('caddy','ok'),svc('paperless','err'),svc('vaultwarden','ok'),svc('gitea','ok'),
+      svc('syncthing','ok'),svc('pihole','ok'),svc('uptime-kuma','ok'),svc('cron','ok')];
+
+    return {
+      navLinks:this.navLinks(), headerTitle, headerSub,
+      isHome:t==='home', isSystem:t==='devices', isProjects:t==='projects',
+      isStub:!['home','devices','projects'].includes(t),
+      stubName:headerTitle, charts, services,
+      systemScreen:this.renderSystem(charts),
+      projectsScreen:this.renderProjects(charts),
+    };
+  }
+}
+</script>
+</body>
+</html>
