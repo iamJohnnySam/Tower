@@ -71,16 +71,19 @@ def health():
 
 @app.get("/devices")
 def list_devices():
-    return [
-        {
-            "id": dev["id"],
-            "name": dev.get("name", dev["id"]),
-            "ip": dev.get("ip", ""),
+    devices = _load()
+
+    def poll_one(dev):
+        return {
+            "id":      dev["id"],
+            "name":    dev.get("name", dev["id"]),
+            "ip":      dev.get("ip", ""),
             "version": str(dev.get("version", "3.3")),
-            "dps": _poll(dev),
+            "dps":     _poll(dev) if dev.get("ip") else {},
         }
-        for dev in _load()
-    ]
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as ex:
+        return list(ex.map(poll_one, devices))
 
 
 @app.get("/devices/{device_id}/state")
