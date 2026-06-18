@@ -34,19 +34,16 @@ public class TuyaDeviceService(TuyaServiceClient client, TowerDbContext db, Sett
         }).ToList();
     }
 
-    public async Task<(List<ScannedDevice> Devices, string? Error)> ScanAsync()
+    public async Task<ScanResponse> ScanAsync()
     {
         var key    = settings.Get("tuya.api_key")    ?? "";
         var secret = settings.Get("tuya.api_secret") ?? "";
         var region = settings.Get("tuya.region")     ?? "us";
 
         if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(secret))
-            return ([], "Tuya API key and secret must be set in Settings before scanning.");
+            return new ScanResponse([], "Tuya API key and secret must be set in Settings before scanning.", []);
 
-        var devices = await client.ScanAsync(key, secret, region);
-        return devices.Count == 0
-            ? ([], "Scan returned no devices. Check your API credentials and ensure devices are on the same network.")
-            : (devices, null);
+        return await client.ScanAsync(key, secret, region);
     }
 
     public async Task SaveDeviceAsync(TuyaDevice device)

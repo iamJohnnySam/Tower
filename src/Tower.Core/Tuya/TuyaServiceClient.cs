@@ -29,18 +29,20 @@ public class TuyaServiceClient(HttpClient http)
         catch { return []; }
     }
 
-    public async Task<List<ScannedDevice>> ScanAsync(string apiKey, string apiSecret, string region)
+    public async Task<ScanResponse> ScanAsync(string apiKey, string apiSecret, string region)
     {
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
             var resp = await http.PostAsJsonAsync("scan",
                 new { api_key = apiKey, api_secret = apiSecret, region }, cts.Token);
-            if (!resp.IsSuccessStatusCode) return [];
+            if (!resp.IsSuccessStatusCode)
+                return new ScanResponse([], $"Service error: {resp.StatusCode}", []);
             var json = await resp.Content.ReadAsStringAsync(cts.Token);
-            return JsonSerializer.Deserialize<List<ScannedDevice>>(json, _opts) ?? [];
+            return JsonSerializer.Deserialize<ScanResponse>(json, _opts)
+                ?? new ScanResponse([], "Empty response from scan service", []);
         }
-        catch { return []; }
+        catch (Exception ex) { return new ScanResponse([], ex.Message, []); }
     }
 
     public async Task<bool> SendCommandAsync(string deviceId, TuyaCommandRequest cmd)

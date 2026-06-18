@@ -3,6 +3,9 @@ from typing import Any
 import tinytuya
 import json
 import os
+import socket
+import ipaddress
+import concurrent.futures
 
 DEVICES_FILE = os.path.join(os.path.dirname(__file__), "devices.json")
 app = FastAPI()
@@ -37,6 +40,30 @@ def _poll(dev: dict) -> dict[str, Any]:
         return {}
 
 
+def _check_port(ip: str, port: int = 6668, timeout: float = 0.5) -> bool:
+    try:
+        with socket.create_connection((ip, port), timeout=timeout):
+            return True
+    except Exception:
+        return False
+
+
+def _probe_subnet(subnet: str) -> list[str]:
+    """Return IPs in subnet that have Tuya port 6668 open."""
+    try:
+        net = ipaddress.ip_network(subnet, strict=False)
+    except ValueError:
+        return []
+    hosts = list(net.hosts())
+    found = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=64) as ex:
+        results = {ex.submit(_check_port, str(h)): str(h) for h in hosts}
+        for fut in concurrent.futures.as_completed(results):
+            if fut.result():
+                found.append(results[fut])
+    return sorted(found, key=lambda ip: ipaddress.ip_address(ip))
+
+
 @app.get("/health")
 def health():
     return {"ok": True}
@@ -66,29 +93,66 @@ def get_state(device_id: str):
 
 @app.post("/scan")
 async def scan(body: dict):
-    api_key = body.get("api_key", "")
+    api_key    = body.get("api_key", "")
     api_secret = body.get("api_secret", "")
-    region = body.get("region", "us")
+    region     = body.get("region", "us")
+    subnet     = body.get("subnet", "")
+
+    cloud_devices: list[dict] = []
+    cloud_error: str | None = None
+
+    # ── 1. Cloud lookup ─────────────────────────────────────────────────────────
     try:
         c = tinytuya.Cloud(apiRegion=region, apiKey=api_key, apiSecret=api_secret)
-        cloud_devices = c.getdevices()
-        # Scan local network for IPs via UDP broadcast (takes ~5 s)
+        cloud_devices = c.getdevices() or []
+    except Exception as e:
+        cloud_error = str(e)
+
+    # ── 2. Local UDP broadcast ──────────────────────────────────────────────────
+    udp_map: dict[str, str] = {}
+    try:
         local_scan = tinytuya.deviceScan(verbose=False, maxretry=3)
-        ip_map = {info.get("gwId", ""): ip for ip, info in local_scan.items()}
+        udp_map = {info.get("gwId", ""): ip for ip, info in local_scan.items()}
+    except Exception:
+        pass
+
+    # ── 3. If cloud has devices, merge and save ─────────────────────────────────
+    if cloud_devices:
         merged = [
             {
-                "id": dev.get("id", ""),
-                "name": dev.get("name", dev.get("id", "")),
-                "ip": dev.get("ip", "") or ip_map.get(dev.get("id", ""), ""),
-                "key": dev.get("key", ""),
+                "id":      dev.get("id", ""),
+                "name":    dev.get("name", dev.get("id", "")),
+                "ip":      dev.get("ip", "") or udp_map.get(dev.get("id", ""), ""),
+                "key":     dev.get("key", ""),
                 "version": str(dev.get("version", "3.3")),
             }
             for dev in cloud_devices
         ]
         _save(merged)
-        return merged
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"devices": merged, "cloud_error": None, "probe_ips": []}
+
+    # ── 4. No cloud devices — fall back to port probe ───────────────────────────
+    if not subnet:
+        # Auto-detect subnet from default route interface
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
+            s.close()
+            subnet = str(ipaddress.ip_network(f"{local_ip}/24", strict=False))
+        except Exception:
+            subnet = "192.168.1.0/24"
+
+    probe_ips = _probe_subnet(subnet)
+
+    hint = (
+        cloud_error
+        or "Cloud API returned 0 devices. Link your Smart Life / Tuya app account "
+           "to this IoT Platform project at iot.tuya.com → your project → Cloud → "
+           "Link Tuya App Account, then scan again."
+    )
+
+    return {"devices": [], "cloud_error": hint, "probe_ips": probe_ips}
 
 
 @app.post("/devices/{device_id}/command")

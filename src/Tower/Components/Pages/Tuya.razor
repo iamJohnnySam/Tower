@@ -44,10 +44,28 @@
         </div>
     }
 
-    @* ── Scan error ──────────────────────────────────────────────────────────── *@
+    @* ── Scan error / probe results ───────────────────────────────────────────── *@
     @if (_scanError is not null)
     {
-        <div class="tuya-notice tuya-notice-warn">@_scanError</div>
+        <div class="tuya-notice tuya-notice-warn">
+            <strong>Cloud scan issue:</strong> @_scanError
+        </div>
+        @if (_probeIps.Count > 0)
+        {
+            <div class="tuya-notice tuya-notice-info">
+                <strong>Tuya devices found on LAN</strong> (port 6668 open) — but local keys are unavailable without cloud linking.
+                Once you link your app account, these devices will be controllable:
+                <div class="tuya-probe-ips">
+                    @foreach (var ip in _probeIps)
+                    {
+                        <span class="tuya-probe-ip">@ip</span>
+                    }
+                </div>
+                <div style="margin-top:0.5rem;font-size:0.82rem;opacity:0.8">
+                    To link: <strong>iot.tuya.com</strong> → your project → Cloud → Link Tuya App Account → enter your Smart Life UID.
+                </div>
+            </div>
+        }
     }
 
     @* ── Scan assignment panel ───────────────────────────────────────────────── *@
@@ -255,6 +273,7 @@
     private List<ScannedDevice>     _scanResults = [];
     private List<DeviceAssignment>  _assignments = [];
     private string?                 _scanError;
+    private List<string>            _probeIps    = [];
     private DateTime                _updatedAt   = DateTime.Now;
     private readonly HashSet<string> _busyDevices = [];
 
@@ -285,14 +304,15 @@
 
     private async Task StartScanAsync()
     {
-        _scanning = true; _scanError = null;
+        _scanning = true; _scanError = null; _probeIps = [];
         StateHasChanged();
 
-        var (devices, error) = await TuyaSvc.ScanAsync();
+        var result   = await TuyaSvc.ScanAsync();
         _scanning    = false;
-        _scanError   = error;
-        _scanResults = devices;
-        _assignments = devices.Select(d => new DeviceAssignment
+        _scanError   = result.CloudError;
+        _probeIps    = result.ProbeIps;
+        _scanResults = result.Devices;
+        _assignments = result.Devices.Select(d => new DeviceAssignment
         {
             DeviceId = d.Id, Ip = d.Ip, Version = d.Version,
             Name     = d.Name, Include = true

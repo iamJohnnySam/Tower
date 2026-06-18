@@ -225,3 +225,21 @@
     color: #6e7681;
     margin-top: 0.5rem;
 }
+
+/* Probe IP chips */
+.tuya-probe-ips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+}
+
+.tuya-probe-ip {
+    font-family: monospace;
+    font-size: 0.82rem;
+    background: rgba(88, 166, 255, 0.12);
+    border: 1px solid rgba(88, 166, 255, 0.2);
+    border-radius: 4px;
+    padding: 2px 8px;
+    color: #58a6ff;
+}

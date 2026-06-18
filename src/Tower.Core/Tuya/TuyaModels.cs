@@ -19,6 +19,11 @@ public record ScannedDevice(
     string Key,
     string Version);
 
+public record ScanResponse(
+    List<ScannedDevice> Devices,
+    string?             CloudError,
+    List<string>        ProbeIps);
+
 // ── Commands sent TO Python service ──────────────────────────────────────────
 
 public record TuyaCommandRequest(
