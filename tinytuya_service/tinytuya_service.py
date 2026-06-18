@@ -104,7 +104,14 @@ async def scan(body: dict):
     # ── 1. Cloud lookup ─────────────────────────────────────────────────────────
     try:
         c = tinytuya.Cloud(apiRegion=region, apiKey=api_key, apiSecret=api_secret)
-        cloud_devices = c.getdevices() or []
+        raw = c.getdevices(verbose=True)
+        if isinstance(raw, dict):
+            if not raw.get("success", True):
+                cloud_error = f"Tuya API error {raw.get('code', '')}: {raw.get('msg', 'Unknown error')}"
+            else:
+                cloud_devices = raw.get("result", []) or []
+        else:
+            cloud_devices = raw or []
     except Exception as e:
         cloud_error = str(e)
 
@@ -147,9 +154,8 @@ async def scan(body: dict):
 
     hint = (
         cloud_error
-        or "Cloud API returned 0 devices. Link your Smart Life / Tuya app account "
-           "to this IoT Platform project at iot.tuya.com → your project → Cloud → "
-           "Link Tuya App Account, then scan again."
+        or "Cloud API returned 0 devices. Ensure your Smart Life account is linked "
+           "to this project at iot.tuya.com → your project → Cloud → Link Tuya App Account."
     )
 
     return {"devices": [], "cloud_error": hint, "probe_ips": probe_ips}
