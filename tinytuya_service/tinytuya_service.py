@@ -161,6 +161,59 @@ async def scan(body: dict):
     return {"devices": [], "cloud_error": hint, "probe_ips": probe_ips}
 
 
+@app.put("/devices/{device_id}/credentials")
+async def set_credentials(device_id: str, body: dict):
+    """Update local key (and optionally IP) for a device, then auto-probe LAN to find IP."""
+    key = body.get("key", "").strip()
+    ip  = body.get("ip", "").strip()
+
+    devices = _load()
+    dev = next((d for d in devices if d["id"] == device_id), None)
+    if dev is None:
+        dev = {"id": device_id, "name": device_id, "ip": "", "key": "", "version": "3.3"}
+        devices.append(dev)
+
+    dev["key"] = key
+
+    # If no IP provided or current IP is not on LAN, probe all known Tuya IPs
+    if key and (not ip or not ip.startswith("192.168.")):
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
+            s.close()
+            subnet = str(ipaddress.ip_network(f"{local_ip}/24", strict=False))
+        except Exception:
+            subnet = "192.168.1.0/24"
+
+        probe_ips = _probe_subnet(subnet)
+        matched_ip = ""
+        for probe_ip in probe_ips:
+            try:
+                d = tinytuya.OutletDevice(
+                    dev_id=device_id,
+                    address=probe_ip,
+                    local_key=key,
+                    version=str(dev.get("version", "3.3")),
+                )
+                d.set_socketTimeout(2)
+                result = d.status()
+                if isinstance(result, dict) and ("dps" in result or "Error" not in str(result)):
+                    matched_ip = probe_ip
+                    break
+            except Exception:
+                continue
+        if matched_ip:
+            dev["ip"] = matched_ip
+        elif ip:
+            dev["ip"] = ip
+    elif ip:
+        dev["ip"] = ip
+
+    _save(devices)
+    return {"id": device_id, "ip": dev["ip"], "key_set": bool(key)}
+
+
 @app.post("/devices/{device_id}/command")
 async def command(device_id: str, body: dict):
     dev = next((d for d in _load() if d["id"] == device_id), None)

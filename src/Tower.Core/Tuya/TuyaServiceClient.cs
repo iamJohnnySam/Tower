@@ -45,6 +45,21 @@ public class TuyaServiceClient(HttpClient http)
         catch (Exception ex) { return new ScanResponse([], ex.Message, []); }
     }
 
+    public async Task<CredentialResult> SetCredentialsAsync(string deviceId, string key, string ip = "")
+    {
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var resp = await http.PutAsJsonAsync($"devices/{deviceId}/credentials",
+                new { key, ip }, cts.Token);
+            if (!resp.IsSuccessStatusCode) return new CredentialResult(deviceId, "", false);
+            var json = await resp.Content.ReadAsStringAsync(cts.Token);
+            return JsonSerializer.Deserialize<CredentialResult>(json, _opts)
+                ?? new CredentialResult(deviceId, "", false);
+        }
+        catch { return new CredentialResult(deviceId, "", false); }
+    }
+
     public async Task<bool> SendCommandAsync(string deviceId, TuyaCommandRequest cmd)
     {
         try

@@ -226,6 +226,43 @@
     margin-top: 0.5rem;
 }
 
+/* Local key entry on unreachable cards */
+.tuya-key-entry {
+    display: flex;
+    gap: 0.3rem;
+    width: 100%;
+    margin-top: 0.1rem;
+}
+
+.tuya-key-input {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.72rem;
+    font-family: monospace;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 5px;
+    padding: 3px 7px;
+    color: #e6edf3;
+}
+
+.tuya-key-input::placeholder { color: #6e7681; }
+.tuya-key-input:focus { outline: none; border-color: rgba(88,166,255,0.5); }
+
+.tuya-key-save {
+    font-size: 0.72rem;
+    padding: 3px 9px;
+    border-radius: 5px;
+    border: 1px solid rgba(88,166,255,0.3);
+    background: rgba(88,166,255,0.1);
+    color: #58a6ff;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.tuya-key-save:hover:not(:disabled) { background: rgba(88,166,255,0.2); }
+.tuya-key-save:disabled { opacity: 0.4; cursor: default; }
+
 /* Multi-gang switches */
 .tuya-switch-gangs {
     display: flex;

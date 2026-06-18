@@ -166,7 +166,16 @@
                             <div class="tuya-card-name">@dev.Name</div>
                             @if (!dev.Reachable)
                             {
-                                <span class="tuya-unreachable-badge">Unreachable</span>
+                                <div class="tuya-key-entry">
+                                    <input class="tuya-key-input" type="text" placeholder="Paste local key…"
+                                           value="@PendingKey(dev.DeviceId)"
+                                           @oninput="e => _pendingKeys[dev.DeviceId] = e.Value?.ToString() ?? string.Empty"
+                                           disabled="@IsBusy(dev.DeviceId)" />
+                                    <button class="tuya-key-save" disabled="@(IsBusy(dev.DeviceId) || string.IsNullOrWhiteSpace(PendingKey(dev.DeviceId)))"
+                                            @onclick="() => SaveKeyAsync(dev)">
+                                        @(IsBusy(dev.DeviceId) ? "…" : "Save")
+                                    </button>
+                                </div>
                             }
                             else
                             {
@@ -193,7 +202,16 @@
                             <div class="tuya-card-name">@dev.Name</div>
                             @if (!dev.Reachable)
                             {
-                                <span class="tuya-unreachable-badge">Unreachable</span>
+                                <div class="tuya-key-entry">
+                                    <input class="tuya-key-input" type="text" placeholder="Paste local key…"
+                                           value="@PendingKey(dev.DeviceId)"
+                                           @oninput="e => _pendingKeys[dev.DeviceId] = e.Value?.ToString() ?? string.Empty"
+                                           disabled="@IsBusy(dev.DeviceId)" />
+                                    <button class="tuya-key-save" disabled="@(IsBusy(dev.DeviceId) || string.IsNullOrWhiteSpace(PendingKey(dev.DeviceId)))"
+                                            @onclick="() => SaveKeyAsync(dev)">
+                                        @(IsBusy(dev.DeviceId) ? "…" : "Save")
+                                    </button>
+                                </div>
                             }
                             else
                             {
@@ -228,7 +246,16 @@
                             <div class="tuya-card-name">@dev.Name</div>
                             @if (!dev.Reachable)
                             {
-                                <span class="tuya-unreachable-badge">Unreachable</span>
+                                <div class="tuya-key-entry">
+                                    <input class="tuya-key-input" type="text" placeholder="Paste local key…"
+                                           value="@PendingKey(dev.DeviceId)"
+                                           @oninput="e => _pendingKeys[dev.DeviceId] = e.Value?.ToString() ?? string.Empty"
+                                           disabled="@IsBusy(dev.DeviceId)" />
+                                    <button class="tuya-key-save" disabled="@(IsBusy(dev.DeviceId) || string.IsNullOrWhiteSpace(PendingKey(dev.DeviceId)))"
+                                            @onclick="() => SaveKeyAsync(dev)">
+                                        @(IsBusy(dev.DeviceId) ? "…" : "Save")
+                                    </button>
+                                </div>
                             }
                             else
                             {
@@ -274,7 +301,16 @@
                             <div class="tuya-card-name">@dev.Name</div>
                             @if (!dev.Reachable)
                             {
-                                <span class="tuya-unreachable-badge">Unreachable</span>
+                                <div class="tuya-key-entry">
+                                    <input class="tuya-key-input" type="text" placeholder="Paste local key…"
+                                           value="@PendingKey(dev.DeviceId)"
+                                           @oninput="e => _pendingKeys[dev.DeviceId] = e.Value?.ToString() ?? string.Empty"
+                                           disabled="@IsBusy(dev.DeviceId)" />
+                                    <button class="tuya-key-save" disabled="@(IsBusy(dev.DeviceId) || string.IsNullOrWhiteSpace(PendingKey(dev.DeviceId)))"
+                                            @onclick="() => SaveKeyAsync(dev)">
+                                        @(IsBusy(dev.DeviceId) ? "…" : "Save")
+                                    </button>
+                                </div>
                             }
                             else
                             {
@@ -311,7 +347,16 @@
                             <div class="tuya-card-name">@dev.Name</div>
                             @if (!dev.Reachable)
                             {
-                                <span class="tuya-unreachable-badge">Unreachable</span>
+                                <div class="tuya-key-entry">
+                                    <input class="tuya-key-input" type="text" placeholder="Paste local key…"
+                                           value="@PendingKey(dev.DeviceId)"
+                                           @oninput="e => _pendingKeys[dev.DeviceId] = e.Value?.ToString() ?? string.Empty"
+                                           disabled="@IsBusy(dev.DeviceId)" />
+                                    <button class="tuya-key-save" disabled="@(IsBusy(dev.DeviceId) || string.IsNullOrWhiteSpace(PendingKey(dev.DeviceId)))"
+                                            @onclick="() => SaveKeyAsync(dev)">
+                                        @(IsBusy(dev.DeviceId) ? "…" : "Save")
+                                    </button>
+                                </div>
                             }
                             else
                             {
@@ -330,17 +375,18 @@
 </div>
 
 @code {
-    private bool                    _serviceOk   = true;
-    private bool                    _loading     = true;
-    private bool                    _busy        = false;
-    private bool                    _scanning    = false;
-    private List<TuyaDeviceView>    _devices     = [];
-    private List<ScannedDevice>     _scanResults = [];
-    private List<DeviceAssignment>  _assignments = [];
-    private string?                 _scanError;
-    private List<string>            _probeIps    = [];
-    private DateTime                _updatedAt   = DateTime.Now;
-    private readonly HashSet<string> _busyDevices = [];
+    private bool                      _serviceOk   = true;
+    private bool                      _loading     = true;
+    private bool                      _busy        = false;
+    private bool                      _scanning    = false;
+    private List<TuyaDeviceView>      _devices     = [];
+    private List<ScannedDevice>       _scanResults = [];
+    private List<DeviceAssignment>    _assignments = [];
+    private string?                   _scanError;
+    private List<string>              _probeIps    = [];
+    private DateTime                  _updatedAt   = DateTime.Now;
+    private readonly HashSet<string>  _busyDevices = [];
+    private Dictionary<string,string> _pendingKeys = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -491,6 +537,28 @@
     }
 
     private bool IsBusy(string deviceId) => _busy || _busyDevices.Contains(deviceId);
+
+    private string PendingKey(string deviceId)
+    {
+        _pendingKeys.TryGetValue(deviceId, out var v);
+        return v ?? "";
+    }
+
+    private async Task SaveKeyAsync(TuyaDeviceView dev)
+    {
+        var key = PendingKey(dev.DeviceId).Trim();
+        if (string.IsNullOrEmpty(key)) return;
+        _busyDevices.Add(dev.DeviceId);
+        StateHasChanged();
+        var result = await TuyaSvc.SetCredentialsAsync(dev.DeviceId, key);
+        _busyDevices.Remove(dev.DeviceId);
+        if (result.KeySet)
+        {
+            _pendingKeys.Remove(dev.DeviceId);
+            await LoadAsync();
+        }
+        await InvokeAsync(StateHasChanged);
+    }
 
     private static bool GetGangPower(TuyaDeviceView dev, int gang)
     {

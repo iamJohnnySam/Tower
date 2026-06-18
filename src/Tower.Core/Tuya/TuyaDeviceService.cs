@@ -75,6 +75,9 @@ public class TuyaDeviceService(TuyaServiceClient client, TowerDbContext db, Sett
         }
     }
 
+    public Task<CredentialResult> SetCredentialsAsync(string deviceId, string key, string ip = "")
+        => client.SetCredentialsAsync(deviceId, key, ip);
+
     public Task<bool> SendCommandAsync(string deviceId, TuyaCommandRequest cmd)
         => client.SendCommandAsync(deviceId, cmd);
 }

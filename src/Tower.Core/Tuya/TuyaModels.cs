@@ -24,6 +24,8 @@ public record ScanResponse(
     string?             CloudError,
     List<string>        ProbeIps);
 
+public record CredentialResult(string Id, string Ip, bool KeySet);
+
 // ── Commands sent TO Python service ──────────────────────────────────────────
 
 public record TuyaCommandRequest(
