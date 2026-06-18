@@ -130,7 +130,7 @@ async def scan(body: dict):
                 "id":      dev.get("id", ""),
                 "name":    dev.get("name", dev.get("id", "")),
                 "ip":      dev.get("ip", "") or udp_map.get(dev.get("id", ""), ""),
-                "key":     dev.get("key", ""),
+                "key":     dev.get("local_key", dev.get("key", "")),
                 "version": str(dev.get("version", "3.3")),
             }
             for dev in cloud_devices
