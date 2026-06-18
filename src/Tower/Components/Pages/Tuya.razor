@@ -101,6 +101,10 @@
                                     <option value="Plug">Plug</option>
                                     <option value="Light">Light</option>
                                     <option value="AcRemote">AC Remote</option>
+                                    <option value="Switch1">Switch (1-gang)</option>
+                                    <option value="Switch2">Switch (2-gang)</option>
+                                    <option value="Switch4">Switch (4-gang)</option>
+                                    <option value="Sensor">Sensor</option>
                                 </select>
                             </td>
                             <td>
@@ -253,6 +257,67 @@
                                         }
                                     </div>
                                 }
+                            }
+                        </div>
+                    }
+                    else if (dev.DeviceType is TuyaDeviceType.Switch1 or TuyaDeviceType.Switch2 or TuyaDeviceType.Switch4)
+                    {
+                        var gangs = dev.DeviceType == TuyaDeviceType.Switch4 ? 4
+                                  : dev.DeviceType == TuyaDeviceType.Switch2 ? 2 : 1;
+                        <div class="tuya-card @(dev.Reachable ? "" : "tuya-card-unreachable")">
+                            <div class="tuya-card-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="3" width="20" height="18" rx="2"/>
+                                    <circle cx="12" cy="12" r="2"/>
+                                </svg>
+                            </div>
+                            <div class="tuya-card-name">@dev.Name</div>
+                            @if (!dev.Reachable)
+                            {
+                                <span class="tuya-unreachable-badge">Unreachable</span>
+                            }
+                            else
+                            {
+                                <div class="tuya-switch-gangs">
+                                    @for (int g = 1; g <= gangs; g++)
+                                    {
+                                        var gang = g;
+                                        var on = GetGangPower(dev, gang);
+                                        <div class="tuya-switch-gang">
+                                            @if (gangs > 1)
+                                            {
+                                                <span class="tuya-gang-label">CH@gang</span>
+                                            }
+                                            <button class="tuya-toggle @(on ? "tuya-toggle-on" : "tuya-toggle-off")"
+                                                    disabled="@IsBusy(dev.DeviceId)"
+                                                    @onclick="() => ToggleGangAsync(dev, gang)">
+                                                @(on ? "ON" : "OFF")
+                                            </button>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                    else if (dev.DeviceType == TuyaDeviceType.Sensor)
+                    {
+                        <div class="tuya-card @(dev.Reachable ? "" : "tuya-card-unreachable")">
+                            <div class="tuya-card-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 22c5.52 0 10-4.48 10-10S17.52 2 12 2 2 6.48 2 12s4.48 10 10 10z"/>
+                                    <path d="M12 8v4M12 16h.01"/>
+                                </svg>
+                            </div>
+                            <div class="tuya-card-name">@dev.Name</div>
+                            @if (!dev.Reachable)
+                            {
+                                <span class="tuya-unreachable-badge">Unreachable</span>
+                            }
+                            else
+                            {
+                                <div class="tuya-sensor-state @(GetPresence(dev) ? "tuya-sensor-active" : "tuya-sensor-idle")">
+                                    @(GetPresence(dev) ? "Presence Detected" : "No Presence")
+                                </div>
                             }
                         </div>
                     }
@@ -426,6 +491,30 @@
     }
 
     private bool IsBusy(string deviceId) => _busy || _busyDevices.Contains(deviceId);
+
+    private static bool GetGangPower(TuyaDeviceView dev, int gang)
+    {
+        var key = gang.ToString();
+        return dev.Dps.TryGetValue(key, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.True;
+    }
+
+    private async Task ToggleGangAsync(TuyaDeviceView dev, int gang)
+    {
+        var current = GetGangPower(dev, gang);
+        await SendAsync(dev.DeviceId, new TuyaCommandRequest(
+            Dps: new Dictionary<string, object> { [gang.ToString()] = !current }));
+        await LoadAsync();
+    }
+
+    private static bool GetPresence(TuyaDeviceView dev)
+    {
+        if (dev.Dps.TryGetValue("1", out var v))
+            return v.ValueKind == System.Text.Json.JsonValueKind.True
+                || (v.ValueKind == System.Text.Json.JsonValueKind.String && v.GetString() is "1" or "true" or "presence");
+        if (dev.Dps.TryGetValue("101", out v))
+            return v.ValueKind == System.Text.Json.JsonValueKind.True;
+        return false;
+    }
 
     // ── Scan assignment model ─────────────────────────────────────────────────
 

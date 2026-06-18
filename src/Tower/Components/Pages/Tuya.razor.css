@@ -226,6 +226,47 @@
     margin-top: 0.5rem;
 }
 
+/* Multi-gang switches */
+.tuya-switch-gangs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    width: 100%;
+}
+
+.tuya-switch-gang {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.tuya-gang-label {
+    font-size: 0.68rem;
+    color: #6e7681;
+    min-width: 2rem;
+}
+
+/* Sensor */
+.tuya-sensor-state {
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 5px;
+    border: 1px solid transparent;
+}
+
+.tuya-sensor-active {
+    background: rgba(63, 185, 80, 0.12);
+    border-color: rgba(63, 185, 80, 0.3);
+    color: #3fb950;
+}
+
+.tuya-sensor-idle {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #6e7681;
+}
+
 /* Probe IP chips */
 .tuya-probe-ips {
     display: flex;

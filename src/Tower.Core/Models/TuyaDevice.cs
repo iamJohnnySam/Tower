@@ -1,6 +1,6 @@
 namespace Tower.Core.Models;
 
-public enum TuyaDeviceType { Plug, Light, AcRemote }
+public enum TuyaDeviceType { Plug, Light, AcRemote, Switch1, Switch2, Switch4, Sensor }
 
 public class TuyaDevice
 {
