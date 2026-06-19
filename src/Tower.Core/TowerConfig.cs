@@ -11,6 +11,7 @@ public class TowerConfig
     public string MediaBoxGrpcUrl { get; set; } = "http://localhost:5602";
     public bool MediaBoxOrchestrate { get; set; } = false;
     public MediaBoxJobsConfig MediaBoxJobs { get; set; } = new();
+    public WebsiteConfig Website { get; set; } = new();
 }
 
 /// <summary>
@@ -48,4 +49,11 @@ public class ProjectDef
     public string? DbPath { get; set; }
     public string? LogDir { get; set; }
     public string? Url { get; set; }
+}
+
+public class WebsiteConfig
+{
+    public string LocalPath { get; set; } = "/home/atom/dev/iamJohnnySam.com/public_html";
+    public string FtpHost { get; set; } = "x11.x10hosting.com";
+    public string FtpRemotePath { get; set; } = "/public_html";
 }

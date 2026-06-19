@@ -14,6 +14,7 @@ using Tower.Core.Projects;
 using Tower.Core.Settings;
 using Tower.Core.State;
 using Tower.Core.Telegram;
+using Tower.Core.Website;
 using Tower.Core.Workers;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -40,6 +41,14 @@ builder.Services.AddHttpClient<PiAgentClient>();
 
 // ── PiHole ───────────────────────────────────────────────────────────────────
 builder.Services.AddHttpClient<PiHoleClient>();
+
+// ── Website ──────────────────────────────────────────────────────────────────
+builder.Services.AddSingleton(new WebsiteOptions
+{
+    LocalPath     = towerCfg.Website.LocalPath,
+    FtpHost       = towerCfg.Website.FtpHost,
+    FtpRemotePath = towerCfg.Website.FtpRemotePath,
+});
 
 // ── Tuya ─────────────────────────────────────────────────────────────────────
 builder.Services.AddHttpClient<TuyaServiceClient>(c =>
