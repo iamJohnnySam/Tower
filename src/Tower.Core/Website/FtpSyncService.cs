@@ -36,6 +36,9 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
         if (user is null || pass is null)
             throw new InvalidOperationException("FTP credentials not configured.");
 
+        if (!Directory.Exists(opts.LocalPath))
+            throw new DirectoryNotFoundException($"Local path not found: {opts.LocalPath}");
+
         using var ftp = new AsyncFtpClient(opts.FtpHost, user, pass);
         await ftp.Connect();
 
@@ -45,8 +48,6 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
             .ToDictionary(
                 i => NormalizePath(i.FullName[opts.FtpRemotePath.TrimEnd('/').Length..]),
                 i => (size: i.Size, mtime: i.Modified.ToUniversalTime()));
-
-        await ftp.Disconnect();
 
         var localFiles = Directory
             .GetFiles(opts.LocalPath, "*", SearchOption.AllDirectories)
@@ -102,8 +103,6 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
                 logger.LogWarning(ex, "Failed to delete {Path}", rel);
             }
         }
-
-        await ftp.Disconnect();
     }
 
     public static ScanResult Classify(
