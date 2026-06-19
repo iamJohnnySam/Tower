@@ -51,13 +51,7 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
         await ftp.Connect();
 
         progress?.Report($"Listing remote files in {remotePath}…");
-        var remoteItems = await ftp.GetListing(remotePath, FtpListOption.Recursive);
-        var prefix = remotePath.TrimEnd('/');
-        var remoteFiles = remoteItems
-            .Where(i => i.Type == FtpObjectType.File && i.FullName.StartsWith(prefix, StringComparison.Ordinal))
-            .ToDictionary(
-                i => NormalizePath(i.FullName[prefix.Length..]),
-                i => (size: i.Size, mtime: i.Modified.ToUniversalTime()));
+        var remoteFiles = await WalkRemoteAsync(ftp, remotePath, progress);
 
         progress?.Report($"Found {remoteFiles.Count} remote files. Counting local files…");
         var localFiles = Directory
@@ -129,6 +123,32 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
         }
 
         return (uploaded, deleted, failed);
+    }
+
+    private static async Task<Dictionary<string, (long size, DateTime mtime)>> WalkRemoteAsync(
+        AsyncFtpClient ftp, string rootPath, IProgress<string>? progress)
+    {
+        var files = new Dictionary<string, (long size, DateTime mtime)>();
+        var root  = rootPath.TrimEnd('/');
+        var queue = new Queue<string>();
+        queue.Enqueue(root);
+
+        while (queue.Count > 0)
+        {
+            var dir   = queue.Dequeue();
+            var items = await ftp.GetListing(dir);
+            foreach (var item in items)
+            {
+                if (item.Type == FtpObjectType.File)
+                    files["/" + item.FullName[root.Length..].TrimStart('/')] =
+                        (item.Size, item.Modified.ToUniversalTime());
+                else if (item.Type == FtpObjectType.Directory)
+                    queue.Enqueue(item.FullName);
+            }
+            progress?.Report($"Scanning {dir}… ({files.Count} files found)");
+        }
+
+        return files;
     }
 
     public static ScanResult Classify(
