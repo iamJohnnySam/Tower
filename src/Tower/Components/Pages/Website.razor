@@ -313,14 +313,19 @@
             InvokeAsync(StateHasChanged);
         });
 
+        int uploaded = 0, deleted = 0, failed = 0;
         try
         {
-            await FtpSvc.SyncAsync(_scanResult!.ToUpload, toDelete, progress);
+            (uploaded, deleted, failed) = await FtpSvc.SyncAsync(_scanResult!.ToUpload, toDelete, progress);
         }
         catch (Exception ex)
         {
             _syncLog += $"✗ {ex.Message}\n";
         }
+
+        _syncLog += $"\nDone: {uploaded} uploaded, {deleted} deleted" + (failed > 0 ? $", {failed} failed" : "") + "\n";
+        if (failed > 0)
+            _syncError = $"{failed} file(s) failed to sync — see log above";
 
         _state = SyncState.Done;
         await InvokeAsync(StateHasChanged);

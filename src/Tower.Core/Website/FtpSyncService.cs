@@ -20,6 +20,8 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
         try
         {
             using var ftp = new AsyncFtpClient(opts.FtpHost, user, pass);
+            ftp.Config.EncryptionMode = FtpEncryptionMode.Explicit;
+            ftp.Config.ValidateAnyCertificate = true;
             await ftp.Connect();
             await ftp.Disconnect();
             return (true, null);
@@ -40,13 +42,16 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
             throw new DirectoryNotFoundException($"Local path not found: {opts.LocalPath}");
 
         using var ftp = new AsyncFtpClient(opts.FtpHost, user, pass);
+        ftp.Config.EncryptionMode = FtpEncryptionMode.Explicit;
+        ftp.Config.ValidateAnyCertificate = true;
         await ftp.Connect();
 
         var remoteItems = await ftp.GetListing(opts.FtpRemotePath, FtpListOption.Recursive);
+        var prefix = opts.FtpRemotePath.TrimEnd('/');
         var remoteFiles = remoteItems
-            .Where(i => i.Type == FtpObjectType.File)
+            .Where(i => i.Type == FtpObjectType.File && i.FullName.StartsWith(prefix, StringComparison.Ordinal))
             .ToDictionary(
-                i => NormalizePath(i.FullName[opts.FtpRemotePath.TrimEnd('/').Length..]),
+                i => NormalizePath(i.FullName[prefix.Length..]),
                 i => (size: i.Size, mtime: i.Modified.ToUniversalTime()));
 
         var localFiles = Directory
@@ -58,7 +63,7 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
         return Classify(localFiles, remoteFiles);
     }
 
-    public async Task SyncAsync(
+    public async Task<(int uploaded, int deleted, int failed)> SyncAsync(
         IReadOnlyList<string> filesToUpload,
         IReadOnlyList<string> filesToDelete,
         IProgress<string> progress,
@@ -68,7 +73,11 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
         if (user is null || pass is null)
             throw new InvalidOperationException("FTP credentials not configured.");
 
+        int uploaded = 0, deleted = 0, failed = 0;
+
         using var ftp = new AsyncFtpClient(opts.FtpHost, user, pass);
+        ftp.Config.EncryptionMode = FtpEncryptionMode.Explicit;
+        ftp.Config.ValidateAnyCertificate = true;
         await ftp.Connect();
 
         foreach (var rel in filesToUpload)
@@ -80,11 +89,13 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
             {
                 await ftp.UploadFile(localFile, remotePath, FtpRemoteExists.Overwrite, createRemoteDir: true);
                 progress.Report($"↑ {rel}");
+                uploaded++;
             }
             catch (Exception ex)
             {
                 progress.Report($"✗ upload failed {rel}: {ex.Message}");
                 logger.LogWarning(ex, "Failed to upload {Path}", rel);
+                failed++;
             }
         }
 
@@ -96,13 +107,17 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
             {
                 await ftp.DeleteFile(remotePath);
                 progress.Report($"✗ deleted {rel}");
+                deleted++;
             }
             catch (Exception ex)
             {
                 progress.Report($"✗ delete failed {rel}: {ex.Message}");
                 logger.LogWarning(ex, "Failed to delete {Path}", rel);
+                failed++;
             }
         }
+
+        return (uploaded, deleted, failed);
     }
 
     public static ScanResult Classify(
