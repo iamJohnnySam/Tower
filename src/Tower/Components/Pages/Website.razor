@@ -1,0 +1,339 @@
+@page "/website"
+@using Tower.Core.Settings
+@using Tower.Core.Website
+@inject SettingsService SettingsSvc
+@inject FtpSyncService FtpSvc
+
+<PageTitle>Tower — Website</PageTitle>
+
+<div class="website-page">
+
+    <h1 class="page-title">Website</h1>
+
+    @* ── Credentials ─────────────────────────────────────────────────────────── *@
+    <section class="web-section">
+        <div class="atom-section-block">
+            <div class="atom-block-title">FTP Credentials</div>
+            <div class="config-form">
+
+                @* Username *@
+                <div class="config-row">
+                    <label class="config-label">FTP Username</label>
+                    <div class="config-control">
+                        @if (SettingsSvc.IsConfigured("website.ftp_user") && !_userReplacing)
+                        {
+                            <div class="key-configured-row">
+                                <span class="val-green configured-badge">&#10003; Configured</span>
+                                <button class="btn-secondary btn-sm" @onclick="() => _userReplacing = true">Replace</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="key-input-row">
+                                <input type="text" class="config-input config-input-wide"
+                                       placeholder="FTP username…"
+                                       @bind="_userValue" @bind:event="oninput" />
+                                <button class="btn btn-primary btn-sm"
+                                        disabled="@string.IsNullOrWhiteSpace(_userValue)"
+                                        @onclick="SaveUser">Save</button>
+                                @if (SettingsSvc.IsConfigured("website.ftp_user"))
+                                {
+                                    <button class="btn-secondary btn-sm"
+                                            @onclick="() => { _userReplacing = false; _userValue = null; }">Cancel</button>
+                                }
+                            </div>
+                            @if (_userSaved) { <span class="save-confirm">Saved &#10003;</span> }
+                        }
+                    </div>
+                </div>
+
+                @* Password *@
+                <div class="config-row">
+                    <label class="config-label">FTP Password</label>
+                    <div class="config-control">
+                        @if (SettingsSvc.IsConfigured("website.ftp_pass") && !_passReplacing)
+                        {
+                            <div class="key-configured-row">
+                                <span class="val-green configured-badge">&#10003; Configured</span>
+                                <button class="btn-secondary btn-sm" @onclick="() => _passReplacing = true">Replace</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="key-input-row">
+                                <input type="password" class="config-input config-input-wide"
+                                       placeholder="FTP password…"
+                                       @bind="_passValue" @bind:event="oninput" />
+                                <button class="btn btn-primary btn-sm"
+                                        disabled="@string.IsNullOrWhiteSpace(_passValue)"
+                                        @onclick="SavePass">Save</button>
+                                @if (SettingsSvc.IsConfigured("website.ftp_pass"))
+                                {
+                                    <button class="btn-secondary btn-sm"
+                                            @onclick="() => { _passReplacing = false; _passValue = null; }">Cancel</button>
+                                }
+                            </div>
+                            @if (_passSaved) { <span class="save-confirm">Saved &#10003;</span> }
+                        }
+                    </div>
+                </div>
+
+                @* Test connection (only when both configured) *@
+                @if (_credentialsConfigured)
+                {
+                    <div class="config-row">
+                        <label class="config-label"></label>
+                        <div class="config-control">
+                            <button class="btn-secondary btn-sm" @onclick="TestConnectionAsync" disabled="@_testing">
+                                @(_testing ? "Testing…" : "Test Connection")
+                            </button>
+                            @if (_testResult is not null)
+                            {
+                                <span class="@(_testOk ? "val-green" : "val-red") web-test-result">
+                                    @(_testOk ? "✓ Connected" : $"✗ {_testResult}")
+                                </span>
+                            }
+                        </div>
+                    </div>
+                }
+
+            </div>
+        </div>
+    </section>
+
+    @* ── Sync (only when credentials configured) ─────────────────────────────── *@
+    @if (_credentialsConfigured)
+    {
+        <section class="web-section">
+            <div class="atom-section-block">
+                <div class="atom-block-title">Sync</div>
+
+                @if (_syncError is not null)
+                {
+                    <div class="val-red web-error">✗ @_syncError</div>
+                }
+
+                @if (_state == SyncState.Idle)
+                {
+                    <button class="btn btn-primary" @onclick="ScanAsync">Scan</button>
+                }
+
+                else if (_state == SyncState.Scanning)
+                {
+                    <div class="web-notice">Scanning remote files…</div>
+                }
+
+                else if (_state == SyncState.Preview && _scanResult is not null)
+                {
+                    @* To upload *@
+                    <div class="web-group">
+                        <div class="web-group-header">
+                            <span class="web-group-label">To upload</span>
+                            <span class="web-group-count @(_scanResult.ToUpload.Count > 0 ? "val-green" : "")">
+                                @_scanResult.ToUpload.Count
+                            </span>
+                        </div>
+                        @if (_scanResult.ToUpload.Count > 0)
+                        {
+                            <button class="btn-link web-toggle" @onclick="() => _showUpload = !_showUpload">
+                                @(_showUpload ? "Hide files" : "Show files")
+                            </button>
+                            @if (_showUpload)
+                            {
+                                <div class="web-file-list">
+                                    @foreach (var f in _scanResult.ToUpload)
+                                    {
+                                        <div class="web-file-item">@f</div>
+                                    }
+                                </div>
+                            }
+                        }
+                    </div>
+
+                    @* Remote only *@
+                    <div class="web-group">
+                        <div class="web-group-header">
+                            <span class="web-group-label">Remote only</span>
+                            <span class="web-group-count @(_scanResult.RemoteOnly.Count > 0 ? "val-amber" : "")">
+                                @_scanResult.RemoteOnly.Count
+                            </span>
+                        </div>
+                        @if (_scanResult.RemoteOnly.Count > 0)
+                        {
+                            <div class="web-file-list">
+                                @foreach (var f in _scanResult.RemoteOnly)
+                                {
+                                    <label class="web-file-item web-file-check">
+                                        <input type="checkbox" @bind="_deleteChecked[f]" />
+                                        <span>@f</span>
+                                    </label>
+                                }
+                            </div>
+                            <div class="web-delete-hint">Check files above to delete them during sync.</div>
+                        }
+                    </div>
+
+                    @* Up to date *@
+                    <div class="web-group">
+                        <div class="web-group-header">
+                            <span class="web-group-label">Up to date</span>
+                            <span class="web-group-count">@_scanResult.UpToDate</span>
+                        </div>
+                    </div>
+
+                    <div class="web-sync-actions">
+                        <button class="btn btn-primary"
+                                disabled="@(_scanResult.ToUpload.Count == 0 && !_deleteChecked.Any(kv => kv.Value))"
+                                @onclick="DoSyncAsync">
+                            Sync now
+                        </button>
+                        <button class="btn-secondary btn-sm" @onclick="Reset">Scan again</button>
+                    </div>
+                }
+
+                else if (_state == SyncState.Syncing)
+                {
+                    <div class="web-notice">Syncing…</div>
+                    <pre class="maint-log web-sync-log">@_syncLog</pre>
+                }
+
+                else if (_state == SyncState.Done)
+                {
+                    <pre class="maint-log web-sync-log">@_syncLog</pre>
+                    <div class="web-sync-actions">
+                        <button class="btn-secondary btn-sm" @onclick="Reset">Scan again</button>
+                    </div>
+                }
+
+            </div>
+        </section>
+    }
+
+</div>
+
+@code {
+    enum SyncState { Idle, Scanning, Preview, Syncing, Done }
+
+    // Credentials
+    private string?  _userValue;
+    private string?  _passValue;
+    private bool     _userReplacing;
+    private bool     _passReplacing;
+    private bool     _userSaved;
+    private bool     _passSaved;
+    private bool     _credentialsConfigured;
+
+    // Test connection
+    private bool     _testing;
+    private string?  _testResult;
+    private bool     _testOk;
+
+    // Sync state
+    private SyncState              _state       = SyncState.Idle;
+    private ScanResult?            _scanResult;
+    private Dictionary<string, bool> _deleteChecked = new();
+    private bool                   _showUpload;
+    private string                 _syncLog     = "";
+    private string?                _syncError;
+
+    protected override void OnInitialized() => RefreshConfigState();
+
+    private void RefreshConfigState()
+    {
+        _credentialsConfigured = SettingsSvc.IsConfigured("website.ftp_user")
+                              && SettingsSvc.IsConfigured("website.ftp_pass");
+    }
+
+    private void SaveUser()
+    {
+        if (string.IsNullOrWhiteSpace(_userValue)) return;
+        SettingsSvc.Set("website.ftp_user", _userValue);
+        _userValue = null;
+        _userReplacing = false;
+        _userSaved = true;
+        RefreshConfigState();
+    }
+
+    private void SavePass()
+    {
+        if (string.IsNullOrWhiteSpace(_passValue)) return;
+        SettingsSvc.Set("website.ftp_pass", _passValue);
+        _passValue = null;
+        _passReplacing = false;
+        _passSaved = true;
+        RefreshConfigState();
+    }
+
+    private async Task TestConnectionAsync()
+    {
+        _testing = true;
+        _testResult = null;
+        await InvokeAsync(StateHasChanged);
+
+        var (ok, err) = await FtpSvc.TestConnectionAsync();
+        _testOk     = ok;
+        _testResult = ok ? "Connected" : err;
+        _testing    = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ScanAsync()
+    {
+        _state     = SyncState.Scanning;
+        _syncError = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            _scanResult   = await FtpSvc.ScanAsync();
+            _deleteChecked = _scanResult.RemoteOnly.ToDictionary(f => f, _ => false);
+            _showUpload   = false;
+            _state        = SyncState.Preview;
+        }
+        catch (Exception ex)
+        {
+            _syncError = ex.Message;
+            _state     = SyncState.Idle;
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task DoSyncAsync()
+    {
+        var toDelete = _deleteChecked.Where(kv => kv.Value).Select(kv => kv.Key).ToList();
+
+        _state   = SyncState.Syncing;
+        _syncLog = "";
+        await InvokeAsync(StateHasChanged);
+
+        var progress = new Progress<string>(line =>
+        {
+            _syncLog += line + "\n";
+            InvokeAsync(StateHasChanged);
+        });
+
+        try
+        {
+            await FtpSvc.SyncAsync(_scanResult!.ToUpload, toDelete, progress);
+        }
+        catch (Exception ex)
+        {
+            _syncLog += $"✗ {ex.Message}\n";
+        }
+
+        _state = SyncState.Done;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void Reset()
+    {
+        _state        = SyncState.Idle;
+        _scanResult   = null;
+        _deleteChecked = new();
+        _showUpload   = false;
+        _syncLog      = "";
+        _syncError    = null;
+        StateHasChanged();
+    }
+}

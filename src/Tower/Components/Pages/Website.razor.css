@@ -1,0 +1,125 @@
+.website-page {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    max-width: 900px;
+}
+
+.web-section {
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Sync groups ─────────────────────────────────────────────────────────── */
+
+.web-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.web-group:last-of-type {
+    border-bottom: none;
+}
+
+.web-group-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.web-group-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.web-group-count {
+    font-size: 0.85rem;
+    font-weight: 700;
+    font-family: var(--mono);
+    color: var(--muted);
+}
+
+.web-toggle {
+    font-size: 0.78rem;
+    color: var(--accent);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    align-self: flex-start;
+}
+
+.web-toggle:hover { text-decoration: underline; }
+
+/* ── File list ───────────────────────────────────────────────────────────── */
+
+.web-file-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 260px;
+    overflow-y: auto;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    padding: 0.4rem 0.6rem;
+}
+
+.web-file-item {
+    font-size: 0.78rem;
+    font-family: var(--mono);
+    color: var(--text);
+    line-height: 1.6;
+    white-space: nowrap;
+}
+
+.web-file-check {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+
+.web-file-check:hover { color: var(--text-strong); }
+
+.web-delete-hint {
+    font-size: 0.75rem;
+    color: var(--muted);
+}
+
+/* ── Actions + misc ──────────────────────────────────────────────────────── */
+
+.web-sync-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding-top: 0.75rem;
+}
+
+.web-notice {
+    font-size: 0.82rem;
+    color: var(--muted);
+    padding: 0.5rem 0;
+}
+
+.web-sync-log {
+    max-height: 320px;
+    overflow-y: auto;
+    margin-top: 0.5rem;
+}
+
+.web-error {
+    font-size: 0.82rem;
+    margin-bottom: 0.75rem;
+}
+
+.web-test-result {
+    font-size: 0.82rem;
+    margin-left: 0.75rem;
+}
