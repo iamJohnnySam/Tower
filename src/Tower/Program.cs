@@ -49,6 +49,7 @@ builder.Services.AddSingleton(new WebsiteOptions
     FtpHost       = towerCfg.Website.FtpHost,
     FtpRemotePath = towerCfg.Website.FtpRemotePath,
 });
+builder.Services.AddScoped<FtpSyncService>();
 
 // ── Tuya ─────────────────────────────────────────────────────────────────────
 builder.Services.AddHttpClient<TuyaServiceClient>(c =>
