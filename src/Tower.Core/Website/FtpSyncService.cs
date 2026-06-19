@@ -135,8 +135,23 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
 
         while (queue.Count > 0)
         {
-            var dir   = queue.Dequeue();
-            var items = await ftp.GetListing(dir);
+            var dir = queue.Dequeue();
+            progress?.Report($"Scanning {dir}… ({files.Count} files found)");
+
+            FtpListItem[] items;
+            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20)))
+            {
+                try
+                {
+                    items = await ftp.GetListing(dir, token: cts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    progress?.Report($"⚠ Timeout listing {dir} — skipped");
+                    continue;
+                }
+            }
+
             foreach (var item in items)
             {
                 if (item.Type == FtpObjectType.File)
@@ -145,7 +160,6 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
                 else if (item.Type == FtpObjectType.Directory)
                     queue.Enqueue(item.FullName);
             }
-            progress?.Report($"Scanning {dir}… ({files.Count} files found)");
         }
 
         return files;
