@@ -78,6 +78,18 @@
                     </div>
                 </div>
 
+                @* TLS certificate validation *@
+                <div class="config-row">
+                    <label class="config-label">TLS Certificates</label>
+                    <div class="config-control">
+                        <label class="web-cert-toggle">
+                            <input type="checkbox" checked="@_acceptAnyCert" @onchange="OnCertToggled" />
+                            <span>Accept self-signed or unverified certificates</span>
+                        </label>
+                        <span class="config-hint">Enable if Test Connection fails with a certificate error. Only use with hosts you trust.</span>
+                    </div>
+                </div>
+
                 @* Test connection (only when both configured) *@
                 @if (_credentialsConfigured)
                 {
@@ -223,6 +235,9 @@
     private bool     _passSaved;
     private bool     _credentialsConfigured;
 
+    // TLS cert toggle
+    private bool     _acceptAnyCert;
+
     // Test connection
     private bool     _testing;
     private string?  _testResult;
@@ -236,12 +251,22 @@
     private string                 _syncLog     = "";
     private string?                _syncError;
 
-    protected override void OnInitialized() => RefreshConfigState();
+    protected override void OnInitialized()
+    {
+        _acceptAnyCert = SettingsSvc.Get("website.ftp_accept_any_cert") == "true";
+        RefreshConfigState();
+    }
 
     private void RefreshConfigState()
     {
         _credentialsConfigured = SettingsSvc.IsConfigured("website.ftp_user")
                               && SettingsSvc.IsConfigured("website.ftp_pass");
+    }
+
+    private void OnCertToggled(ChangeEventArgs e)
+    {
+        _acceptAnyCert = (bool)(e.Value ?? false);
+        SettingsSvc.Set("website.ftp_accept_any_cert", _acceptAnyCert ? "true" : null);
     }
 
     private void SaveUser()

@@ -123,3 +123,14 @@
     font-size: 0.82rem;
     margin-left: 0.75rem;
 }
+
+.web-cert-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--text);
+}
+
+.web-cert-toggle:hover { color: var(--text-strong); }

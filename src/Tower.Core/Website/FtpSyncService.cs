@@ -21,7 +21,7 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
         {
             using var ftp = new AsyncFtpClient(opts.FtpHost, user, pass);
             ftp.Config.EncryptionMode = FtpEncryptionMode.Explicit;
-            ftp.Config.ValidateAnyCertificate = true;
+            ftp.Config.ValidateAnyCertificate = GetAcceptAnyCert();
             await ftp.Connect();
             await ftp.Disconnect();
             return (true, null);
@@ -43,7 +43,7 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
 
         using var ftp = new AsyncFtpClient(opts.FtpHost, user, pass);
         ftp.Config.EncryptionMode = FtpEncryptionMode.Explicit;
-        ftp.Config.ValidateAnyCertificate = true;
+        ftp.Config.ValidateAnyCertificate = GetAcceptAnyCert();
         await ftp.Connect();
 
         var remoteItems = await ftp.GetListing(opts.FtpRemotePath, FtpListOption.Recursive);
@@ -77,7 +77,7 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
 
         using var ftp = new AsyncFtpClient(opts.FtpHost, user, pass);
         ftp.Config.EncryptionMode = FtpEncryptionMode.Explicit;
-        ftp.Config.ValidateAnyCertificate = true;
+        ftp.Config.ValidateAnyCertificate = GetAcceptAnyCert();
         await ftp.Connect();
 
         foreach (var rel in filesToUpload)
@@ -150,6 +150,9 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
 
     private (string? user, string? pass) GetCredentials() =>
         (settings.Get("website.ftp_user"), settings.Get("website.ftp_pass"));
+
+    private bool GetAcceptAnyCert() =>
+        settings.Get("website.ftp_accept_any_cert") == "true";
 
     private static string NormalizePath(string path) =>
         "/" + path.TrimStart('/').Replace('\\', '/');
