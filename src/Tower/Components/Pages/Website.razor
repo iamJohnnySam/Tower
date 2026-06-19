@@ -78,6 +78,40 @@
                     </div>
                 </div>
 
+                @* Local path *@
+                <div class="config-row">
+                    <label class="config-label">Local Path</label>
+                    <div class="config-control">
+                        <div class="key-input-row">
+                            <input type="text" class="config-input config-input-wide"
+                                   placeholder="@FtpSvc.GetLocalPath()"
+                                   @bind="_localPathValue" @bind:event="oninput" />
+                            <button class="btn btn-primary btn-sm"
+                                    disabled="@string.IsNullOrWhiteSpace(_localPathValue)"
+                                    @onclick="SaveLocalPath">Save</button>
+                            @if (_localPathSaved) { <span class="save-confirm">Saved &#10003;</span> }
+                        </div>
+                        <span class="config-hint">Current: @FtpSvc.GetLocalPath()</span>
+                    </div>
+                </div>
+
+                @* Remote path *@
+                <div class="config-row">
+                    <label class="config-label">Remote Path</label>
+                    <div class="config-control">
+                        <div class="key-input-row">
+                            <input type="text" class="config-input config-input-wide"
+                                   placeholder="@FtpSvc.GetRemotePath()"
+                                   @bind="_remotePathValue" @bind:event="oninput" />
+                            <button class="btn btn-primary btn-sm"
+                                    disabled="@string.IsNullOrWhiteSpace(_remotePathValue)"
+                                    @onclick="SaveRemotePath">Save</button>
+                            @if (_remotePathSaved) { <span class="save-confirm">Saved &#10003;</span> }
+                        </div>
+                        <span class="config-hint">Current: @FtpSvc.GetRemotePath()</span>
+                    </div>
+                </div>
+
                 @* TLS certificate validation *@
                 <div class="config-row">
                     <label class="config-label">TLS Certificates</label>
@@ -132,7 +166,7 @@
 
                 else if (_state == SyncState.Scanning)
                 {
-                    <div class="web-notice">Scanning remote files…</div>
+                    <div class="web-notice">@_scanStatus</div>
                 }
 
                 else if (_state == SyncState.Preview && _scanResult is not null)
@@ -235,6 +269,12 @@
     private bool     _passSaved;
     private bool     _credentialsConfigured;
 
+    // Path config
+    private string?  _localPathValue;
+    private string?  _remotePathValue;
+    private bool     _localPathSaved;
+    private bool     _remotePathSaved;
+
     // TLS cert toggle
     private bool     _acceptAnyCert;
 
@@ -244,6 +284,7 @@
     private bool     _testOk;
 
     // Sync state
+    private string                 _scanStatus  = "Scanning…";
     private SyncState              _state       = SyncState.Idle;
     private ScanResult?            _scanResult;
     private Dictionary<string, bool> _deleteChecked = new();
@@ -261,6 +302,22 @@
     {
         _credentialsConfigured = SettingsSvc.IsConfigured("website.ftp_user")
                               && SettingsSvc.IsConfigured("website.ftp_pass");
+    }
+
+    private void SaveLocalPath()
+    {
+        if (string.IsNullOrWhiteSpace(_localPathValue)) return;
+        SettingsSvc.Set("website.local_path", _localPathValue.TrimEnd('/'));
+        _localPathValue = null;
+        _localPathSaved = true;
+    }
+
+    private void SaveRemotePath()
+    {
+        if (string.IsNullOrWhiteSpace(_remotePathValue)) return;
+        SettingsSvc.Set("website.remote_path", _remotePathValue.TrimEnd('/'));
+        _remotePathValue = null;
+        _remotePathSaved = true;
     }
 
     private void OnCertToggled(ChangeEventArgs e)
@@ -304,13 +361,20 @@
 
     private async Task ScanAsync()
     {
-        _state     = SyncState.Scanning;
-        _syncError = null;
+        _state      = SyncState.Scanning;
+        _scanStatus = "Connecting to FTP…";
+        _syncError  = null;
         await InvokeAsync(StateHasChanged);
+
+        var scanProgress = new Progress<string>(msg =>
+        {
+            _scanStatus = msg;
+            InvokeAsync(StateHasChanged);
+        });
 
         try
         {
-            _scanResult   = await FtpSvc.ScanAsync();
+            _scanResult   = await FtpSvc.ScanAsync(scanProgress);
             _deleteChecked = _scanResult.RemoteOnly.ToDictionary(f => f, _ => false);
             _showUpload   = false;
             _state        = SyncState.Preview;

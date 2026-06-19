@@ -32,34 +32,41 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
         }
     }
 
-    public async Task<ScanResult> ScanAsync()
+    public async Task<ScanResult> ScanAsync(IProgress<string>? progress = null)
     {
         var (user, pass) = GetCredentials();
         if (user is null || pass is null)
             throw new InvalidOperationException("FTP credentials not configured.");
 
-        if (!Directory.Exists(opts.LocalPath))
-            throw new DirectoryNotFoundException($"Local path not found: {opts.LocalPath}");
+        var localPath  = GetLocalPath();
+        var remotePath = GetRemotePath();
 
+        if (!Directory.Exists(localPath))
+            throw new DirectoryNotFoundException($"Local path not found: {localPath}");
+
+        progress?.Report("Connecting to FTP…");
         using var ftp = new AsyncFtpClient(opts.FtpHost, user, pass);
         ftp.Config.EncryptionMode = FtpEncryptionMode.Explicit;
         ftp.Config.ValidateAnyCertificate = GetAcceptAnyCert();
         await ftp.Connect();
 
-        var remoteItems = await ftp.GetListing(opts.FtpRemotePath, FtpListOption.Recursive);
-        var prefix = opts.FtpRemotePath.TrimEnd('/');
+        progress?.Report($"Listing remote files in {remotePath}…");
+        var remoteItems = await ftp.GetListing(remotePath, FtpListOption.Recursive);
+        var prefix = remotePath.TrimEnd('/');
         var remoteFiles = remoteItems
             .Where(i => i.Type == FtpObjectType.File && i.FullName.StartsWith(prefix, StringComparison.Ordinal))
             .ToDictionary(
                 i => NormalizePath(i.FullName[prefix.Length..]),
                 i => (size: i.Size, mtime: i.Modified.ToUniversalTime()));
 
+        progress?.Report($"Found {remoteFiles.Count} remote files. Counting local files…");
         var localFiles = Directory
-            .GetFiles(opts.LocalPath, "*", SearchOption.AllDirectories)
+            .GetFiles(localPath, "*", SearchOption.AllDirectories)
             .ToDictionary(
-                f => NormalizePath(f[opts.LocalPath.TrimEnd('/').Length..]),
+                f => NormalizePath(f[localPath.TrimEnd('/').Length..]),
                 f => { var fi = new FileInfo(f); return (size: fi.Length, mtime: fi.LastWriteTimeUtc); });
 
+        progress?.Report($"Comparing {localFiles.Count} local vs {remoteFiles.Count} remote files…");
         return Classify(localFiles, remoteFiles);
     }
 
@@ -74,20 +81,24 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
             throw new InvalidOperationException("FTP credentials not configured.");
 
         int uploaded = 0, deleted = 0, failed = 0;
+        var localPath  = GetLocalPath();
+        var remotePath = GetRemotePath();
 
         using var ftp = new AsyncFtpClient(opts.FtpHost, user, pass);
         ftp.Config.EncryptionMode = FtpEncryptionMode.Explicit;
         ftp.Config.ValidateAnyCertificate = GetAcceptAnyCert();
         await ftp.Connect();
 
+        var remoteBase = remotePath.TrimEnd('/');
+
         foreach (var rel in filesToUpload)
         {
             ct.ThrowIfCancellationRequested();
-            var localFile  = Path.Combine(opts.LocalPath.TrimEnd('/'), rel.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
-            var remotePath = opts.FtpRemotePath.TrimEnd('/') + rel;
+            var localFile  = Path.Combine(localPath.TrimEnd('/'), rel.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+            var remoteFile = remoteBase + rel;
             try
             {
-                await ftp.UploadFile(localFile, remotePath, FtpRemoteExists.Overwrite, createRemoteDir: true);
+                await ftp.UploadFile(localFile, remoteFile, FtpRemoteExists.Overwrite, createRemoteDir: true);
                 progress.Report($"↑ {rel}");
                 uploaded++;
             }
@@ -102,11 +113,11 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
         foreach (var rel in filesToDelete)
         {
             ct.ThrowIfCancellationRequested();
-            var remotePath = opts.FtpRemotePath.TrimEnd('/') + rel;
+            var remoteFile = remoteBase + rel;
             try
             {
-                await ftp.DeleteFile(remotePath);
-                progress.Report($"✗ deleted {rel}");
+                await ftp.DeleteFile(remoteFile);
+                progress.Report($"− deleted {rel}");
                 deleted++;
             }
             catch (Exception ex)
@@ -150,6 +161,9 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
 
     private (string? user, string? pass) GetCredentials() =>
         (settings.Get("website.ftp_user"), settings.Get("website.ftp_pass"));
+
+    public string GetLocalPath()  => settings.Get("website.local_path")  ?? opts.LocalPath;
+    public string GetRemotePath() => settings.Get("website.remote_path") ?? opts.FtpRemotePath;
 
     private bool GetAcceptAnyCert() =>
         settings.Get("website.ftp_accept_any_cert") == "true";
