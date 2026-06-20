@@ -124,6 +124,15 @@
     margin-left: 0.75rem;
 }
 
+.web-exclude-textarea {
+    width: 100%;
+    min-height: 80px;
+    resize: vertical;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    margin-bottom: 0.4rem;
+}
+
 .web-cert-toggle {
     display: flex;
     align-items: center;

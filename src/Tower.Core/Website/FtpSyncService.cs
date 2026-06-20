@@ -58,6 +58,13 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
                 f => NormalizePath(f[localPath.TrimEnd('/').Length..]),
                 f => { var fi = new FileInfo(f); return (size: fi.Length, mtime: fi.LastWriteTimeUtc); });
 
+        var excludePatterns = GetExcludePatterns();
+        if (excludePatterns.Length > 0)
+        {
+            localFiles  = localFiles .Where(kv => !IsExcluded(kv.Key, excludePatterns)).ToDictionary(kv => kv.Key, kv => kv.Value);
+            remoteFiles = remoteFiles.Where(kv => !IsExcluded(kv.Key, excludePatterns)).ToDictionary(kv => kv.Key, kv => kv.Value);
+        }
+
         progress?.Report($"Comparing {localFiles.Count} local vs {remoteFiles.Count} remote files…");
         return Classify(localFiles, remoteFiles);
     }
@@ -242,6 +249,31 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
         remoteOnly.Sort();
 
         return new ScanResult(toUpload, remoteOnly, upToDate);
+    }
+
+    private string[] GetExcludePatterns()
+    {
+        var raw = settings.Get("website.exclude_patterns");
+        if (string.IsNullOrWhiteSpace(raw)) return [];
+        return raw.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                  .Where(l => !l.StartsWith('#'))
+                  .ToArray();
+    }
+
+    private static bool IsExcluded(string relativePath, string[] patterns)
+    {
+        foreach (var p in patterns)
+        {
+            if (p.StartsWith('/'))
+            {
+                if (relativePath.StartsWith(p, StringComparison.OrdinalIgnoreCase) ||
+                    relativePath.StartsWith(p.TrimEnd('/') + "/", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            else if (relativePath.Contains(p, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 
     private (string? user, string? pass) GetCredentials() =>

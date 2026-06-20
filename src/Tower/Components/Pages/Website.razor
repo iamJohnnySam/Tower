@@ -112,6 +112,21 @@
                     </div>
                 </div>
 
+                @* Exclude patterns *@
+                <div class="config-row">
+                    <label class="config-label">Exclude Patterns</label>
+                    <div class="config-control">
+                        <textarea class="config-input web-exclude-textarea"
+                                  placeholder="# one pattern per line&#10;graphify&#10;/tools/tax-calculator"
+                                  @bind="_excludePatterns"></textarea>
+                        <div class="key-input-row">
+                            <button class="btn btn-primary btn-sm" @onclick="SaveExcludePatterns">Save</button>
+                            @if (_excludePatternsSaved) { <span class="save-confirm">Saved &#10003;</span> }
+                        </div>
+                        <span class="config-hint">One pattern per line. A leading / anchors to the path root; otherwise matches anywhere in the path. Lines starting with # are ignored.</span>
+                    </div>
+                </div>
+
                 @* TLS certificate validation *@
                 <div class="config-row">
                     <label class="config-label">TLS Certificates</label>
@@ -275,6 +290,10 @@
     private bool     _localPathSaved;
     private bool     _remotePathSaved;
 
+    // Exclude patterns
+    private string?  _excludePatterns;
+    private bool     _excludePatternsSaved;
+
     // TLS cert toggle
     private bool     _acceptAnyCert;
 
@@ -294,7 +313,8 @@
 
     protected override void OnInitialized()
     {
-        _acceptAnyCert = SettingsSvc.Get("website.ftp_accept_any_cert") == "true";
+        _acceptAnyCert    = SettingsSvc.Get("website.ftp_accept_any_cert") == "true";
+        _excludePatterns  = SettingsSvc.Get("website.exclude_patterns");
         RefreshConfigState();
     }
 
@@ -302,6 +322,13 @@
     {
         _credentialsConfigured = SettingsSvc.IsConfigured("website.ftp_user")
                               && SettingsSvc.IsConfigured("website.ftp_pass");
+    }
+
+    private void SaveExcludePatterns()
+    {
+        SettingsSvc.Set("website.exclude_patterns",
+            string.IsNullOrWhiteSpace(_excludePatterns) ? null : _excludePatterns.Trim());
+        _excludePatternsSaved = true;
     }
 
     private void SaveLocalPath()
