@@ -99,6 +99,7 @@ builder.Services.AddHostedService<SmartWorker>();
 builder.Services.AddHostedService<DiskUsageWorker>();
 builder.Services.AddHostedService<CpuProfileRecorder>();
 builder.Services.AddHostedService<MaintenanceScheduler>();
+builder.Services.AddHostedService<ConversionScheduler>();
 builder.Services.AddHostedService<SizeMonitorWorker>();
 
 // ── Telegram ──────────────────────────────────────────────────────────────────
@@ -151,6 +152,11 @@ using (var scope = app.Services.CreateScope())
         Console.Error.WriteLine($"[key-migration] {ex.Message}");
     }
 }
+
+// Wire Telegram callbacks for conversion pipeline
+var convSvc = app.Services.GetRequiredService<ConversionService>();
+var telegramHub = app.Services.GetRequiredService<TelegramHub>();
+convSvc.RegisterCallbacks(telegramHub);
 
 // ── HTTP pipeline ─────────────────────────────────────────────────────────────
 if (!app.Environment.IsDevelopment())
