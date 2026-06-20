@@ -112,6 +112,7 @@ builder.Services.AddHostedService<TelegramPollWorker>();
 // ── Todo ─────────────────────────────────────────────────────────────────────
 builder.Services.AddScoped<TodoService>();
 builder.Services.AddSingleton<TodoTelegramHandler>();
+builder.Services.AddHostedService<TodoReminderWorker>();
 
 // ── gRPC ─────────────────────────────────────────────────────────────────────
 builder.Services.AddGrpc();
