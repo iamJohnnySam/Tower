@@ -4,10 +4,19 @@ using Tower.Core.Settings;
 
 namespace Tower.Core.Website;
 
+public record FileCompareResult(
+    string   Path,
+    long     LocalSize,
+    long?    RemoteSize,
+    DateTime LocalMtime,
+    DateTime? RemoteMtime,
+    string   Reason
+);
+
 public record ScanResult(
-    List<string> ToUpload,
-    List<string> RemoteOnly,
-    int UpToDate
+    List<FileCompareResult> ToUpload,
+    List<string>            RemoteOnly,
+    int                     UpToDate
 );
 
 public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogger<FtpSyncService> logger)
@@ -44,11 +53,11 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
         if (!Directory.Exists(localPath))
             throw new DirectoryNotFoundException($"Local path not found: {localPath}");
 
+        // Read all settings before any async work so DbContext is only touched synchronously
+        // on the Blazor circuit thread, avoiding races with re-render callbacks.
+        var excludePatterns = GetExcludePatterns();
+
         progress?.Report("Connecting to FTP…");
-        // Task.Run ensures the entire walk (including all Task.WhenAny awaits) runs on the
-        // thread pool with no captured Blazor circuit synchronization context. Without this,
-        // the circuit thread can be blocked by synchronous socket work inside FluentFTP,
-        // preventing the 25-second timeout from ever landing.
         var remoteFiles = await Task.Run(() => WalkRemoteAsync(opts.FtpHost, user, pass, GetAcceptAnyCert(), remotePath, progress));
 
         progress?.Report($"Found {remoteFiles.Count} remote files. Counting local files…");
@@ -58,7 +67,6 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
                 f => NormalizePath(f[localPath.TrimEnd('/').Length..]),
                 f => { var fi = new FileInfo(f); return (size: fi.Length, mtime: fi.LastWriteTimeUtc); });
 
-        var excludePatterns = GetExcludePatterns();
         if (excludePatterns.Length > 0)
         {
             localFiles  = localFiles .Where(kv => !IsExcluded(kv.Key, excludePatterns)).ToDictionary(kv => kv.Key, kv => kv.Value);
@@ -227,29 +235,45 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
         Dictionary<string, (long size, DateTime mtime)> localFiles,
         Dictionary<string, (long size, DateTime mtime)> remoteFiles)
     {
-        var toUpload   = new List<string>();
+        var toUpload   = new List<FileCompareResult>();
         var remoteOnly = new List<string>();
         var upToDate   = 0;
 
         foreach (var (path, local) in localFiles)
         {
             if (!remoteFiles.TryGetValue(path, out var remote))
-                toUpload.Add(path);
-            else if (local.size != remote.size || local.mtime > remote.mtime)
-                toUpload.Add(path);
+            {
+                toUpload.Add(new FileCompareResult(path, local.size, null, local.mtime, null, "New"));
+            }
+            else if (local.size != remote.size)
+            {
+                toUpload.Add(new FileCompareResult(path, local.size, remote.size, local.mtime, remote.mtime, "Size differs"));
+            }
             else
-                upToDate++;
+            {
+                // FTP returns whole-second precision; truncate both sides before comparing
+                // to avoid false positives from sub-second local timestamps.
+                var localSec  = TruncateToSeconds(local.mtime);
+                var remoteSec = TruncateToSeconds(remote.mtime);
+                if (localSec > remoteSec)
+                    toUpload.Add(new FileCompareResult(path, local.size, remote.size, local.mtime, remote.mtime, "Local newer"));
+                else
+                    upToDate++;
+            }
         }
 
         foreach (var path in remoteFiles.Keys)
             if (!localFiles.ContainsKey(path))
                 remoteOnly.Add(path);
 
-        toUpload.Sort();
+        toUpload.Sort((a, b) => string.Compare(a.Path, b.Path, StringComparison.Ordinal));
         remoteOnly.Sort();
 
         return new ScanResult(toUpload, remoteOnly, upToDate);
     }
+
+    private static DateTime TruncateToSeconds(DateTime dt) =>
+        new(dt.Ticks / TimeSpan.TicksPerSecond * TimeSpan.TicksPerSecond, DateTimeKind.Utc);
 
     private string[] GetExcludePatterns()
     {

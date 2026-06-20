@@ -1,6 +1,7 @@
 @page "/website"
 @using Tower.Core.Settings
 @using Tower.Core.Website
+@using System.Linq
 @inject SettingsService SettingsSvc
 @inject FtpSyncService FtpSvc
 
@@ -196,18 +197,28 @@
                         </div>
                         @if (_scanResult.ToUpload.Count > 0)
                         {
-                            <button class="btn-link web-toggle" @onclick="() => _showUpload = !_showUpload">
-                                @(_showUpload ? "Hide files" : "Show files")
-                            </button>
-                            @if (_showUpload)
-                            {
-                                <div class="web-file-list">
+                            <div class="web-compare-scroll">
+                                <div class="web-compare-grid">
+                                    <div class="web-compare-header">
+                                        <span>File</span><span>Reason</span><span>Local (UTC)</span><span>Remote (UTC)</span>
+                                    </div>
                                     @foreach (var f in _scanResult.ToUpload)
                                     {
-                                        <div class="web-file-item">@f</div>
+                                        <div class="web-compare-row">
+                                            <span class="web-compare-path">@f.Path</span>
+                                            <span class="web-compare-reason">@f.Reason</span>
+                                            <span class="web-compare-cell">
+                                                <span>@FormatSize(f.LocalSize)</span>
+                                                <span class="web-compare-time"> · @f.LocalMtime.ToString("MM-dd HH:mm:ss")</span>
+                                            </span>
+                                            <span class="web-compare-cell">
+                                                <span>@(f.RemoteSize.HasValue ? FormatSize(f.RemoteSize.Value) : "—")</span>
+                                                <span class="web-compare-time"> · @(f.RemoteMtime?.ToString("MM-dd HH:mm:ss") ?? "")</span>
+                                            </span>
+                                        </div>
                                     }
                                 </div>
-                            }
+                            </div>
                         }
                     </div>
 
@@ -307,7 +318,6 @@
     private SyncState              _state       = SyncState.Idle;
     private ScanResult?            _scanResult;
     private Dictionary<string, bool> _deleteChecked = new();
-    private bool                   _showUpload;
     private string                 _syncLog     = "";
     private string?                _syncError;
 
@@ -401,10 +411,9 @@
 
         try
         {
-            _scanResult   = await FtpSvc.ScanAsync(scanProgress);
+            _scanResult    = await FtpSvc.ScanAsync(scanProgress);
             _deleteChecked = _scanResult.RemoteOnly.ToDictionary(f => f, _ => false);
-            _showUpload   = false;
-            _state        = SyncState.Preview;
+            _state         = SyncState.Preview;
         }
         catch (Exception ex)
         {
@@ -432,7 +441,8 @@
         int uploaded = 0, deleted = 0, failed = 0;
         try
         {
-            (uploaded, deleted, failed) = await FtpSvc.SyncAsync(_scanResult!.ToUpload, toDelete, progress);
+            (uploaded, deleted, failed) = await FtpSvc.SyncAsync(
+            _scanResult!.ToUpload.Select(f => f.Path).ToList(), toDelete, progress);
         }
         catch (Exception ex)
         {
@@ -447,12 +457,16 @@
         await InvokeAsync(StateHasChanged);
     }
 
+    private static string FormatSize(long bytes) =>
+        bytes >= 1024 * 1024 ? $"{bytes / (1024.0 * 1024):F1} MB" :
+        bytes >= 1024         ? $"{bytes / 1024.0:F1} KB"          :
+                                $"{bytes} B";
+
     private void Reset()
     {
         _state        = SyncState.Idle;
-        _scanResult   = null;
+        _scanResult    = null;
         _deleteChecked = new();
-        _showUpload   = false;
         _syncLog      = "";
         _syncError    = null;
         StateHasChanged();

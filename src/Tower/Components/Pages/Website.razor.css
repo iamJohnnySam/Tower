@@ -124,6 +124,71 @@
     margin-left: 0.75rem;
 }
 
+/* ── Upload comparison grid ──────────────────────────────────────────────── */
+
+.web-compare-scroll {
+    max-height: 320px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    margin-top: 0.35rem;
+}
+
+.web-compare-grid {
+    display: grid;
+    grid-template-columns: 2fr 0.7fr 1.1fr 1.1fr;
+    font-size: 0.76rem;
+    font-family: var(--mono);
+    min-width: 560px;
+}
+
+.web-compare-header {
+    display: contents;
+}
+
+.web-compare-header > span {
+    position: sticky;
+    top: 0;
+    background: var(--surface-2);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    padding: 0.3rem 0.6rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.web-compare-row {
+    display: contents;
+}
+
+.web-compare-row > span {
+    padding: 0.25rem 0.6rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    align-self: center;
+}
+
+.web-compare-row:last-child > span { border-bottom: none; }
+
+.web-compare-path {
+    word-break: break-all;
+    white-space: normal;
+}
+
+.web-compare-reason {
+    color: var(--muted);
+    font-style: italic;
+}
+
+.web-compare-cell { line-height: 1.5; }
+
+.web-compare-time {
+    font-size: 0.7rem;
+    color: var(--muted);
+}
+
 .web-exclude-textarea {
     width: 100%;
     min-height: 80px;
