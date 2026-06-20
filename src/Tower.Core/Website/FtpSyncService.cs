@@ -136,26 +136,32 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
             var dir = queue.Dequeue();
             progress?.Report($"Scanning {dir}… ({files.Count} files found)");
 
-            // Task.WhenAny + Dispose is the only reliable way to interrupt a hung socket read.
-            // CancellationToken alone doesn't unblock blocking FTP data-channel reads.
-            var listTask    = ftp.GetListing(dir);
-            var timeoutTask = Task.Delay(TimeSpan.FromSeconds(20));
-
-            if (await Task.WhenAny(listTask, timeoutTask) == timeoutTask)
+            // Task.Run moves GetListing onto a thread-pool thread so Task.WhenAny can fire
+            // even if FluentFTP does synchronous work before its first internal await (which
+            // would otherwise pin the Blazor circuit thread and prevent the timeout from landing).
+            // Disposing the client closes the underlying socket, which unblocks the orphaned task.
+            var listTask = Task.Run(async () => await ftp.GetListing(dir));
+            if (await Task.WhenAny(listTask, Task.Delay(TimeSpan.FromSeconds(25))) != listTask)
             {
                 progress?.Report($"⚠ Timeout listing {dir} — skipped, reconnecting…");
                 ftp.Dispose();
-                // Suppress the now-failing background task to avoid unobserved exception noise.
                 _ = listTask.ContinueWith(_ => { }, TaskContinuationOptions.None);
                 ftp = CreateFtpClient(host, user, pass, acceptAnyCert);
                 try   { await ftp.Connect(); }
-                catch { progress?.Report("⚠ Reconnect failed — scan aborted"); break; }
+                catch { progress?.Report("⚠ Reconnect failed — scan aborted"); return files; }
                 continue;
             }
 
             FtpListItem[] items;
             try   { items = await listTask; }
-            catch (Exception ex) { progress?.Report($"⚠ Error listing {dir}: {ex.Message} — skipped"); continue; }
+            catch (Exception ex)
+            {
+                progress?.Report($"⚠ Error listing {dir}: {ex.Message} — skipped, reconnecting…");
+                try { ftp.Dispose(); } catch { }
+                ftp = CreateFtpClient(host, user, pass, acceptAnyCert);
+                try { await ftp.Connect(); } catch { return files; }
+                continue;
+            }
 
             foreach (var item in items)
             {
@@ -174,8 +180,10 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
     private static AsyncFtpClient CreateFtpClient(string host, string user, string pass, bool acceptAnyCert)
     {
         var ftp = new AsyncFtpClient(host, user, pass);
-        ftp.Config.EncryptionMode      = FtpEncryptionMode.Explicit;
-        ftp.Config.ValidateAnyCertificate = acceptAnyCert;
+        ftp.Config.EncryptionMode            = FtpEncryptionMode.Explicit;
+        ftp.Config.ValidateAnyCertificate    = acceptAnyCert;
+        ftp.Config.ReadTimeout               = 20_000;
+        ftp.Config.DataConnectionReadTimeout = 20_000;
         return ftp;
     }
 
