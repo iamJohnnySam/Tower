@@ -4,6 +4,7 @@ using Tower;
 using Tower.Components;
 using Tower.MediaBox;
 using Tower.Core.Backup;
+using Tower.Core.Conversion;
 using Tower.Core.Data;
 using Tower.Core.Jellyfin;
 using Tower.Core.PiHole;
@@ -60,6 +61,15 @@ builder.Services.AddScoped<TuyaDeviceService>();
 builder.Services.AddSingleton(new JellyfinOptions { JellyfinUrl = towerCfg.JellyfinUrl });
 builder.Services.AddHttpClient<JellyfinClient>();
 builder.Services.AddScoped<JellyfinStats>();
+
+// ── Conversion (Task 4+) ──────────────────────────────────────────────────────
+builder.Services.AddSingleton(sp => new ConversionService(
+    scopes: sp.GetRequiredService<IServiceScopeFactory>(),
+    telegram: sp.GetRequiredService<TelegramHub>(),
+    jellyfinOpts: sp.GetRequiredService<JellyfinOptions>(),
+    httpFactory: sp.GetRequiredService<IHttpClientFactory>(),
+    conversionTestPath: towerCfg.ConversionTestPath ?? "/tmp"
+));
 
 // ── Projects + Backup ────────────────────────────────────────────────────────
 builder.Services.AddSingleton(new ProjectsOptions
