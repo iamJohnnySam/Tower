@@ -133,6 +133,92 @@ public class ConversionServiceTests
         var updated = db2.ConversionJobs.Find(jobId)!;
         Assert.Equal(ConversionStatus.Ignored, updated.Status);
     }
+
+    [Fact]
+    public async Task ApproveAsync_moves_test_file_to_original_path()
+    {
+        var (_, scopes) = BuildDb();
+        var tmpDir = Path.GetTempPath();
+        var testFile = Path.Combine(tmpDir, $"conv_test_{Guid.NewGuid()}.mkv");
+        var origFile = Path.Combine(tmpDir, $"conv_orig_{Guid.NewGuid()}.mkv");
+        await File.WriteAllTextAsync(testFile, "fake-video-data");
+
+        using var scope = scopes.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
+        var job = new ConversionJob
+        {
+            MediaId = "m1", MediaName = "Film", OriginalPath = origFile,
+            TestPath = testFile, Status = ConversionStatus.AwaitingApproval,
+            CreatedAt = DateTime.Now
+        };
+        db.ConversionJobs.Add(job);
+        db.SaveChanges();
+        int jobId = job.Id;
+
+        var hub = BuildHub(scopes);
+        var svc = new ConversionService(scopes, hub,
+            new JellyfinOptions { JellyfinUrl = "http://localhost:8096" },
+            new TestHttpClientFactory(), tmpDir);
+
+        await svc.HandleApproveCallbackAsync($"conv:approve:{jobId}:777", 100L, "cb3", CancellationToken.None);
+
+        using var scope2 = scopes.CreateScope();
+        var db2 = scope2.ServiceProvider.GetRequiredService<TowerDbContext>();
+        var updated = db2.ConversionJobs.Find(jobId)!;
+        Assert.Equal(ConversionStatus.Approved, updated.Status);
+        Assert.True(File.Exists(origFile));
+        Assert.False(File.Exists(testFile));
+
+        // cleanup
+        File.Delete(origFile);
+    }
+
+    [Fact]
+    public async Task RejectAsync_deletes_test_file()
+    {
+        var (_, scopes) = BuildDb();
+        var tmpDir = Path.GetTempPath();
+        var testFile = Path.Combine(tmpDir, $"conv_reject_{Guid.NewGuid()}.mkv");
+        await File.WriteAllTextAsync(testFile, "fake-video-data");
+
+        using var scope = scopes.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
+        var job = new ConversionJob
+        {
+            MediaId = "m2", MediaName = "Film2", OriginalPath = "/tmp/orig.mkv",
+            TestPath = testFile, Status = ConversionStatus.AwaitingApproval,
+            CreatedAt = DateTime.Now
+        };
+        db.ConversionJobs.Add(job);
+        db.SaveChanges();
+        int jobId = job.Id;
+
+        var hub = BuildHub(scopes);
+        var svc = new ConversionService(scopes, hub,
+            new JellyfinOptions { JellyfinUrl = "http://localhost:8096" },
+            new TestHttpClientFactory(), tmpDir);
+
+        await svc.HandleRejectCallbackAsync($"conv:reject:{jobId}:888", 100L, "cb4", CancellationToken.None);
+
+        using var scope2 = scopes.CreateScope();
+        var db2 = scope2.ServiceProvider.GetRequiredService<TowerDbContext>();
+        var updated = db2.ConversionJobs.Find(jobId)!;
+        Assert.Equal(ConversionStatus.Rejected, updated.Status);
+        Assert.False(File.Exists(testFile));
+    }
+
+    [Fact]
+    public async Task RunNextJobAsync_returns_false_when_no_queued_jobs()
+    {
+        var (_, scopes) = BuildDb();
+        var hub = BuildHub(scopes);
+        var svc = new ConversionService(scopes, hub,
+            new JellyfinOptions { JellyfinUrl = "http://localhost:8096" },
+            new TestHttpClientFactory(), "/tmp/conv-test");
+
+        var result = await svc.RunNextJobAsync(CancellationToken.None);
+        Assert.False(result);
+    }
 }
 
 // Minimal IHttpClientFactory for tests (no real HTTP)

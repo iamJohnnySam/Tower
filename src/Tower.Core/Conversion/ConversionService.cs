@@ -188,12 +188,218 @@ public class ConversionService(
         hub.RegisterCallbackHandler("conv:reject:",  HandleRejectCallbackAsync);
     }
 
-    // ── ffmpeg execution (implemented in Task 5) ──────────────────────────────
+    // ── Approval / rejection ──────────────────────────────────────────────────
 
-    public Task<bool> RunNextJobAsync(CancellationToken ct) => Task.FromResult(false); // stub
+    private async Task ApproveAsync(int jobId, long chatId, int approvalMsgId, string callbackId, CancellationToken ct)
+    {
+        string? testPath = null, originalPath = null, mediaName = null;
+        using (var scope = scopes.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
+            var job = await db.ConversionJobs.FindAsync(jobId);
+            if (job is null) return;
+            testPath     = job.TestPath;
+            originalPath = job.OriginalPath;
+            mediaName    = job.MediaName;
+            job.Status      = ConversionStatus.Approved;
+            job.CompletedAt = DateTime.Now;
+            await db.SaveChangesAsync(ct);
+        }
 
-    // ── Approval / rejection (implemented in Task 5) ──────────────────────────
+        try
+        {
+            if (testPath is not null && originalPath is not null && File.Exists(testPath))
+                File.Move(testPath, originalPath, overwrite: true);
+        }
+        catch (Exception ex)
+        {
+            await telegram.EditAsync(chatId, approvalMsgId, $"❌ Approve failed — {mediaName}\n{ex.Message}", null, null, ct);
+            await telegram.AnswerCallbackAsync(callbackId, null, ct);
+            return;
+        }
 
-    private Task ApproveAsync(int jobId, long chatId, int approvalMsgId, string callbackId, CancellationToken ct) => Task.CompletedTask; // stub
-    private Task RejectAsync(int jobId, long chatId, int approvalMsgId, string callbackId, CancellationToken ct) => Task.CompletedTask; // stub
+        await telegram.EditAsync(chatId, approvalMsgId, $"✅ Approved — original replaced\n{mediaName}", null, null, ct);
+        await telegram.AnswerCallbackAsync(callbackId, null, ct);
+    }
+
+    private async Task RejectAsync(int jobId, long chatId, int approvalMsgId, string callbackId, CancellationToken ct)
+    {
+        string? testPath = null, mediaName = null;
+        using (var scope = scopes.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
+            var job = await db.ConversionJobs.FindAsync(jobId);
+            if (job is null) return;
+            testPath     = job.TestPath;
+            mediaName    = job.MediaName;
+            job.Status      = ConversionStatus.Rejected;
+            job.CompletedAt = DateTime.Now;
+            await db.SaveChangesAsync(ct);
+        }
+
+        try
+        {
+            if (testPath is not null && File.Exists(testPath))
+                File.Delete(testPath);
+        }
+        catch { /* best effort */ }
+
+        await telegram.EditAsync(chatId, approvalMsgId, $"❌ Rejected — test file deleted\n{mediaName}", null, null, ct);
+        await telegram.AnswerCallbackAsync(callbackId, null, ct);
+    }
+
+    // ── ffmpeg execution ──────────────────────────────────────────────────────
+
+    public async Task<bool> RunNextJobAsync(CancellationToken ct)
+    {
+        // Only one job at a time
+        if (System.Threading.Interlocked.CompareExchange(ref _converting, 1, 0) != 0) return false;
+
+        try
+        {
+            // Pick oldest queued job
+            ConversionJob? job;
+            using (var scope = scopes.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
+                job = await db.ConversionJobs
+                    .Where(j => j.Status == ConversionStatus.Queued)
+                    .OrderBy(j => j.CreatedAt)
+                    .FirstOrDefaultAsync(ct);
+                if (job is null) return false;
+
+                // Verify source file exists
+                if (!File.Exists(job.OriginalPath))
+                {
+                    job.Status       = ConversionStatus.Failed;
+                    job.ErrorMessage = "Source file not found";
+                    job.CompletedAt  = DateTime.Now;
+                    await db.SaveChangesAsync(ct);
+                    return false;
+                }
+
+                // Build output path: {testDir}/{id}_{nameWithoutExt}.mkv
+                Directory.CreateDirectory(conversionTestPath);
+                var nameNoExt    = Path.GetFileNameWithoutExtension(job.OriginalPath);
+                var testFileName = $"{job.Id}_{nameNoExt}.mkv";
+                job.TestPath  = Path.Combine(conversionTestPath, testFileName);
+                job.Status    = ConversionStatus.Converting;
+                job.StartedAt = DateTime.Now;
+                await db.SaveChangesAsync(ct);
+            }
+
+            // Run ffmpeg in Task.Run to avoid blocking the scheduler thread
+            await Task.Run(async () =>
+            {
+                string? stderr = null;
+                int exitCode = -1;
+                try
+                {
+                    var psi = new System.Diagnostics.ProcessStartInfo("/usr/bin/ffmpeg",
+                        $"-i \"{job.OriginalPath}\" -c:v libx264 -crf 20 -preset medium -c:a aac -b:a 192k -c:s copy -map 0 -y \"{job.TestPath}\"")
+                    {
+                        RedirectStandardOutput = true,
+                        RedirectStandardError  = true,
+                        UseShellExecute        = false,
+                    };
+                    using var proc = System.Diagnostics.Process.Start(psi)
+                        ?? throw new InvalidOperationException("Failed to start ffmpeg");
+
+                    var stderrTask = proc.StandardError.ReadToEndAsync();
+                    bool finished  = proc.WaitForExit(14_400_000); // 4 hours
+                    stderr         = await stderrTask;
+                    exitCode       = finished ? proc.ExitCode : -1;
+                    if (!finished) try { proc.Kill(entireProcessTree: true); } catch { }
+                }
+                catch (Exception ex)
+                {
+                    stderr   = ex.Message;
+                    exitCode = -1;
+                }
+
+                if (exitCode == 0)
+                {
+                    await MarkAwaitingApprovalAsync(job, ct);
+                }
+                else
+                {
+                    var snippet = stderr is null ? "unknown error"
+                        : stderr.Length <= 500 ? stderr
+                        : "…" + stderr[^500..];
+                    await MarkFailedAsync(job, snippet, ct);
+                }
+            }, ct);
+
+            return true;
+        }
+        finally
+        {
+            System.Threading.Interlocked.Exchange(ref _converting, 0);
+        }
+    }
+
+    private async Task MarkAwaitingApprovalAsync(ConversionJob job, CancellationToken ct)
+    {
+        long adminChatId = 0;
+        using (var scope = scopes.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
+            var loaded = await db.ConversionJobs.FindAsync(job.Id);
+            if (loaded is null) return;
+            loaded.Status      = ConversionStatus.AwaitingApproval;
+            loaded.CompletedAt = DateTime.Now;
+            await db.SaveChangesAsync(ct);
+
+            var subs = scope.ServiceProvider.GetRequiredService<Tower.Core.Telegram.SubscriberService>();
+            adminChatId = subs.GetAdmin() ?? 0;
+        }
+        if (adminChatId == 0) return;
+
+        var text = $"✅ Conversion complete\n{job.MediaName}\nTest file ready.\n\nAdd ConversionTest/ as a Jellyfin library to verify playback, then:";
+        var sent = await telegram.SendKeyboardAsync(adminChatId, text,
+            new List<IReadOnlyList<(string, string)>>
+            {
+                new List<(string, string)>
+                {
+                    ("✅ Approve — replace original", $"conv:approve:{job.Id}:0"),
+                    ("❌ Reject — delete test file",  $"conv:reject:{job.Id}:0"),
+                }
+            }, null, ct);
+
+        if (sent.Ok && sent.MessageId > 0)
+        {
+            await telegram.EditAsync(adminChatId, sent.MessageId, text,
+                new List<IReadOnlyList<(string, string)>>
+                {
+                    new List<(string, string)>
+                    {
+                        ("✅ Approve — replace original", $"conv:approve:{job.Id}:{sent.MessageId}"),
+                        ("❌ Reject — delete test file",  $"conv:reject:{job.Id}:{sent.MessageId}"),
+                    }
+                }, null, ct);
+        }
+    }
+
+    private async Task MarkFailedAsync(ConversionJob job, string error, CancellationToken ct)
+    {
+        long adminChatId = 0;
+        using (var scope = scopes.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
+            var loaded = await db.ConversionJobs.FindAsync(job.Id);
+            if (loaded is null) return;
+            loaded.Status       = ConversionStatus.Failed;
+            loaded.ErrorMessage = error;
+            loaded.CompletedAt  = DateTime.Now;
+            await db.SaveChangesAsync(ct);
+
+            var subs = scope.ServiceProvider.GetRequiredService<Tower.Core.Telegram.SubscriberService>();
+            adminChatId = subs.GetAdmin() ?? 0;
+        }
+        if (adminChatId == 0) return;
+
+        var snippet = error.Length > 300 ? error[..300] + "…" : error;
+        await telegram.SendAsync(TgAudience.Chat, adminChatId,
+            $"❌ Conversion failed — {job.MediaName}\n{snippet}", null, ct);
+    }
 }
