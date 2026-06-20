@@ -45,7 +45,11 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
             throw new DirectoryNotFoundException($"Local path not found: {localPath}");
 
         progress?.Report("Connecting to FTP…");
-        var remoteFiles = await WalkRemoteAsync(opts.FtpHost, user, pass, GetAcceptAnyCert(), remotePath, progress);
+        // Task.Run ensures the entire walk (including all Task.WhenAny awaits) runs on the
+        // thread pool with no captured Blazor circuit synchronization context. Without this,
+        // the circuit thread can be blocked by synchronous socket work inside FluentFTP,
+        // preventing the 25-second timeout from ever landing.
+        var remoteFiles = await Task.Run(() => WalkRemoteAsync(opts.FtpHost, user, pass, GetAcceptAnyCert(), remotePath, progress));
 
         progress?.Report($"Found {remoteFiles.Count} remote files. Counting local files…");
         var localFiles = Directory
@@ -128,27 +132,24 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
         var queue = new Queue<string>();
         queue.Enqueue(root);
 
-        var ftp = CreateFtpClient(host, user, pass, acceptAnyCert);
-        await ftp.Connect();
+        var ftp = await ConnectFtpAsync(host, user, pass, acceptAnyCert, progress);
+        if (ftp is null) return files;
 
         while (queue.Count > 0)
         {
             var dir = queue.Dequeue();
             progress?.Report($"Scanning {dir}… ({files.Count} files found)");
 
-            // Task.Run moves GetListing onto a thread-pool thread so Task.WhenAny can fire
-            // even if FluentFTP does synchronous work before its first internal await (which
-            // would otherwise pin the Blazor circuit thread and prevent the timeout from landing).
-            // Disposing the client closes the underlying socket, which unblocks the orphaned task.
-            var listTask = Task.Run(async () => await ftp.GetListing(dir));
+            var listTask = ftp.GetListing(dir);
             if (await Task.WhenAny(listTask, Task.Delay(TimeSpan.FromSeconds(25))) != listTask)
             {
                 progress?.Report($"⚠ Timeout listing {dir} — skipped, reconnecting…");
-                ftp.Dispose();
+                // Dispose via Task.Run: Socket.Disconnect(false) is synchronous and blocks
+                // if the server is not responding. Fire-and-forget so we don't inherit the hang.
+                DisposeSafely(ftp);
                 _ = listTask.ContinueWith(_ => { }, TaskContinuationOptions.None);
-                ftp = CreateFtpClient(host, user, pass, acceptAnyCert);
-                try   { await ftp.Connect(); }
-                catch { progress?.Report("⚠ Reconnect failed — scan aborted"); return files; }
+                ftp = await ConnectFtpAsync(host, user, pass, acceptAnyCert, progress);
+                if (ftp is null) break;
                 continue;
             }
 
@@ -156,10 +157,10 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
             try   { items = await listTask; }
             catch (Exception ex)
             {
-                progress?.Report($"⚠ Error listing {dir}: {ex.Message} — skipped, reconnecting…");
-                try { ftp.Dispose(); } catch { }
-                ftp = CreateFtpClient(host, user, pass, acceptAnyCert);
-                try { await ftp.Connect(); } catch { return files; }
+                progress?.Report($"⚠ Error listing {dir}: {ex.Message} — skipped");
+                DisposeSafely(ftp);
+                ftp = await ConnectFtpAsync(host, user, pass, acceptAnyCert, progress);
+                if (ftp is null) break;
                 continue;
             }
 
@@ -173,8 +174,36 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
             }
         }
 
-        try { ftp.Dispose(); } catch { }
+        DisposeSafely(ftp);
         return files;
+    }
+
+    private static async Task<AsyncFtpClient?> ConnectFtpAsync(
+        string host, string user, string pass, bool acceptAnyCert, IProgress<string>? progress)
+    {
+        var ftp = CreateFtpClient(host, user, pass, acceptAnyCert);
+        var connectTask = ftp.Connect();
+        if (await Task.WhenAny(connectTask, Task.Delay(TimeSpan.FromSeconds(20))) != connectTask)
+        {
+            progress?.Report("⚠ FTP connect timed out — scan aborted");
+            DisposeSafely(ftp);
+            return null;
+        }
+        try   { await connectTask; return ftp; }
+        catch (Exception ex)
+        {
+            progress?.Report($"⚠ FTP connect failed: {ex.Message} — scan aborted");
+            DisposeSafely(ftp);
+            return null;
+        }
+    }
+
+    private static void DisposeSafely(AsyncFtpClient? ftp)
+    {
+        if (ftp is null) return;
+        // Socket.Disconnect(false) inside Dispose() is synchronous and can block indefinitely
+        // if the server is not responding to TCP teardown. Run it on the thread pool.
+        _ = Task.Run(() => { try { ftp.Dispose(); } catch { } });
     }
 
     private static AsyncFtpClient CreateFtpClient(string host, string user, string pass, bool acceptAnyCert)
