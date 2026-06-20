@@ -45,13 +45,7 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
             throw new DirectoryNotFoundException($"Local path not found: {localPath}");
 
         progress?.Report("Connecting to FTP…");
-        using var ftp = new AsyncFtpClient(opts.FtpHost, user, pass);
-        ftp.Config.EncryptionMode = FtpEncryptionMode.Explicit;
-        ftp.Config.ValidateAnyCertificate = GetAcceptAnyCert();
-        await ftp.Connect();
-
-        progress?.Report($"Listing remote files in {remotePath}…");
-        var remoteFiles = await WalkRemoteAsync(ftp, remotePath, progress);
+        var remoteFiles = await WalkRemoteAsync(opts.FtpHost, user, pass, GetAcceptAnyCert(), remotePath, progress);
 
         progress?.Report($"Found {remoteFiles.Count} remote files. Counting local files…");
         var localFiles = Directory
@@ -126,31 +120,42 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
     }
 
     private static async Task<Dictionary<string, (long size, DateTime mtime)>> WalkRemoteAsync(
-        AsyncFtpClient ftp, string rootPath, IProgress<string>? progress)
+        string host, string user, string pass, bool acceptAnyCert,
+        string rootPath, IProgress<string>? progress)
     {
         var files = new Dictionary<string, (long size, DateTime mtime)>();
         var root  = rootPath.TrimEnd('/');
         var queue = new Queue<string>();
         queue.Enqueue(root);
 
+        var ftp = CreateFtpClient(host, user, pass, acceptAnyCert);
+        await ftp.Connect();
+
         while (queue.Count > 0)
         {
             var dir = queue.Dequeue();
             progress?.Report($"Scanning {dir}… ({files.Count} files found)");
 
-            FtpListItem[] items;
-            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20)))
+            // Task.WhenAny + Dispose is the only reliable way to interrupt a hung socket read.
+            // CancellationToken alone doesn't unblock blocking FTP data-channel reads.
+            var listTask    = ftp.GetListing(dir);
+            var timeoutTask = Task.Delay(TimeSpan.FromSeconds(20));
+
+            if (await Task.WhenAny(listTask, timeoutTask) == timeoutTask)
             {
-                try
-                {
-                    items = await ftp.GetListing(dir, token: cts.Token);
-                }
-                catch (OperationCanceledException)
-                {
-                    progress?.Report($"⚠ Timeout listing {dir} — skipped");
-                    continue;
-                }
+                progress?.Report($"⚠ Timeout listing {dir} — skipped, reconnecting…");
+                ftp.Dispose();
+                // Suppress the now-failing background task to avoid unobserved exception noise.
+                _ = listTask.ContinueWith(_ => { }, TaskContinuationOptions.None);
+                ftp = CreateFtpClient(host, user, pass, acceptAnyCert);
+                try   { await ftp.Connect(); }
+                catch { progress?.Report("⚠ Reconnect failed — scan aborted"); break; }
+                continue;
             }
+
+            FtpListItem[] items;
+            try   { items = await listTask; }
+            catch (Exception ex) { progress?.Report($"⚠ Error listing {dir}: {ex.Message} — skipped"); continue; }
 
             foreach (var item in items)
             {
@@ -162,7 +167,16 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
             }
         }
 
+        try { ftp.Dispose(); } catch { }
         return files;
+    }
+
+    private static AsyncFtpClient CreateFtpClient(string host, string user, string pass, bool acceptAnyCert)
+    {
+        var ftp = new AsyncFtpClient(host, user, pass);
+        ftp.Config.EncryptionMode      = FtpEncryptionMode.Explicit;
+        ftp.Config.ValidateAnyCertificate = acceptAnyCert;
+        return ftp;
     }
 
     public static ScanResult Classify(
