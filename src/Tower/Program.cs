@@ -136,6 +136,25 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
     db.Database.EnsureCreated();
 
+    // EnsureCreated does not alter existing schemas — create new tables manually
+    db.Database.ExecuteSqlRaw(@"
+        CREATE TABLE IF NOT EXISTS ConversionJobs (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            MediaId TEXT NOT NULL,
+            MediaName TEXT NOT NULL,
+            OriginalPath TEXT NOT NULL,
+            TestPath TEXT,
+            Status INTEGER NOT NULL DEFAULT 0,
+            TranscodeReasons TEXT,
+            CreatedAt TEXT NOT NULL,
+            StartedAt TEXT,
+            CompletedAt TEXT,
+            ErrorMessage TEXT,
+            AlertMessageId INTEGER
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS IX_ConversionJobs_MediaId ON ConversionJobs (MediaId);
+    ");
+
     var settings = scope.ServiceProvider.GetRequiredService<SettingsService>();
     try
     {
