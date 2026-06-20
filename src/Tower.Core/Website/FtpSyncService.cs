@@ -74,7 +74,75 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
         }
 
         progress?.Report($"Comparing {localFiles.Count} local vs {remoteFiles.Count} remote files…");
-        return Classify(localFiles, remoteFiles);
+        var result = Classify(localFiles, remoteFiles);
+
+        if (result.ToUpload.Any(f => f.Reason == "Local newer"))
+            result = await VerifyHashesAsync(result, localPath, user, pass, GetAcceptAnyCert(), progress);
+
+        return result;
+    }
+
+    private async Task<ScanResult> VerifyHashesAsync(
+        ScanResult initial, string localPath,
+        string user, string pass, bool acceptAnyCert,
+        IProgress<string>? progress)
+    {
+        var candidates = initial.ToUpload.Count(f => f.Reason == "Local newer");
+        progress?.Report($"Hash-checking {candidates} size-matched files…");
+
+        var ftp = await ConnectFtpAsync(opts.FtpHost, user, pass, acceptAnyCert, progress);
+        if (ftp is null) return initial;
+
+        try
+        {
+            var remoteBase    = GetRemotePath().TrimEnd('/');
+            var toUpload      = new List<FileCompareResult>(initial.ToUpload.Count);
+            var extraUpToDate = 0;
+            var checkedCount  = 0;
+            var hashSupported = true;
+
+            foreach (var f in initial.ToUpload)
+            {
+                if (f.Reason != "Local newer" || !hashSupported)
+                {
+                    toUpload.Add(f);
+                    continue;
+                }
+
+                try
+                {
+                    var localFile  = Path.Combine(localPath.TrimEnd('/'), f.Path.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+                    var remoteFile = remoteBase + f.Path;
+
+                    var hash = await ftp.GetChecksum(remoteFile);
+                    if (!hash.IsValid)
+                    {
+                        hashSupported = false;
+                        toUpload.Add(f);
+                        continue;
+                    }
+
+                    checkedCount++;
+                    if (checkedCount % 10 == 0 || checkedCount == candidates)
+                        progress?.Report($"Hash-checking {checkedCount}/{candidates}…");
+
+                    if (hash.Verify(localFile))
+                        extraUpToDate++;
+                    else
+                        toUpload.Add(f with { Reason = "Content differs" });
+                }
+                catch
+                {
+                    toUpload.Add(f);
+                }
+            }
+
+            return initial with { ToUpload = toUpload, UpToDate = initial.UpToDate + extraUpToDate };
+        }
+        finally
+        {
+            DisposeSafely(ftp);
+        }
     }
 
     public async Task<(int uploaded, int deleted, int failed)> SyncAsync(
