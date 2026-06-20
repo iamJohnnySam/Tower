@@ -47,6 +47,19 @@ public sealed class TelegramHub(
 
     private readonly ConcurrentDictionary<string, ChannelWriter<ParsedUpdate>> _clients = new();
 
+    // ── Callback dispatcher ───────────────────────────────────────────────────
+
+    private readonly List<(string Prefix, Func<string, long, string, CancellationToken, Task> Handler)> _callbackHandlers = new();
+
+    /// <summary>
+    /// Registers a handler invoked when an inbound callback's Data starts with <paramref name="prefix"/>.
+    /// The first registered matching prefix wins. Handler receives (callbackData, chatId, callbackId, ct).
+    /// </summary>
+    public void RegisterCallbackHandler(string prefix, Func<string, long, string, CancellationToken, Task> handler)
+    {
+        _callbackHandlers.Add((prefix, handler));
+    }
+
     /// <summary>
     /// Registers a new streaming client and returns its Channel so the caller
     /// can read from it with <c>await foreach</c>.
@@ -414,6 +427,20 @@ public sealed class TelegramHub(
 
         // 4. Broadcast to registered gRPC clients
         BroadcastUpdate(u);
+
+        // 5. Dispatch to registered internal callback handlers
+        if (u.IsCallback && _callbackHandlers.Count > 0)
+        {
+            foreach (var (prefix, handler) in _callbackHandlers)
+            {
+                if (u.CallbackData.StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    try { await handler(u.CallbackData, u.ChatId, u.CallbackId, ct); }
+                    catch (Exception ex) { logger.LogError(ex, "Callback handler failed for prefix {Prefix}", prefix); }
+                    break;
+                }
+            }
+        }
     }
 
     // ── Snapshot ──────────────────────────────────────────────────────────────
