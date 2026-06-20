@@ -15,6 +15,7 @@ using Tower.Core.Projects;
 using Tower.Core.Settings;
 using Tower.Core.State;
 using Tower.Core.Telegram;
+using Tower.Core.Todo;
 using Tower.Core.Website;
 using Tower.Core.Workers;
 
@@ -107,6 +108,9 @@ builder.Services.AddHttpClient<TelegramApi>();
 builder.Services.AddScoped<SubscriberService>();
 builder.Services.AddSingleton<TelegramHub>();
 builder.Services.AddHostedService<TelegramPollWorker>();
+
+// ── Todo ─────────────────────────────────────────────────────────────────────
+builder.Services.AddScoped<TodoService>();
 
 // ── gRPC ─────────────────────────────────────────────────────────────────────
 builder.Services.AddGrpc();
