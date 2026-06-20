@@ -9,6 +9,7 @@ public class TowerDbContext(DbContextOptions<TowerDbContext> options) : DbContex
     public DbSet<TelegramMessage> Messages => Set<TelegramMessage>();
     public DbSet<ProjectConfig> Projects => Set<ProjectConfig>();
     public DbSet<TuyaDevice>    TuyaDevices  => Set<TuyaDevice>();
+    public DbSet<ConversionJob> ConversionJobs => Set<ConversionJob>();
     protected override void OnModelCreating(ModelBuilder b) {
         b.Entity<CpuProfileSlot>().HasKey(x => x.Slot);
         b.Entity<CpuProfileSlot>().Property(x => x.Slot).ValueGeneratedNever();
@@ -19,5 +20,6 @@ public class TowerDbContext(DbContextOptions<TowerDbContext> options) : DbContex
         b.Entity<PlayHistory>().HasIndex(x => x.StartedAt);
         b.Entity<PlayHistory>().HasIndex(x => x.MediaName);
         b.Entity<TelegramMessage>().HasIndex(x => x.ChatId);
+        b.Entity<ConversionJob>().HasIndex(x => x.MediaId).IsUnique();
     }
 }

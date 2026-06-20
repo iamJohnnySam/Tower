@@ -12,6 +12,7 @@ public class TowerConfig
     public bool MediaBoxOrchestrate { get; set; } = false;
     public MediaBoxJobsConfig MediaBoxJobs { get; set; } = new();
     public WebsiteConfig Website { get; set; } = new();
+    public string ConversionTestPath { get; set; } = "/molecule/Media/ConversionTest";
 }
 
 /// <summary>
