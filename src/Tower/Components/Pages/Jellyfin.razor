@@ -285,7 +285,7 @@
                             <td class="jf-ts">@job.CreatedAt.ToLocalTime().ToString("MM/dd HH:mm")</td>
                             <td class="jf-ts">@(job.CompletedAt.HasValue ? job.CompletedAt.Value.ToLocalTime().ToString("MM/dd HH:mm") : "—")</td>
                             <td>
-                                @if (job.Status == ConversionStatus.Failed)
+                                @if (job.Status == ConversionStatus.Failed || job.Status == ConversionStatus.Converting)
                                 {
                                     <button class="btn-secondary btn-sm" @onclick="() => RequeueJob(job.Id)">Re-queue</button>
                                 }

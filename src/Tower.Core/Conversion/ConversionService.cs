@@ -201,9 +201,6 @@ public class ConversionService(
             testPath     = job.TestPath;
             originalPath = job.OriginalPath;
             mediaName    = job.MediaName;
-            job.Status      = ConversionStatus.Approved;
-            job.CompletedAt = DateTime.Now;
-            await db.SaveChangesAsync(ct);
         }
 
         try
@@ -213,9 +210,24 @@ public class ConversionService(
         }
         catch (Exception ex)
         {
+            // Mark Failed in DB
+            using (var scope = scopes.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
+                var job = await db.ConversionJobs.FindAsync(jobId);
+                if (job is not null) { job.Status = ConversionStatus.Failed; job.ErrorMessage = ex.Message; await db.SaveChangesAsync(ct); }
+            }
             await telegram.EditAsync(chatId, approvalMsgId, $"❌ Approve failed — {mediaName}\n{ex.Message}", null, null, ct);
             await telegram.AnswerCallbackAsync(callbackId, null, ct);
             return;
+        }
+
+        // File move succeeded — now update DB
+        using (var scope2 = scopes.CreateScope())
+        {
+            var db = scope2.ServiceProvider.GetRequiredService<TowerDbContext>();
+            var job = await db.ConversionJobs.FindAsync(jobId);
+            if (job is not null) { job.Status = ConversionStatus.Approved; job.CompletedAt = DateTime.Now; await db.SaveChangesAsync(ct); }
         }
 
         await telegram.EditAsync(chatId, approvalMsgId, $"✅ Approved — original replaced\n{mediaName}", null, null, ct);
@@ -259,6 +271,10 @@ public class ConversionService(
         {
             // Pick oldest queued job
             ConversionJob? job;
+            int capturedId = 0;
+            string capturedOriginal = "";
+            string capturedTest = "";
+            string capturedName = "";
             using (var scope = scopes.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
@@ -286,6 +302,12 @@ public class ConversionService(
                 job.Status    = ConversionStatus.Converting;
                 job.StartedAt = DateTime.Now;
                 await db.SaveChangesAsync(ct);
+
+                // Extract primitives before scope closes — job entity must not be accessed after disposal
+                capturedId       = job.Id;
+                capturedOriginal = job.OriginalPath;
+                capturedTest     = job.TestPath!;
+                capturedName     = job.MediaName;
             }
 
             // Run ffmpeg in Task.Run to avoid blocking the scheduler thread
@@ -296,7 +318,7 @@ public class ConversionService(
                 try
                 {
                     var psi = new System.Diagnostics.ProcessStartInfo("/usr/bin/ffmpeg",
-                        $"-i \"{job.OriginalPath}\" -c:v libx264 -crf 20 -preset medium -c:a aac -b:a 192k -c:s copy -map 0 -y \"{job.TestPath}\"")
+                        $"-i \"{capturedOriginal}\" -c:v libx264 -crf 20 -preset medium -c:a aac -b:a 192k -c:s copy -map 0 -y \"{capturedTest}\"")
                     {
                         RedirectStandardOutput = true,
                         RedirectStandardError  = true,
@@ -319,14 +341,14 @@ public class ConversionService(
 
                 if (exitCode == 0)
                 {
-                    await MarkAwaitingApprovalAsync(job, ct);
+                    await MarkAwaitingApprovalAsync(capturedId, capturedName, ct);
                 }
                 else
                 {
                     var snippet = stderr is null ? "unknown error"
                         : stderr.Length <= 500 ? stderr
                         : "…" + stderr[^500..];
-                    await MarkFailedAsync(job, snippet, ct);
+                    await MarkFailedAsync(capturedId, capturedName, snippet, ct);
                 }
             }, ct);
 
@@ -338,13 +360,13 @@ public class ConversionService(
         }
     }
 
-    private async Task MarkAwaitingApprovalAsync(ConversionJob job, CancellationToken ct)
+    private async Task MarkAwaitingApprovalAsync(int jobId, string mediaName, CancellationToken ct)
     {
         long adminChatId = 0;
         using (var scope = scopes.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
-            var loaded = await db.ConversionJobs.FindAsync(job.Id);
+            var loaded = await db.ConversionJobs.FindAsync(jobId);
             if (loaded is null) return;
             loaded.Status      = ConversionStatus.AwaitingApproval;
             loaded.CompletedAt = DateTime.Now;
@@ -355,14 +377,14 @@ public class ConversionService(
         }
         if (adminChatId == 0) return;
 
-        var text = $"✅ Conversion complete\n{job.MediaName}\nTest file ready.\n\nAdd ConversionTest/ as a Jellyfin library to verify playback, then:";
+        var text = $"✅ Conversion complete\n{mediaName}\nTest file ready.\n\nAdd ConversionTest/ as a Jellyfin library to verify playback, then:";
         var sent = await telegram.SendKeyboardAsync(adminChatId, text,
             new List<IReadOnlyList<(string, string)>>
             {
                 new List<(string, string)>
                 {
-                    ("✅ Approve — replace original", $"conv:approve:{job.Id}:0"),
-                    ("❌ Reject — delete test file",  $"conv:reject:{job.Id}:0"),
+                    ("✅ Approve — replace original", $"conv:approve:{jobId}:0"),
+                    ("❌ Reject — delete test file",  $"conv:reject:{jobId}:0"),
                 }
             }, null, ct);
 
@@ -373,20 +395,20 @@ public class ConversionService(
                 {
                     new List<(string, string)>
                     {
-                        ("✅ Approve — replace original", $"conv:approve:{job.Id}:{sent.MessageId}"),
-                        ("❌ Reject — delete test file",  $"conv:reject:{job.Id}:{sent.MessageId}"),
+                        ("✅ Approve — replace original", $"conv:approve:{jobId}:{sent.MessageId}"),
+                        ("❌ Reject — delete test file",  $"conv:reject:{jobId}:{sent.MessageId}"),
                     }
                 }, null, ct);
         }
     }
 
-    private async Task MarkFailedAsync(ConversionJob job, string error, CancellationToken ct)
+    private async Task MarkFailedAsync(int jobId, string mediaName, string error, CancellationToken ct)
     {
         long adminChatId = 0;
         using (var scope = scopes.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
-            var loaded = await db.ConversionJobs.FindAsync(job.Id);
+            var loaded = await db.ConversionJobs.FindAsync(jobId);
             if (loaded is null) return;
             loaded.Status       = ConversionStatus.Failed;
             loaded.ErrorMessage = error;
@@ -400,6 +422,6 @@ public class ConversionService(
 
         var snippet = error.Length > 300 ? error[..300] + "…" : error;
         await telegram.SendAsync(TgAudience.Chat, adminChatId,
-            $"❌ Conversion failed — {job.MediaName}\n{snippet}", null, ct);
+            $"❌ Conversion failed — {mediaName}\n{snippet}", null, ct);
     }
 }

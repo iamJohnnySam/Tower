@@ -431,13 +431,24 @@ public sealed class TelegramHub(
         // 5. Dispatch to registered internal callback handlers
         if (u.IsCallback && _callbackHandlers.Count > 0)
         {
-            foreach (var (prefix, handler) in _callbackHandlers)
+            // Only dispatch to internal handlers for the admin user
+            bool isAdmin;
+            using (var cbScope = scopes.CreateScope())
             {
-                if (u.CallbackData.StartsWith(prefix, StringComparison.Ordinal))
+                var cbSubs = cbScope.ServiceProvider.GetRequiredService<SubscriberService>();
+                isAdmin = cbSubs.GetAdmin() == u.ChatId;
+            }
+
+            if (isAdmin)
+            {
+                foreach (var (prefix, handler) in _callbackHandlers)
                 {
-                    try { await handler(u.CallbackData, u.ChatId, u.CallbackId, ct); }
-                    catch (Exception ex) { logger.LogError(ex, "Callback handler failed for prefix {Prefix}", prefix); }
-                    break;
+                    if (u.CallbackData.StartsWith(prefix, StringComparison.Ordinal))
+                    {
+                        try { await handler(u.CallbackData, u.ChatId, u.CallbackId, ct); }
+                        catch (Exception ex) { logger.LogError(ex, "Callback handler failed for prefix {Prefix}", prefix); }
+                        break;
+                    }
                 }
             }
         }

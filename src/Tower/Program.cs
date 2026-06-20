@@ -155,6 +155,18 @@ using (var scope = app.Services.CreateScope())
         CREATE UNIQUE INDEX IF NOT EXISTS IX_ConversionJobs_MediaId ON ConversionJobs (MediaId);
     ");
 
+    // Reset any jobs stuck in Converting state from a previous run
+    var stuckJobs = db.ConversionJobs
+        .Where(j => j.Status == Tower.Core.Models.ConversionStatus.Converting)
+        .ToList();
+    foreach (var j in stuckJobs)
+    {
+        j.Status = Tower.Core.Models.ConversionStatus.Queued;
+        j.StartedAt = null;
+    }
+    if (stuckJobs.Count > 0)
+        db.SaveChanges();
+
     var settings = scope.ServiceProvider.GetRequiredService<SettingsService>();
     try
     {
