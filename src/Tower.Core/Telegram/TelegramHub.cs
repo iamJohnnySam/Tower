@@ -60,6 +60,19 @@ public sealed class TelegramHub(
         _callbackHandlers.Add((prefix, handler));
     }
 
+    // ── Command dispatcher ────────────────────────────────────────────────────
+
+    private readonly List<(string Command, Func<string, long, CancellationToken, Task> Handler)> _commandHandlers = new();
+
+    /// <summary>
+    /// Registers a handler for a specific bot command (e.g. "/todo").
+    /// Only dispatched for the admin user. <paramref name="command"/> must include the slash.
+    /// </summary>
+    public void RegisterCommandHandler(string command, Func<string, long, CancellationToken, Task> handler)
+    {
+        _commandHandlers.Add((command, handler));
+    }
+
     /// <summary>
     /// Registers a new streaming client and returns its Channel so the caller
     /// can read from it with <c>await foreach</c>.
@@ -447,6 +460,31 @@ public sealed class TelegramHub(
                     {
                         try { await handler(u.CallbackData, u.ChatId, u.CallbackId, ct); }
                         catch (Exception ex) { logger.LogError(ex, "Callback handler failed for prefix {Prefix}", prefix); }
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 6. Dispatch text commands to registered internal handlers (admin only)
+        if (!u.IsCallback && u.Text.StartsWith('/') && _commandHandlers.Count > 0)
+        {
+            bool isCommandAdmin;
+            using (var cmdScope = scopes.CreateScope())
+            {
+                var cmdSubs = cmdScope.ServiceProvider.GetRequiredService<SubscriberService>();
+                isCommandAdmin = cmdSubs.GetAdmin() == u.ChatId;
+            }
+
+            if (isCommandAdmin)
+            {
+                var cmdToken = u.Text.Split(' ', 2)[0].ToLowerInvariant();
+                foreach (var (cmd, handler) in _commandHandlers)
+                {
+                    if (cmdToken == cmd.ToLowerInvariant())
+                    {
+                        try { await handler(u.Text, u.ChatId, ct); }
+                        catch (Exception ex) { logger.LogError(ex, "Command handler failed for {Cmd}", cmd); }
                         break;
                     }
                 }

@@ -111,6 +111,7 @@ builder.Services.AddHostedService<TelegramPollWorker>();
 
 // ── Todo ─────────────────────────────────────────────────────────────────────
 builder.Services.AddScoped<TodoService>();
+builder.Services.AddSingleton<TodoTelegramHandler>();
 
 // ── gRPC ─────────────────────────────────────────────────────────────────────
 builder.Services.AddGrpc();
@@ -204,6 +205,7 @@ using (var scope = app.Services.CreateScope())
 var convSvc = app.Services.GetRequiredService<ConversionService>();
 var telegramHub = app.Services.GetRequiredService<TelegramHub>();
 convSvc.RegisterCallbacks(telegramHub);
+app.Services.GetRequiredService<TodoTelegramHandler>().Register();
 
 // ── HTTP pipeline ─────────────────────────────────────────────────────────────
 if (!app.Environment.IsDevelopment())
