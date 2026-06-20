@@ -10,6 +10,7 @@ public class TowerDbContext(DbContextOptions<TowerDbContext> options) : DbContex
     public DbSet<ProjectConfig> Projects => Set<ProjectConfig>();
     public DbSet<TuyaDevice>    TuyaDevices  => Set<TuyaDevice>();
     public DbSet<ConversionJob> ConversionJobs => Set<ConversionJob>();
+    public DbSet<TodoItem> Todos => Set<TodoItem>();
     protected override void OnModelCreating(ModelBuilder b) {
         b.Entity<CpuProfileSlot>().HasKey(x => x.Slot);
         b.Entity<CpuProfileSlot>().Property(x => x.Slot).ValueGeneratedNever();

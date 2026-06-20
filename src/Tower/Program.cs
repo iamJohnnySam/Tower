@@ -155,6 +155,18 @@ using (var scope = app.Services.CreateScope())
         CREATE UNIQUE INDEX IF NOT EXISTS IX_ConversionJobs_MediaId ON ConversionJobs (MediaId);
     ");
 
+    db.Database.ExecuteSqlRaw(@"
+        CREATE TABLE IF NOT EXISTS Todos (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            Title TEXT NOT NULL,
+            Deadline TEXT,
+            Done INTEGER NOT NULL DEFAULT 0,
+            CreatedAt TEXT NOT NULL,
+            DoneAt TEXT,
+            TelegramMessageId INTEGER
+        );
+    ");
+
     // Reset any jobs stuck in Converting state from a previous run
     var stuckJobs = db.ConversionJobs
         .Where(j => j.Status == Tower.Core.Models.ConversionStatus.Converting)
