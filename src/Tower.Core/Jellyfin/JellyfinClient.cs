@@ -38,6 +38,26 @@ public class JellyfinClient(HttpClient http) {
         } catch { return new List<SessionInfo>(); }
         return list;
     }
+    public static string? ParseItemPath(string json)
+    {
+        try
+        {
+            var node = JsonNode.Parse(json);
+            return node?["Path"]?.ToString();
+        }
+        catch { return null; }
+    }
+    public async Task<string?> GetItemPathAsync(string baseUrl, string apiKey, string mediaId)
+    {
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var json = await http.GetStringAsync(
+                $"{baseUrl}/Items/{mediaId}?api_key={apiKey}&Fields=Path", cts.Token);
+            return ParseItemPath(json);
+        }
+        catch { return null; }
+    }
     public async Task<List<SessionInfo>?> SessionsAsync(string baseUrl, string apiKey) {
         try {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));

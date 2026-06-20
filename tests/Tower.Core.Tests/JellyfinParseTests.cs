@@ -15,4 +15,24 @@ public class JellyfinParseTests {
         Assert.Contains("VideoCodecNotSupported", s1.TranscodeReasons);
         Assert.False(sessions[1].Playing);
     }
+    [Fact]
+    public void ParseItemPath_returns_path_from_json()
+    {
+        var json = """{"Id":"abc","Name":"The Dark Knight","Path":"/molecule/Media/Movies/The Dark Knight/tdknight.mkv"}""";
+        var path = JellyfinClient.ParseItemPath(json);
+        Assert.Equal("/molecule/Media/Movies/The Dark Knight/tdknight.mkv", path);
+    }
+
+    [Fact]
+    public void ParseItemPath_returns_null_for_missing_path()
+    {
+        var json = """{"Id":"abc","Name":"The Dark Knight"}""";
+        Assert.Null(JellyfinClient.ParseItemPath(json));
+    }
+
+    [Fact]
+    public void ParseItemPath_returns_null_for_malformed_json()
+    {
+        Assert.Null(JellyfinClient.ParseItemPath("not json"));
+    }
 }
