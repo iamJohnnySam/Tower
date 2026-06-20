@@ -1,14 +1,12 @@
 // src/Tower.Core/Todo/TodoTelegramHandler.cs
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Tower.Core.Telegram;
 
 namespace Tower.Core.Todo;
 
 public sealed class TodoTelegramHandler(
     TelegramHub hub,
-    IServiceScopeFactory scopes,
-    ILogger<TodoTelegramHandler> logger)
+    IServiceScopeFactory scopes)
 {
     public void Register()
     {
