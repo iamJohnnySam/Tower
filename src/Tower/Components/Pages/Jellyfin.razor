@@ -255,6 +255,58 @@
         }
     </section>
 
+    @* ── 4. Conversion Queue ─────────────────────────────────────────────────── *@
+    <section class="jf-section">
+        <h2 class="section-title">
+            Conversion Queue
+            <button class="btn-secondary btn-sm jf-refresh-btn" @onclick="RefreshConversionQueue">Refresh</button>
+        </h2>
+
+        @if (_convQueueLoading)
+        {
+            <div class="jf-notice jf-notice-info">Loading…</div>
+        }
+        else if (_convQueue.Count == 0)
+        {
+            <div class="jf-notice jf-notice-idle">No conversion jobs yet. Jobs appear here when you mark a file for conversion via Telegram.</div>
+        }
+        else
+        {
+            <table class="atom-table">
+                <thead>
+                    <tr><th>Media</th><th>Status</th><th>Created</th><th>Completed</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var job in _convQueue)
+                    {
+                        <tr>
+                            <td>@job.MediaName</td>
+                            <td><span class="@ConvStatusClass(job.Status)">@job.Status</span></td>
+                            <td class="jf-ts">@job.CreatedAt.ToLocalTime().ToString("MM/dd HH:mm")</td>
+                            <td class="jf-ts">@(job.CompletedAt.HasValue ? job.CompletedAt.Value.ToLocalTime().ToString("MM/dd HH:mm") : "—")</td>
+                            <td>
+                                @if (job.Status == ConversionStatus.Failed)
+                                {
+                                    <button class="btn-secondary btn-sm" @onclick="() => RequeueJob(job.Id)">Re-queue</button>
+                                }
+                                @if (job.Status == ConversionStatus.Ignored)
+                                {
+                                    <button class="btn-secondary btn-sm" @onclick="() => ReenableJob(job.Id)">Re-enable alerts</button>
+                                }
+                            </td>
+                        </tr>
+                        @if (job.Status == ConversionStatus.Failed && !string.IsNullOrEmpty(job.ErrorMessage))
+                        {
+                            <tr>
+                                <td colspan="5" class="jf-error-detail">@job.ErrorMessage</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+
 </div>
 
 @code {
@@ -269,9 +321,14 @@
     private List<UserCount> _perUser = new();
     private List<PlayHistory> _recentPlays = new();
 
+    // Conversion Queue state
+    private bool _convQueueLoading = true;
+    private List<ConversionJob> _convQueue = new();
+
     protected override async Task OnInitializedAsync()
     {
         await LoadAnalyticsAsync();
+        await LoadConversionQueueAsync();
 
         _timer = new System.Threading.Timer(async _ =>
         {
@@ -306,6 +363,42 @@
         await LoadAnalyticsAsync();
         await InvokeAsync(StateHasChanged);
     }
+
+    private async Task LoadConversionQueueAsync()
+    {
+        _convQueueLoading = true;
+        _convQueue = await Task.Run(() => JellyfinStatsSvc.ConversionQueue());
+        _convQueueLoading = false;
+    }
+
+    private async Task RefreshConversionQueue()
+    {
+        await LoadConversionQueueAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RequeueJob(int jobId)
+    {
+        await Task.Run(() => JellyfinStatsSvc.RequeueJob(jobId));
+        await RefreshConversionQueue();
+    }
+
+    private async Task ReenableJob(int jobId)
+    {
+        await Task.Run(() => JellyfinStatsSvc.DeleteJob(jobId));
+        await RefreshConversionQueue();
+    }
+
+    static string ConvStatusClass(ConversionStatus s) => s switch
+    {
+        ConversionStatus.Queued           => "val-amber",
+        ConversionStatus.Converting       => "val-amber",
+        ConversionStatus.AwaitingApproval => "jf-method-badge val-green",
+        ConversionStatus.Approved         => "val-green",
+        ConversionStatus.Failed           => "val-red",
+        ConversionStatus.Pending          => "val-amber",
+        _                                 => "val-grey",
+    };
 
     public async ValueTask DisposeAsync()
     {
