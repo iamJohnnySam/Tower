@@ -286,3 +286,115 @@
     color: #8b949e;
     font-size: 0.78rem;
 }
+
+/* ─── To-do section ──────────────────────────────────────────────────────── */
+
+.todo-empty {
+    color: #8b949e;
+    font-size: 0.85rem;
+}
+
+.todo-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.todo-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.4rem 0.6rem;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 5px;
+}
+
+.todo-done-btn {
+    background: none;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    color: #3fb950;
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 0.1rem 0.4rem;
+    line-height: 1.4;
+    flex-shrink: 0;
+}
+
+.todo-done-btn:hover {
+    background: #1f2429;
+    border-color: #3fb950;
+}
+
+.todo-title {
+    flex: 1;
+    font-size: 0.875rem;
+    color: #e6edf3;
+}
+
+.todo-deadline {
+    font-size: 0.75rem;
+    color: #f0883e;
+    background: rgba(240, 136, 62, 0.12);
+    border-radius: 4px;
+    padding: 0.1rem 0.45rem;
+    white-space: nowrap;
+}
+
+.todo-add-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.todo-input {
+    flex: 1;
+    min-width: 180px;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 5px;
+    color: #e6edf3;
+    font-size: 0.875rem;
+    padding: 0.35rem 0.6rem;
+}
+
+.todo-input:focus {
+    outline: none;
+    border-color: #58a6ff;
+}
+
+.todo-date {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 5px;
+    color: #8b949e;
+    font-size: 0.875rem;
+    padding: 0.35rem 0.5rem;
+}
+
+.todo-date:focus {
+    outline: none;
+    border-color: #58a6ff;
+}
+
+.todo-add-btn {
+    background: #238636;
+    border: 1px solid #2ea043;
+    border-radius: 5px;
+    color: #fff;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    padding: 0.35rem 1rem;
+}
+
+.todo-add-btn:hover:not(:disabled) {
+    background: #2ea043;
+}
+
+.todo-add-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
