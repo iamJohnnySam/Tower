@@ -16,7 +16,7 @@ public class TodoService(TowerDbContext db)
 
     public async Task<List<TodoItem>> GetDueTodayAsync(DateTime today) =>
         await db.Todos
-            .Where(t => !t.Done && t.Deadline != null && t.Deadline.Value.Date == today.Date)
+            .Where(t => !t.Done && t.Deadline != null && t.Deadline >= today && t.Deadline < today.AddDays(1))
             .ToListAsync();
 
     public async Task<TodoItem> AddAsync(string title, DateTime? deadline)

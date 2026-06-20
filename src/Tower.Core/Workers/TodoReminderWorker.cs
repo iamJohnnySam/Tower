@@ -31,7 +31,7 @@ public sealed class TodoReminderWorker(
                 if (IsReminderTime(utcNow) && _lastReminderDate != today)
                 {
                     _lastReminderDate = today;
-                    await SendRemindersAsync(DateOnly.FromDateTime(utcNow), ct);
+                    await SendRemindersAsync(today, ct);
                 }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
@@ -46,12 +46,12 @@ public sealed class TodoReminderWorker(
         logger.LogInformation("TodoReminderWorker stopped");
     }
 
-    private async Task SendRemindersAsync(DateOnly utcToday, CancellationToken ct)
+    private async Task SendRemindersAsync(DateOnly localToday, CancellationToken ct)
     {
         using var scope = scopes.CreateScope();
         var svc = scope.ServiceProvider.GetRequiredService<TodoService>();
-        var today = utcToday.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var due = await svc.GetDueTodayAsync(today);
+        var todayUtc = new DateTime(localToday.Year, localToday.Month, localToday.Day, 0, 0, 0, DateTimeKind.Utc);
+        var due = await svc.GetDueTodayAsync(todayUtc);
 
         if (due.Count == 0) return;
 

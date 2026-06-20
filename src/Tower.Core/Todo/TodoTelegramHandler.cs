@@ -62,9 +62,15 @@ public sealed class TodoTelegramHandler(
         var svc = scope.ServiceProvider.GetRequiredService<TodoService>();
         var item = await svc.MarkDoneAsync(id);
 
+        if (item is null)
+        {
+            await hub.AnswerCallbackAsync(callbackId, "Already done or not found", ct);
+            return;
+        }
+
         await hub.AnswerCallbackAsync(callbackId, "Marked done", ct);
 
-        if (item?.TelegramMessageId is int msgId)
+        if (item.TelegramMessageId is int msgId)
         {
             await hub.EditAsync(chatId, msgId,
                 $"☑ Done: {item.Title}", null, null, ct);
