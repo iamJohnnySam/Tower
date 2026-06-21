@@ -222,6 +222,27 @@ app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
+// ── FTP push (called by blog editor after image upload) ──────────────────────
+app.MapPost("/api/ftp-push", async (
+    FtpPushRequest req,
+    FtpSyncService ftpSvc,
+    CancellationToken ct) =>
+{
+    if (req.Files is null || req.Files.Count == 0)
+        return Results.BadRequest(new { error = "No files specified" });
+
+    var progress = new Progress<string>();
+    try
+    {
+        var (uploaded, _, failed) = await ftpSvc.SyncAsync(req.Files, [], progress, ct);
+        return Results.Ok(new { uploaded, failed });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
+});
+
 // ── Dropbox OAuth callback ────────────────────────────────────────────────────
 app.MapGet("/dropbox/callback", async (
     string? code, string? error,
@@ -241,3 +262,5 @@ app.MapGet("/dropbox/callback", async (
 });
 
 app.Run();
+
+record FtpPushRequest(List<string> Files);
