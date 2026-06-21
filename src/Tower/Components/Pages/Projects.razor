@@ -55,6 +55,7 @@
                     var bkpBusy      = _backupBusy.TryGetValue(pname, out var b2) && b2;
                     var logsLoading  = _logsLoading.TryGetValue(pname, out var b3) && b3;
                     var confirmPending = _confirmPending.TryGetValue(pname, out var cp) ? cp : null;
+                    var isActive     = proj.SystemdStatus == "active";
 
                     // Systemd badge colour
                     string sysClass = proj.SystemdStatus switch
@@ -103,15 +104,15 @@
                             {
                                 var svc = psvc; // capture for lambdas
 
-                                @* Start *@
+                                @* Start — disabled when already active *@
                                 <button class="btn-secondary btn-sm proj-btn-start"
-                                        disabled="@ctrlBusy"
+                                        disabled="@(ctrlBusy || isActive)"
                                         @onclick="@(() => ControlAsync(pname, svc, "start"))">
                                     @(_busy.TryGetValue(pname, out var _b) && _b &&
                                       _busyAction.TryGetValue(pname, out var _ba) && _ba == "start" ? "…" : "Start")
                                 </button>
 
-                                @* Stop (2-click confirm) *@
+                                @* Stop (2-click confirm) — disabled when not active *@
                                 @if (confirmPending == "stop")
                                 {
                                     <span class="proj-confirm-row">
@@ -126,11 +127,11 @@
                                 else
                                 {
                                     <button class="btn-danger btn-sm"
-                                            disabled="@ctrlBusy"
+                                            disabled="@(ctrlBusy || !isActive)"
                                             @onclick="@(() => SetConfirm(pname, "stop"))">Stop</button>
                                 }
 
-                                @* Restart (2-click confirm) *@
+                                @* Restart (2-click confirm) — disabled when not active *@
                                 @if (confirmPending == "restart")
                                 {
                                     <span class="proj-confirm-row">
@@ -145,7 +146,7 @@
                                 else
                                 {
                                     <button class="btn-secondary btn-sm proj-btn-amber"
-                                            disabled="@ctrlBusy"
+                                            disabled="@(ctrlBusy || !isActive)"
                                             @onclick="@(() => SetConfirm(pname, "restart"))">Restart</button>
                                 }
                             }
