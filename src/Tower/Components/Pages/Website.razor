@@ -265,7 +265,9 @@
 
                 else if (_state == SyncState.Syncing)
                 {
-                    <div class="web-notice">Syncing…</div>
+                    var doneCount = _syncLog.Split('\n').Count(l => l.StartsWith("↑") || l.StartsWith("✗") || l.StartsWith("−"));
+                    var totalCount = (_scanResult?.ToUpload.Count ?? 0) + _deleteChecked.Count(kv => kv.Value);
+                    <div class="web-notice">Syncing… @doneCount / @totalCount</div>
                     <pre class="maint-log web-sync-log">@_syncLog</pre>
                 }
 

@@ -173,8 +173,8 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
             var remoteFile = remoteBase + rel;
             try
             {
-                await ftp.UploadFile(localFile, remoteFile, FtpRemoteExists.Overwrite, createRemoteDir: true);
                 progress.Report($"↑ {rel}");
+                await ftp.UploadFile(localFile, remoteFile, FtpRemoteExists.Overwrite, createRemoteDir: true);
                 uploaded++;
             }
             catch (Exception ex)
