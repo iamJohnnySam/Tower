@@ -243,6 +243,24 @@ app.MapPost("/api/ftp-push", async (
     }
 });
 
+// ── Full scan-and-sync (triggered by Claude after each git push) ─────────────
+app.MapPost("/api/website/sync", async (
+    FtpSyncService ftpSvc,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var scan     = await ftpSvc.ScanAsync();
+        var toUpload = scan.ToUpload.Select(f => f.Path).ToList();
+        var (uploaded, _, failed) = await ftpSvc.SyncAsync(toUpload, [], new Progress<string>(), ct);
+        return Results.Ok(new { scanned = scan.ToUpload.Count + scan.UpToDate, uploaded, failed });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
+});
+
 // ── Dropbox OAuth callback ────────────────────────────────────────────────────
 app.MapGet("/dropbox/callback", async (
     string? code, string? error,
