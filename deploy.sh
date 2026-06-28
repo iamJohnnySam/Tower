@@ -15,6 +15,15 @@ echo "==> Copying maintenance script"
 cp "$REPO/do_maintenance.sh" "$TARGET/do_maintenance.sh"
 chmod +x "$TARGET/do_maintenance.sh"
 
+echo "==> Installing sudoers (validate first, then install)"
+if sudo visudo -c -f "$REPO/tower.sudoers" >/dev/null; then
+    sudo install -m 0440 -o root -g root "$REPO/tower.sudoers" /etc/sudoers.d/tower
+    echo "    /etc/sudoers.d/tower updated"
+else
+    echo "    ERROR: tower.sudoers failed validation — not installing" >&2
+    exit 1
+fi
+
 echo "==> Starting tower service"
 sudo systemctl start tower
 sleep 2
