@@ -1,0 +1,165 @@
+.fw-page {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 1rem 2rem;
+}
+
+.fw-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.fw-header .page-title {
+    margin-bottom: 0;
+}
+
+.fw-section {
+    margin-bottom: 2rem;
+}
+
+/* Notice banners */
+.fw-notice {
+    padding: 0.6rem 1rem;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+.fw-notice-warn {
+    background: rgba(210, 153, 34, 0.1);
+    border: 1px solid rgba(210, 153, 34, 0.3);
+    color: #d29922;
+}
+
+.fw-notice-idle {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #8b949e;
+}
+
+/* Active badge */
+.fw-status-row {
+    margin-bottom: 1rem;
+}
+
+.fw-badge {
+    display: inline-block;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 6px;
+}
+
+.fw-badge-on {
+    background: rgba(63, 185, 80, 0.15);
+    border: 1px solid rgba(63, 185, 80, 0.35);
+    color: #3fb950;
+}
+
+.fw-badge-off {
+    background: rgba(248, 81, 73, 0.15);
+    border: 1px solid rgba(248, 81, 73, 0.35);
+    color: #f85149;
+}
+
+/* Metrics row */
+.fw-metrics-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.fw-metric {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 0.75rem 1.25rem;
+    min-width: 120px;
+}
+
+.fw-metric-value {
+    font-size: 1.25rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: #e6edf3;
+    text-transform: capitalize;
+}
+
+.fw-metric-label {
+    font-size: 0.72rem;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 0.2rem;
+}
+
+/* Rules table */
+.fw-rules-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.fw-v6-toggle {
+    font-size: 0.78rem;
+    color: #8b949e;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.fw-port {
+    font-family: monospace;
+    font-size: 0.88rem;
+    color: #c9d1d9;
+}
+
+.fw-comment {
+    color: #8b949e;
+    font-size: 0.85rem;
+}
+
+.fw-action {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 2px 8px;
+    border-radius: 5px;
+    white-space: nowrap;
+}
+
+.fw-action-allow {
+    background: rgba(63, 185, 80, 0.12);
+    border: 1px solid rgba(63, 185, 80, 0.3);
+    color: #3fb950;
+}
+
+.fw-action-deny {
+    background: rgba(248, 81, 73, 0.12);
+    border: 1px solid rgba(248, 81, 73, 0.3);
+    color: #f85149;
+}
+
+.fw-action-limit {
+    background: rgba(210, 153, 34, 0.12);
+    border: 1px solid rgba(210, 153, 34, 0.3);
+    color: #d29922;
+}
+
+/* Updated timestamp */
+.fw-updated {
+    font-size: 0.75rem;
+    color: #6e7681;
+    margin-top: -1rem;
+}

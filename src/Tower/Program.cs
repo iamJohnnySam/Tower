@@ -6,6 +6,7 @@ using Tower.MediaBox;
 using Tower.Core.Backup;
 using Tower.Core.Conversion;
 using Tower.Core.Data;
+using Tower.Core.Firewall;
 using Tower.Core.Jellyfin;
 using Tower.Core.PiHole;
 using Tower.Core.Tuya;
@@ -43,6 +44,9 @@ builder.Services.AddHttpClient<PiAgentClient>();
 
 // ── PiHole ───────────────────────────────────────────────────────────────────
 builder.Services.AddHttpClient<PiHoleClient>();
+
+// ── Firewall (read-only ufw status) ──────────────────────────────────────────
+builder.Services.AddScoped<FirewallService>();
 
 // ── Website ──────────────────────────────────────────────────────────────────
 builder.Services.AddSingleton(new WebsiteOptions

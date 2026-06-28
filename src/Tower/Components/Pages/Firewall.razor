@@ -1,0 +1,125 @@
+@page "/firewall"
+@using Tower.Core.Firewall
+@inject FirewallService FirewallSvc
+
+<PageTitle>Tower — Firewall</PageTitle>
+
+<div class="fw-page">
+
+    <div class="fw-header">
+        <h1 class="page-title">Firewall</h1>
+        @if (!_loading)
+        {
+            <button class="btn-secondary btn-sm" @onclick="RefreshAsync" disabled="@_loading">Refresh</button>
+        }
+    </div>
+
+    @if (_loading)
+    {
+        <div class="fw-notice fw-notice-idle">Loading…</div>
+    }
+    else if (_status is not null && _status.Error is not null)
+    {
+        <div class="fw-notice fw-notice-warn">@_status.Error</div>
+    }
+    else if (_status is not null)
+    {
+        @* ── Status ─────────────────────────────────────────────────────────── *@
+        <section class="fw-section">
+            <h2 class="section-title">Status</h2>
+            <div class="fw-status-row">
+                <span class="fw-badge @(_status.Active ? "fw-badge-on" : "fw-badge-off")">
+                    @(_status.Active ? "ufw active" : "ufw inactive")
+                </span>
+            </div>
+            <div class="fw-metrics-row">
+                <div class="fw-metric">
+                    <span class="fw-metric-value">@PolicyText(_status.DefaultIncoming)</span>
+                    <span class="fw-metric-label">Incoming</span>
+                </div>
+                <div class="fw-metric">
+                    <span class="fw-metric-value">@PolicyText(_status.DefaultOutgoing)</span>
+                    <span class="fw-metric-label">Outgoing</span>
+                </div>
+                <div class="fw-metric">
+                    <span class="fw-metric-value">@PolicyText(_status.DefaultRouted)</span>
+                    <span class="fw-metric-label">Routed</span>
+                </div>
+                <div class="fw-metric">
+                    <span class="fw-metric-value">@(_status.Logging ?? "—")</span>
+                    <span class="fw-metric-label">Logging</span>
+                </div>
+            </div>
+        </section>
+
+        @* ── Rules ───────────────────────────────────────────────────────────── *@
+        <section class="fw-section">
+            <div class="fw-rules-head">
+                <h2 class="section-title">Rules (@_visibleRules.Count)</h2>
+                <label class="fw-v6-toggle">
+                    <input type="checkbox" @bind="_showV6" @bind:after="StateHasChanged" />
+                    Show IPv6
+                </label>
+            </div>
+            @if (_visibleRules.Count == 0)
+            {
+                <div class="fw-notice fw-notice-idle">No rules.</div>
+            }
+            else
+            {
+                <table class="atom-table">
+                    <thead>
+                        <tr><th>To / Port</th><th>Action</th><th>From</th><th>Description</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _visibleRules)
+                        {
+                            <tr>
+                                <td class="fw-port">@r.To</td>
+                                <td><span class="fw-action @ActionClass(r.Action)">@r.Action</span></td>
+                                <td>@r.From</td>
+                                <td class="fw-comment">@(r.Comment ?? "")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </section>
+
+        <div class="fw-updated">Updated: @_status.FetchedAt.ToString("HH:mm:ss")</div>
+    }
+
+</div>
+
+@code {
+    private bool            _loading = true;
+    private bool            _showV6;
+    private FirewallStatus? _status;
+
+    private List<FirewallRule> _visibleRules =>
+        _status is null ? new() : _status.Rules.Where(r => _showV6 || !r.IsV6).ToList();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task RefreshAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _status  = await FirewallSvc.GetStatusAsync();
+        _loading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private static string PolicyText(string? p) => string.IsNullOrEmpty(p) ? "—" : p;
+
+    private static string ActionClass(string action) =>
+        action.StartsWith("ALLOW", StringComparison.OrdinalIgnoreCase) ? "fw-action-allow" :
+        action.StartsWith("LIMIT", StringComparison.OrdinalIgnoreCase) ? "fw-action-limit" :
+        "fw-action-deny";
+}
