@@ -9,5 +9,6 @@ atom ALL=(root) NOPASSWD: /usr/bin/systemctl start financetracker, /usr/bin/syst
 atom ALL=(root) NOPASSWD: /usr/bin/systemctl start newsdigest, /usr/bin/systemctl stop newsdigest, /usr/bin/systemctl restart newsdigest
 atom ALL=(root) NOPASSWD: /usr/bin/systemctl start blog-editor, /usr/bin/systemctl stop blog-editor, /usr/bin/systemctl restart blog-editor
 atom ALL=(root) NOPASSWD: /usr/bin/systemctl start tester, /usr/bin/systemctl stop tester, /usr/bin/systemctl restart tester
+atom ALL=(root) NOPASSWD: /usr/bin/systemctl start designworks, /usr/bin/systemctl stop designworks, /usr/bin/systemctl restart designworks
 # Read-only firewall status for the Firewall tab.
 atom ALL=(root) NOPASSWD: /usr/sbin/ufw status, /usr/sbin/ufw status verbose, /usr/sbin/ufw status numbered
