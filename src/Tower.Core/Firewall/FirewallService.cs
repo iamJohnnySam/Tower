@@ -4,8 +4,8 @@ using System.Text.RegularExpressions;
 namespace Tower.Core.Firewall;
 
 /// <summary>
-/// Reads ufw firewall state via the scoped passwordless rule in /etc/sudoers.d/tower
-/// (`sudo /usr/sbin/ufw status verbose`). Read-only — Tower never mutates the firewall.
+/// Reads/writes ufw firewall state via the scoped passwordless rules in /etc/sudoers.d/tower
+/// (`sudo /usr/sbin/ufw status verbose` and `allow|deny|limit|reject <port>`).
 /// </summary>
 public sealed partial class FirewallService
 {
@@ -14,7 +14,42 @@ public sealed partial class FirewallService
 
     public async Task<FirewallStatus> GetStatusAsync(CancellationToken ct = default)
     {
-        string output;
+        var (ok, output, err) = await RunUfwAsync(ct, "status", "verbose");
+        if (!ok)
+            return new FirewallStatus { Error = string.IsNullOrWhiteSpace(err) ? output : err };
+
+        return Parse(output);
+    }
+
+    /// <summary>
+    /// Adds a ufw rule. Inputs are validated (port + proto + action) so only safe,
+    /// fixed-shape arguments ever reach ufw. Returns an error message, or null on success.
+    /// </summary>
+    public async Task<string?> AddRuleAsync(int port, string proto, string action, CancellationToken ct = default)
+    {
+        if (port is < 1 or > 65535)
+            return "Port must be between 1 and 65535.";
+
+        action = action.ToLowerInvariant();
+        if (action is not ("allow" or "deny" or "limit" or "reject"))
+            return "Action must be allow, deny, limit, or reject.";
+
+        proto = proto.ToLowerInvariant();
+        var target = proto switch
+        {
+            "tcp" or "udp" => $"{port}/{proto}",
+            "both" or ""   => port.ToString(),
+            _              => null,
+        };
+        if (target is null)
+            return "Protocol must be tcp, udp, or both.";
+
+        var (ok, output, err) = await RunUfwAsync(ct, action, target);
+        return ok ? null : (string.IsNullOrWhiteSpace(err) ? output : err.Trim());
+    }
+
+    private static async Task<(bool ok, string stdout, string stderr)> RunUfwAsync(CancellationToken ct, params string[] args)
+    {
         try
         {
             var psi = new ProcessStartInfo("sudo")
@@ -24,23 +59,19 @@ public sealed partial class FirewallService
             };
             psi.ArgumentList.Add("-n");
             psi.ArgumentList.Add("/usr/sbin/ufw");
-            psi.ArgumentList.Add("status");
-            psi.ArgumentList.Add("verbose");
+            foreach (var a in args) psi.ArgumentList.Add(a);
 
             using var p = Process.Start(psi)!;
-            output     = await p.StandardOutput.ReadToEndAsync(ct);
+            var stdout = await p.StandardOutput.ReadToEndAsync(ct);
             var stderr = await p.StandardError.ReadToEndAsync(ct);
             await p.WaitForExitAsync(ct);
 
-            if (p.ExitCode != 0)
-                return new FirewallStatus { Error = string.IsNullOrWhiteSpace(stderr) ? $"ufw exited {p.ExitCode}" : stderr.Trim() };
+            return (p.ExitCode == 0, stdout.Trim(), p.ExitCode == 0 ? "" : (string.IsNullOrWhiteSpace(stderr) ? $"ufw exited {p.ExitCode}" : stderr));
         }
         catch (Exception ex)
         {
-            return new FirewallStatus { Error = ex.Message };
+            return (false, "", ex.Message);
         }
-
-        return Parse(output);
     }
 
     public static FirewallStatus Parse(string output)

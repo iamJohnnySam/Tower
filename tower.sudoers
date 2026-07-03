@@ -10,5 +10,6 @@ atom ALL=(root) NOPASSWD: /usr/bin/systemctl start newsdigest, /usr/bin/systemct
 atom ALL=(root) NOPASSWD: /usr/bin/systemctl start blog-editor, /usr/bin/systemctl stop blog-editor, /usr/bin/systemctl restart blog-editor
 atom ALL=(root) NOPASSWD: /usr/bin/systemctl start tester, /usr/bin/systemctl stop tester, /usr/bin/systemctl restart tester
 atom ALL=(root) NOPASSWD: /usr/bin/systemctl start designworks, /usr/bin/systemctl stop designworks, /usr/bin/systemctl restart designworks
-# Read-only firewall status for the Firewall tab.
+# Firewall status + add-rule for the Firewall tab. Args are validated in FirewallService.
 atom ALL=(root) NOPASSWD: /usr/sbin/ufw status, /usr/sbin/ufw status verbose, /usr/sbin/ufw status numbered
+atom ALL=(root) NOPASSWD: /usr/sbin/ufw allow *, /usr/sbin/ufw deny *, /usr/sbin/ufw limit *, /usr/sbin/ufw reject *

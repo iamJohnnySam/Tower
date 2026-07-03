@@ -52,6 +52,30 @@
             </div>
         </section>
 
+        @* ── Add rule ────────────────────────────────────────────────────────── *@
+        <section class="fw-section">
+            <h2 class="section-title">Add rule</h2>
+            <div class="fw-addrule">
+                <select @bind="_newAction" class="fw-input">
+                    <option value="allow">Allow</option>
+                    <option value="deny">Deny</option>
+                    <option value="limit">Limit</option>
+                    <option value="reject">Reject</option>
+                </select>
+                <input type="number" min="1" max="65535" placeholder="Port" @bind="_newPort" class="fw-input fw-input-port" />
+                <select @bind="_newProto" class="fw-input">
+                    <option value="both">tcp+udp</option>
+                    <option value="tcp">tcp</option>
+                    <option value="udp">udp</option>
+                </select>
+                <button class="btn-primary btn-sm" @onclick="AddRuleAsync" disabled="@_adding">Add</button>
+            </div>
+            @if (_addError is not null)
+            {
+                <div class="fw-notice fw-notice-warn">@_addError</div>
+            }
+        </section>
+
         @* ── Rules ───────────────────────────────────────────────────────────── *@
         <section class="fw-section">
             <div class="fw-rules-head">
@@ -95,6 +119,33 @@
     private bool            _loading = true;
     private bool            _showV6;
     private FirewallStatus? _status;
+
+    private int?    _newPort;
+    private string  _newProto  = "both";
+    private string  _newAction = "allow";
+    private bool    _adding;
+    private string? _addError;
+
+    private async Task AddRuleAsync()
+    {
+        _addError = null;
+        if (_newPort is null) { _addError = "Enter a port."; return; }
+
+        _adding = true;
+        StateHasChanged();
+        _addError = await FirewallSvc.AddRuleAsync(_newPort.Value, _newProto, _newAction);
+        _adding = false;
+
+        if (_addError is null)
+        {
+            _newPort = null;
+            await LoadAsync();   // refresh the rule list
+        }
+        else
+        {
+            StateHasChanged();
+        }
+    }
 
     private List<FirewallRule> _visibleRules =>
         _status is null ? new() : _status.Rules.Where(r => _showV6 || !r.IsV6).ToList();
