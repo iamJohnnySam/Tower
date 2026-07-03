@@ -18,7 +18,7 @@ public class JellyfinParseTests {
     [Fact]
     public void ParseItemPath_returns_path_from_json()
     {
-        var json = """{"Id":"abc","Name":"The Dark Knight","Path":"/molecule/Media/Movies/The Dark Knight/tdknight.mkv"}""";
+        var json = """{"Items":[{"Id":"abc","Name":"The Dark Knight","Path":"/molecule/Media/Movies/The Dark Knight/tdknight.mkv"}],"TotalRecordCount":1}""";
         var path = JellyfinClient.ParseItemPath(json);
         Assert.Equal("/molecule/Media/Movies/The Dark Knight/tdknight.mkv", path);
     }
@@ -26,7 +26,7 @@ public class JellyfinParseTests {
     [Fact]
     public void ParseItemPath_returns_null_for_missing_path()
     {
-        var json = """{"Id":"abc","Name":"The Dark Knight"}""";
+        var json = """{"Items":[{"Id":"abc","Name":"The Dark Knight"}],"TotalRecordCount":1}""";
         Assert.Null(JellyfinClient.ParseItemPath(json));
     }
 

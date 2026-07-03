@@ -43,7 +43,7 @@ public class JellyfinClient(HttpClient http) {
         try
         {
             var node = JsonNode.Parse(json);
-            return node?["Path"]?.ToString();
+            return node?["Items"]?[0]?["Path"]?.ToString();
         }
         catch { return null; }
     }
@@ -53,7 +53,7 @@ public class JellyfinClient(HttpClient http) {
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var json = await http.GetStringAsync(
-                $"{baseUrl}/Items/{mediaId}?api_key={apiKey}&Fields=Path", cts.Token);
+                $"{baseUrl}/Items?ids={mediaId}&api_key={apiKey}&Fields=Path", cts.Token);
             return ParseItemPath(json);
         }
         catch { return null; }
