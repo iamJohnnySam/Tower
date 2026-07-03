@@ -114,6 +114,7 @@ builder.Services.AddSingleton<TelegramHub>();
 builder.Services.AddHostedService<TelegramPollWorker>();
 
 // ── Secrets (password manager) ───────────────────────────────────────────────
+builder.Services.AddScoped<Tower.Core.Secrets.VaultSession>();
 builder.Services.AddScoped<Tower.Core.Secrets.SecretService>();
 
 // ── Todo ─────────────────────────────────────────────────────────────────────

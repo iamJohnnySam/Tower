@@ -29,16 +29,18 @@ The target app needs its own systemd service (`/etc/systemd/system/<svc>.service
 ## Passwords / secrets store (/secrets page)
 
 Project credentials live in the `Secrets` table in `tower.db`. Model: `Secret.cs`
-(Id, Project, Label, Value, Notes, UpdatedAt). Values are **plaintext** (single-user LAN box).
-UI: `/secrets` page — add/edit/delete, masked with Show toggle.
+(Id, Project, Label, Value, Notes, UpdatedAt). The page is **gated by a master password**
+and each `Value` is **AES-256-GCM encrypted at rest** (`VaultCrypto`), keyed by PBKDF2 of
+the master password. Only `Project`/`Label`/`Notes` are plaintext.
 
-**To read a password yourself (Claude), query the prod DB directly — no network endpoint exposes them:**
-```bash
-sqlite3 /home/atom/Tower/tower.db "SELECT Project, Label, Value FROM Secrets WHERE Project='DesignWorks';"
-```
-To add/update from the shell:
-```bash
-sqlite3 /home/atom/Tower/tower.db \
-  "INSERT INTO Secrets (Project,Label,Value,Notes,UpdatedAt) VALUES ('X','label','secret',NULL,datetime('now'));"
-```
-When you set up a new project that has credentials, store them here so they survive and John can view them.
+- First visit sets the master password (`SecretService.ConfigureAsync` encrypts all existing
+  rows). `vault.salt` + `vault.verifier` (SHA256 of key) live in the `Settings` table; the key
+  itself is **never stored** — held in memory per Blazor circuit (`VaultSession`, scoped).
+- **You (Claude) can no longer read values via `sqlite3` once the vault is configured** — the
+  ciphertext is useless without the master password. That's intended. To read a value, John
+  unlocks the `/secrets` page. Adding new project creds: insert a row (Project/Label/Notes plain,
+  Value = the secret) *before* the vault is configured, or ask John to add it via the UI.
+- Check config state: `sqlite3 /home/atom/Tower/tower.db "SELECT Key FROM Settings WHERE Key='vault.salt';"`
+  — if a row exists, the vault is encrypted; do not write plaintext into `Secrets.Value`.
+
+When you set up a new project that has credentials, store them here so John can view them.
