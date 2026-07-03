@@ -3,7 +3,7 @@ using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 namespace Tower.Core.Jellyfin;
 public class JellyfinClient(HttpClient http, ILogger<JellyfinClient>? logger = null) {
-    public static List<SessionInfo> ParseSessions(string json) {
+    public static List<SessionInfo> ParseSessions(string json, ILogger? logger = null) {
         var list = new List<SessionInfo>();
         try {
             var arr = JsonNode.Parse(json) as JsonArray;
@@ -36,17 +36,17 @@ public class JellyfinClient(HttpClient http, ILogger<JellyfinClient>? logger = n
                     TranscodeReasons: reasons, Bitrate: bitrate,
                     VideoBitDepth: videoBitDepth));
             }
-        } catch { return new List<SessionInfo>(); }
+        } catch (Exception ex) { logger?.LogWarning(ex, "Failed to parse Jellyfin sessions JSON"); return new List<SessionInfo>(); }
         return list;
     }
-    public static string? ParseItemPath(string json)
+    public static string? ParseItemPath(string json, ILogger? logger = null)
     {
         try
         {
             var node = JsonNode.Parse(json);
             return node?["Items"]?[0]?["Path"]?.ToString();
         }
-        catch { return null; }
+        catch (Exception ex) { logger?.LogWarning(ex, "Failed to parse Jellyfin item path JSON"); return null; }
     }
     public async Task<string?> GetItemPathAsync(string baseUrl, string apiKey, string mediaId)
     {
@@ -55,7 +55,7 @@ public class JellyfinClient(HttpClient http, ILogger<JellyfinClient>? logger = n
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var json = await http.GetStringAsync(
                 $"{baseUrl}/Items?ids={mediaId}&api_key={apiKey}&Fields=Path", cts.Token);
-            return ParseItemPath(json);
+            return ParseItemPath(json, logger);
         }
         catch (Exception ex) { logger?.LogWarning(ex, "Jellyfin item-path lookup failed for media {MediaId}", mediaId); return null; }
     }
@@ -63,7 +63,7 @@ public class JellyfinClient(HttpClient http, ILogger<JellyfinClient>? logger = n
         try {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var json = await http.GetStringAsync($"{baseUrl}/Sessions?api_key={apiKey}", cts.Token);
-            return ParseSessions(json);
+            return ParseSessions(json, logger);
         } catch (Exception ex) { logger?.LogWarning(ex, "Jellyfin sessions fetch failed"); return null; }
     }
 }
