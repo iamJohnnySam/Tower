@@ -73,6 +73,7 @@ builder.Services.AddSingleton(sp => new ConversionService(
     telegram: sp.GetRequiredService<TelegramHub>(),
     jellyfinOpts: sp.GetRequiredService<JellyfinOptions>(),
     httpFactory: sp.GetRequiredService<IHttpClientFactory>(),
+    jellyfinLogger: sp.GetRequiredService<ILogger<JellyfinClient>>(),
     conversionTestPath: towerCfg.ConversionTestPath ?? "/tmp"
 ));
 

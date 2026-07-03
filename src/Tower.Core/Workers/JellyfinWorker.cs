@@ -1,6 +1,7 @@
 using System.Net.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Tower.Core.Conversion;
 using Tower.Core.Data;
 using Tower.Core.Jellyfin;
@@ -17,6 +18,7 @@ public class JellyfinWorker(
     IServiceScopeFactory scopes,
     JellyfinOptions opts,
     TelegramHub telegram,
+    ILogger<JellyfinClient> jellyfinLogger,
     ConversionService conversion) : BackgroundService
 {
     private readonly Dictionary<string, string> _prevPlaying = new();
@@ -44,7 +46,7 @@ public class JellyfinWorker(
 
                 if (configured)
                 {
-                    var client = new JellyfinClient(httpFactory.CreateClient(nameof(JellyfinClient)));
+                    var client = new JellyfinClient(httpFactory.CreateClient(nameof(JellyfinClient)), jellyfinLogger);
                     var fetched = await client.SessionsAsync(opts.JellyfinUrl, apiKey);
                     if (fetched is null)
                     {

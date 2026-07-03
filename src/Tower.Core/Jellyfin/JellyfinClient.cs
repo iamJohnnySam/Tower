@@ -1,7 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.Logging;
 namespace Tower.Core.Jellyfin;
-public class JellyfinClient(HttpClient http) {
+public class JellyfinClient(HttpClient http, ILogger<JellyfinClient>? logger = null) {
     public static List<SessionInfo> ParseSessions(string json) {
         var list = new List<SessionInfo>();
         try {
@@ -56,13 +57,13 @@ public class JellyfinClient(HttpClient http) {
                 $"{baseUrl}/Items?ids={mediaId}&api_key={apiKey}&Fields=Path", cts.Token);
             return ParseItemPath(json);
         }
-        catch { return null; }
+        catch (Exception ex) { logger?.LogWarning(ex, "Jellyfin item-path lookup failed for media {MediaId}", mediaId); return null; }
     }
     public async Task<List<SessionInfo>?> SessionsAsync(string baseUrl, string apiKey) {
         try {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var json = await http.GetStringAsync($"{baseUrl}/Sessions?api_key={apiKey}", cts.Token);
             return ParseSessions(json);
-        } catch { return null; }
+        } catch (Exception ex) { logger?.LogWarning(ex, "Jellyfin sessions fetch failed"); return null; }
     }
 }

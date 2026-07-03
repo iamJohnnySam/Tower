@@ -15,7 +15,8 @@ public class ConversionService(
     TelegramHub telegram,
     JellyfinOptions jellyfinOpts,
     IHttpClientFactory httpFactory,
-    string conversionTestPath)
+    string conversionTestPath,
+    ILogger<JellyfinClient>? jellyfinLogger = null)
 {
     private int _converting = 0;
     public bool IsConverting => _converting == 1;
@@ -58,7 +59,7 @@ public class ConversionService(
         string? filePath = null;
         if (!string.IsNullOrEmpty(apiKey) && !string.IsNullOrEmpty(mediaId))
         {
-            var client = new JellyfinClient(httpFactory.CreateClient(nameof(JellyfinClient)));
+            var client = new JellyfinClient(httpFactory.CreateClient(nameof(JellyfinClient)), jellyfinLogger);
             filePath = await client.GetItemPathAsync(jellyfinOpts.JellyfinUrl, apiKey, mediaId);
         }
 
