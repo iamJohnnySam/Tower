@@ -113,6 +113,9 @@ builder.Services.AddScoped<SubscriberService>();
 builder.Services.AddSingleton<TelegramHub>();
 builder.Services.AddHostedService<TelegramPollWorker>();
 
+// ── Secrets (password manager) ───────────────────────────────────────────────
+builder.Services.AddScoped<Tower.Core.Secrets.SecretService>();
+
 // ── Todo ─────────────────────────────────────────────────────────────────────
 builder.Services.AddScoped<TodoService>();
 builder.Services.AddSingleton<TodoTelegramHandler>();
@@ -174,6 +177,17 @@ using (var scope = app.Services.CreateScope())
             CreatedAt TEXT NOT NULL,
             DoneAt TEXT,
             TelegramMessageId INTEGER
+        );
+    ");
+
+    db.Database.ExecuteSqlRaw(@"
+        CREATE TABLE IF NOT EXISTS Secrets (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            Project TEXT NOT NULL,
+            Label TEXT NOT NULL,
+            Value TEXT NOT NULL,
+            Notes TEXT,
+            UpdatedAt TEXT NOT NULL
         );
     ");
 
