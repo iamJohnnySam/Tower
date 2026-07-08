@@ -139,6 +139,15 @@ builder.Services.AddSingleton<MediaBoxClient>();
 // Watchlist job (no trigger RPC exists for it).
 builder.Services.AddHostedService<MediaBoxScheduler>();
 
+// ── Solar (SolaX API + Gmail report import) ──────────────────────────────────
+builder.Services.AddHttpClient<Tower.Core.Solar.SolaxClient>();          // typed; page + worker resolve from scope
+builder.Services.AddSingleton<Tower.Core.Gmail.GmailTokenService>();
+builder.Services.AddHttpClient(nameof(Tower.Core.Gmail.GmailTokenService)); // named client used inside GmailTokenService
+builder.Services.AddHttpClient<Tower.Core.Gmail.GmailReader>();          // typed; page + worker resolve from scope
+builder.Services.AddSingleton<Tower.Core.Workers.SolarMailWorker>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<Tower.Core.Workers.SolarMailWorker>());
+builder.Services.AddHostedService<Tower.Core.Workers.SolaxPollWorker>();
+
 // ── Blazor ───────────────────────────────────────────────────────────────────
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -331,6 +340,21 @@ app.MapGet("/dropbox/callback", async (
     return ok
         ? Results.Redirect("/settings?dropbox=connected")
         : Results.Redirect("/settings?dropbox_error=" + Uri.EscapeDataString(err ?? "unknown"));
+});
+
+// ── Gmail OAuth callback ──────────────────────────────────────────────────────
+app.MapGet("/gmail/callback", async (
+    string? code, string? error,
+    Tower.Core.Gmail.GmailTokenService tokenSvc) =>
+{
+    if (!string.IsNullOrEmpty(error))
+        return Results.Redirect("/gmail?error=" + Uri.EscapeDataString(error));
+    if (string.IsNullOrEmpty(code))
+        return Results.Redirect("/gmail?error=no_code");
+    var (ok, err) = await tokenSvc.ExchangeCodeAsync(code);
+    return ok
+        ? Results.Redirect("/gmail?connected=1")
+        : Results.Redirect("/gmail?error=" + Uri.EscapeDataString(err ?? "unknown"));
 });
 
 app.Run();
