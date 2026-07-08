@@ -193,6 +193,40 @@ using (var scope = app.Services.CreateScope())
         );
     ");
 
+    db.Database.ExecuteSqlRaw(@"
+        CREATE TABLE IF NOT EXISTS SolarSnapshots (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            CapturedAt TEXT NOT NULL,
+            UploadTime TEXT,
+            AcPower REAL NOT NULL DEFAULT 0,
+            YieldToday REAL NOT NULL DEFAULT 0,
+            YieldTotal REAL NOT NULL DEFAULT 0,
+            FeedInPower REAL NOT NULL DEFAULT 0,
+            FeedInEnergy REAL NOT NULL DEFAULT 0,
+            ConsumeEnergy REAL NOT NULL DEFAULT 0,
+            Soc REAL NOT NULL DEFAULT 0,
+            BatPower REAL NOT NULL DEFAULT 0,
+            PowerDc1 REAL NOT NULL DEFAULT 0,
+            InverterStatus TEXT
+        );
+        CREATE INDEX IF NOT EXISTS IX_SolarSnapshots_CapturedAt ON SolarSnapshots (CapturedAt);
+        CREATE TABLE IF NOT EXISTS SolarReports (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ReportType INTEGER NOT NULL,
+            PeriodStart TEXT NOT NULL,
+            PeriodEnd TEXT NOT NULL,
+            PeriodYieldKWh REAL NOT NULL DEFAULT 0,
+            TotalYieldKWh REAL NOT NULL DEFAULT 0,
+            PeriodEarningsLkr TEXT NOT NULL DEFAULT '0',
+            TotalEarningsLkr TEXT NOT NULL DEFAULT '0',
+            Co2SavedTons REAL NOT NULL DEFAULT 0,
+            AlarmQuantity INTEGER NOT NULL DEFAULT 0,
+            GmailMessageId TEXT NOT NULL,
+            ImportedAt TEXT NOT NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS IX_SolarReports_GmailMessageId ON SolarReports (GmailMessageId);
+    ");
+
     // Reset any jobs stuck in Converting state from a previous run
     var stuckJobs = db.ConversionJobs
         .Where(j => j.Status == Tower.Core.Models.ConversionStatus.Converting)
