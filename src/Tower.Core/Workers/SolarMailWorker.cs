@@ -9,7 +9,7 @@ namespace Tower.Core.Workers;
 
 public class SolarMailWorker(IServiceScopeFactory scopes) : BackgroundService
 {
-    private const int IntervalMs = 1_800_000; // 30 minutes
+    private const int IntervalMs = 43_200_000; // 12 hours
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -34,9 +34,9 @@ public class SolarMailWorker(IServiceScopeFactory scopes) : BackgroundService
         var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
         var known = db.SolarReports.Select(r => r.GmailMessageId).ToHashSet();
 
-        // Bound the query with a lookback window to keep pages small.
-        var after = DateTime.UtcNow.AddDays(-45);
-        var ids = await reader.ListMessageIdsAsync(labelId!, after, ct);
+        // Full sweep of the label (no date bound): imported emails are trashed and leave
+        // the label, so it stays small — and this guarantees older reports get picked up too.
+        var ids = await reader.ListMessageIdsAsync(labelId!, null, ct);
 
         int imported = 0;
         string? lastError = null;

@@ -78,40 +78,42 @@
         </div>
     </section>
 
-    @* ── 3. Daily yield bar chart ──────────────────────────────────────────── *@
+    @* ── 3. Daily yield trend ──────────────────────────────────────────────── *@
     <section class="solar-section">
-        <h2 class="section-title">Daily yield (30d)</h2>
+        <h2 class="section-title">Daily yield trend (30d)</h2>
         <div class="atom-card">
-            @foreach (var d in _daily)
+            @if (_daily.Count > 1)
             {
-                <div class="solar-bar-row">
-                    <span class="text-muted">@d.PeriodEnd.ToString("MM-dd")</span>
-                    <span class="bar"><i style="width:@(BarPct(d.PeriodYieldKWh, _dailyMax))%"></i></span>
-                    <span class="mono">@d.PeriodYieldKWh.ToString("0.0")</span>
+                <Sparkline Data="_dailySeries" Width="640" Height="160" Color="#e3b341" FillColor="rgba(227,179,65,0.12)" />
+                <div class="text-muted mono" style="margin-top:0.4rem;">
+                    @_daily.First().PeriodEnd.ToString("MMM d") – @_daily.Last().PeriodEnd.ToString("MMM d")
+                    · latest @_daily.Last().PeriodYieldKWh.ToString("0.0") kWh
+                    · max @_daily.Max(d => d.PeriodYieldKWh).ToString("0.0") kWh
                 </div>
             }
-            @if (_daily.Count == 0)
+            else
             {
-                <div class="solar-notice solar-notice-idle">No daily reports imported yet.</div>
+                <div class="solar-notice solar-notice-idle">Not enough daily reports for a trend yet.</div>
             }
         </div>
     </section>
 
-    @* ── 3b. Monthly yield bar chart ─────────────────────────────────────────── *@
+    @* ── 3b. Monthly yield trend ─────────────────────────────────────────────── *@
     <section class="solar-section">
-        <h2 class="section-title">Monthly yield</h2>
+        <h2 class="section-title">Monthly yield trend</h2>
         <div class="atom-card">
-            @foreach (var m in _monthly)
+            @if (_monthly.Count > 1)
             {
-                <div class="solar-bar-row">
-                    <span class="text-muted">@m.PeriodEnd.ToString("yyyy-MM")</span>
-                    <span class="bar"><i style="width:@(BarPct(m.PeriodYieldKWh, _monthlyMax))%"></i></span>
-                    <span class="mono">@m.PeriodYieldKWh.ToString("0.0")</span>
+                <Sparkline Data="_monthlySeries" Width="640" Height="160" Color="#3fb950" FillColor="rgba(63,185,80,0.12)" />
+                <div class="text-muted mono" style="margin-top:0.4rem;">
+                    @_monthly.First().PeriodEnd.ToString("MMM yyyy") – @_monthly.Last().PeriodEnd.ToString("MMM yyyy")
+                    · latest @_monthly.Last().PeriodYieldKWh.ToString("0.0") kWh
+                    · max @_monthly.Max(m => m.PeriodYieldKWh).ToString("0.0") kWh
                 </div>
             }
-            @if (_monthly.Count == 0)
+            else
             {
-                <div class="solar-notice solar-notice-idle">No monthly reports imported yet.</div>
+                <div class="solar-notice solar-notice-idle">Need at least two monthly reports for a trend.</div>
             }
         </div>
     </section>
@@ -125,7 +127,7 @@
             </button>
             @if (_importMsg != null) { <span style="margin-left:0.75rem;">@_importMsg</span> }
         </div>
-        <p class="config-hint">Reports auto-import every 30 min; imported emails are moved to Gmail Trash.</p>
+        <p class="config-hint">Reports auto-import every 12 h; imported emails are moved to Gmail Trash.</p>
         <div class="pills">
             <button class="@Tab(SolarReportType.Daily)" @onclick="() => SetTab(SolarReportType.Daily)">Daily</button>
             <button class="@Tab(SolarReportType.Weekly)" @onclick="() => SetTab(SolarReportType.Weekly)">Weekly</button>
@@ -217,7 +219,7 @@
     private int _alarms;
     private double[] _todayPower = [], _todaySoc = [];
     private List<SolarReport> _daily = new(), _monthly = new(), _reports = new();
-    private double _dailyMax = 1, _monthlyMax = 1;
+    private double[] _dailySeries = [], _monthlySeries = [];
     private SolarReportType _tab = SolarReportType.Daily;
     private string _tokenId = "", _sn = "", _labelId = "";
     private string? _testMsg;
@@ -250,9 +252,9 @@
         _reports = await db.SolarReports.ToListAsync();
         _daily = _reports.Where(r => r.ReportType == SolarReportType.Daily)
             .OrderByDescending(r => r.PeriodEnd).Take(30).OrderBy(r => r.PeriodEnd).ToList();
-        _dailyMax = _daily.Count > 0 ? Math.Max(1, _daily.Max(d => d.PeriodYieldKWh)) : 1;
+        _dailySeries = _daily.Select(d => d.PeriodYieldKWh).ToArray();
         _monthly = _reports.Where(r => r.ReportType == SolarReportType.Monthly).OrderBy(r => r.PeriodEnd).ToList();
-        _monthlyMax = _monthly.Count > 0 ? Math.Max(1, _monthly.Max(d => d.PeriodYieldKWh)) : 1;
+        _monthlySeries = _monthly.Select(m => m.PeriodYieldKWh).ToArray();
         _alarms = _reports.OrderByDescending(r => r.PeriodEnd).FirstOrDefault()?.AlarmQuantity ?? 0;
     }
 
@@ -271,7 +273,6 @@
         finally { _importing = false; }
     }
 
-    private double BarPct(double v, double max) => Math.Round(v / max * 100, 1);
     private string Tab(SolarReportType t) => t == _tab ? "pill active" : "pill";
     private void SetTab(SolarReportType t) => _tab = t;
     private void SaveSolax() { Settings.Set("solax.token_id", _tokenId.Trim()); Settings.Set("solax.sn", _sn.Trim()); }
