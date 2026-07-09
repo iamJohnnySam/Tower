@@ -11,6 +11,7 @@ else
     <div class="dual-legend">
         <span><i style="background:@LeftColor"></i>@LeftName (@LeftUnit)</span>
         <span><i style="background:@RightColor"></i>@RightName (@RightUnit)</span>
+        @if (_hasDiff) { <span><i style="background:@DiffColor;height:2px;border:0"></i>@DiffName (@DiffUnit)</span> }
         @if (_hasMarkers) { <span><i style="background:#f85149;border-radius:50%"></i>alarms</span> }
     </div>
     <svg viewBox="0 0 @VbW @VbH" width="100%" preserveAspectRatio="xMidYMid meet"
@@ -30,12 +31,17 @@ else
     [Parameter] public string RightUnit { get; set; } = "";
     [Parameter] public string RightColor { get; set; } = "#58a6ff";
     [Parameter] public int[]? Markers { get; set; }
+    // Optional third line on its own independent scale (e.g. a yield-vs-sunlight gap).
+    [Parameter] public double[]? Diff { get; set; }
+    [Parameter] public string DiffName { get; set; } = "";
+    [Parameter] public string DiffUnit { get; set; } = "";
+    [Parameter] public string DiffColor { get; set; } = "#db61a2";
 
     private const double VbW = 1000, VbH = 340, PadL = 48, PadR = 54, PadT = 14, PadB = 40;
     private static readonly System.Globalization.CultureInfo Inv = System.Globalization.CultureInfo.InvariantCulture;
 
     private string _svg = "";
-    private bool _hasMarkers;
+    private bool _hasMarkers, _hasDiff;
 
     private static string F(double v) => v.ToString("0.#", Inv);
     private static string N(double v) => v.ToString(Math.Abs(v) >= 100 ? "0" : "0.0", Inv);
@@ -43,17 +49,20 @@ else
 
     protected override void OnParametersSet()
     {
-        _svg = ""; _hasMarkers = false;
+        _svg = ""; _hasMarkers = false; _hasDiff = false;
         int n = Left.Length;
         if (n < 2 || Right.Length != n) return;
+        bool hasDiff = Diff != null && Diff.Length == n;
 
         var (lMin, lMax) = Bounds(Left);
         var (rMin, rMax) = Bounds(Right);
         double plotW = VbW - PadL - PadR, plotH = VbH - PadT - PadB;
 
+        var (dMin, dMax) = hasDiff ? Bounds(Diff!) : (0, 1);
         double X(int i) => PadL + i * plotW / (n - 1);
         double YL(double v) => PadT + plotH - (v - lMin) / (lMax - lMin) * plotH;
         double YR(double v) => PadT + plotH - (v - rMin) / (rMax - rMin) * plotH;
+        double YD(double v) => PadT + plotH - (v - dMin) / (dMax - dMin) * plotH;
 
         var sb = new System.Text.StringBuilder();
 
@@ -88,6 +97,14 @@ else
         sb.Append($"<polyline points=\"{rPts.ToString().TrimEnd()}\" fill=\"none\" stroke=\"{RightColor}\" stroke-width=\"2\" stroke-linejoin=\"round\" />");
         sb.Append($"<polyline points=\"{lPts.ToString().TrimEnd()}\" fill=\"none\" stroke=\"{LeftColor}\" stroke-width=\"2\" stroke-linejoin=\"round\" />");
 
+        if (hasDiff)
+        {
+            _hasDiff = true;
+            var dPts = new System.Text.StringBuilder();
+            for (int i = 0; i < n; i++) dPts.Append($"{F(X(i))},{F(YD(Diff![i]))} ");
+            sb.Append($"<polyline points=\"{dPts.ToString().TrimEnd()}\" fill=\"none\" stroke=\"{DiffColor}\" stroke-width=\"2\" stroke-dasharray=\"5,4\" stroke-linejoin=\"round\" />");
+        }
+
         // points, alarm markers, hover tooltips
         for (int i = 0; i < n; i++)
         {
@@ -105,6 +122,7 @@ else
 
             var label = i < Labels.Count ? Labels[i] : "";
             var tip = $"{label}\n{LeftName}: {Left[i].ToString("0.0", Inv)} {LeftUnit}\n{RightName}: {Right[i].ToString("0.0", Inv)} {RightUnit}"
+                + (hasDiff ? $"\n{DiffName}: {Diff![i].ToString("0.0", Inv)} {DiffUnit}" : "")
                 + (m > 0 ? $"\nalarms: {m}" : "");
             sb.Append($"<circle cx=\"{F(x)}\" cy=\"{F((yl + yr) / 2)}\" r=\"10\" fill=\"transparent\"><title>{Esc(tip)}</title></circle>");
         }
