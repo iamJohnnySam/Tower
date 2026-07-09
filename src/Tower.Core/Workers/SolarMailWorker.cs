@@ -42,18 +42,24 @@ public class SolarMailWorker(IServiceScopeFactory scopes) : BackgroundService
         string? lastError = null;
         foreach (var id in ids)
         {
-            if (known.Contains(id)) continue;
             try
             {
+                if (known.Contains(id))
+                {
+                    // Already imported on a prior run — ensure it's out of the label (retry a failed trash).
+                    await reader.TrashMessageAsync(id, ct);
+                    continue;
+                }
                 var msg = await reader.GetMessageAsync(id, ct);
                 if (msg == null) continue;
                 var report = SolarReportParser.Parse(msg.Value.Subject, msg.Value.Body);
-                if (report == null) continue;
+                if (report == null) continue;   // leave unparseable emails in place for inspection
                 report.GmailMessageId = id;
                 report.ImportedAt = DateTime.UtcNow;
                 db.SolarReports.Add(report);
                 db.SaveChanges();
                 imported++;
+                await reader.TrashMessageAsync(id, ct);   // delete (trash) once safely imported
             }
             catch (Exception ex) { lastError = ex.Message; }
         }

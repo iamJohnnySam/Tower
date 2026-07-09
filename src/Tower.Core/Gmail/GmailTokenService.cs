@@ -5,7 +5,7 @@ using Tower.Core.Settings;
 namespace Tower.Core.Gmail;
 
 /// <summary>
-/// Google OAuth for gmail.readonly. Stores client_id/client_secret/refresh_token in the
+/// Google OAuth for gmail.modify (read + trash imported reports). Stores client_id/client_secret/refresh_token in the
 /// Settings table (keys gmail.*). Caches the short-lived access token in memory.
 /// Redirect is http://localhost:8888/gmail/callback (Google allows http for loopback).
 /// For a remote browser the callback won't load, but the ?code= is in the URL bar —
@@ -14,7 +14,7 @@ namespace Tower.Core.Gmail;
 public class GmailTokenService(IServiceScopeFactory scopes, IHttpClientFactory httpFactory)
 {
     public const string RedirectUri = "http://localhost:8888/gmail/callback";
-    public const string Scope = "https://www.googleapis.com/auth/gmail.readonly";
+    public const string Scope = "https://www.googleapis.com/auth/gmail.modify";
     private const string TokenEndpoint = "https://oauth2.googleapis.com/token";
 
     private string? _cachedToken;

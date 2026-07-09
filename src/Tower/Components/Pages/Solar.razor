@@ -6,11 +6,13 @@
 @using Tower.Core.Settings
 @using Tower.Core.Solar
 @using Tower.Core.Gmail
+@using Tower.Core.Workers
 @using Microsoft.Extensions.DependencyInjection
 @inject IServiceScopeFactory ScopeFactory
 @inject SettingsService Settings
 @inject SolaxClient Solax
 @inject GmailReader Reader
+@inject SolarMailWorker Mail
 
 <PageTitle>Tower — Solar</PageTitle>
 
@@ -117,6 +119,13 @@
     @* ── 4. Reports ────────────────────────────────────────────────────────── *@
     <section class="solar-section">
         <h2 class="section-title">Reports</h2>
+        <div class="config-row" style="margin-bottom:0.75rem;">
+            <button class="btn btn-primary btn-sm" @onclick="ImportNow" disabled="@_importing">
+                @(_importing ? "Importing…" : "Import reports now")
+            </button>
+            @if (_importMsg != null) { <span style="margin-left:0.75rem;">@_importMsg</span> }
+        </div>
+        <p class="config-hint">Reports auto-import every 30 min; imported emails are moved to Gmail Trash.</p>
         <div class="pills">
             <button class="@Tab(SolarReportType.Daily)" @onclick="() => SetTab(SolarReportType.Daily)">Daily</button>
             <button class="@Tab(SolarReportType.Weekly)" @onclick="() => SetTab(SolarReportType.Weekly)">Weekly</button>
@@ -212,9 +221,21 @@
     private SolarReportType _tab = SolarReportType.Daily;
     private string _tokenId = "", _sn = "", _labelId = "";
     private string? _testMsg;
+    private bool _importing;
+    private string? _importMsg;
     private List<(string Id, string Name)> _labels = new();
 
     protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+
+        _tokenId = Settings.Get("solax.token_id") ?? "";
+        _sn = Settings.Get("solax.sn") ?? "";
+        _labelId = Settings.Get("gmail.label_id") ?? "";
+        try { _labels = await Reader.ListLabelsAsync(); } catch { /* gmail not connected yet */ }
+    }
+
+    private async Task LoadDataAsync()
     {
         using var scope = ScopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
@@ -233,11 +254,21 @@
         _monthly = _reports.Where(r => r.ReportType == SolarReportType.Monthly).OrderBy(r => r.PeriodEnd).ToList();
         _monthlyMax = _monthly.Count > 0 ? Math.Max(1, _monthly.Max(d => d.PeriodYieldKWh)) : 1;
         _alarms = _reports.OrderByDescending(r => r.PeriodEnd).FirstOrDefault()?.AlarmQuantity ?? 0;
+    }
 
-        _tokenId = Settings.Get("solax.token_id") ?? "";
-        _sn = Settings.Get("solax.sn") ?? "";
-        _labelId = Settings.Get("gmail.label_id") ?? "";
-        try { _labels = await Reader.ListLabelsAsync(); } catch { /* gmail not connected yet */ }
+    private async Task ImportNow()
+    {
+        _importing = true;
+        _importMsg = null;
+        try
+        {
+            var n = await Mail.RunOnceAsync();
+            await LoadDataAsync();
+            var err = Settings.Get("solar.mail.last_error");
+            _importMsg = $"Imported {n} report(s)." + (string.IsNullOrEmpty(err) ? "" : $" Last error: {err}");
+        }
+        catch (Exception ex) { _importMsg = "Import failed: " + ex.Message; }
+        finally { _importing = false; }
     }
 
     private double BarPct(double v, double max) => Math.Round(v / max * 100, 1);
