@@ -6,7 +6,8 @@
 @using Tower.Core.Settings
 @using Tower.Core.Solar
 @using Tower.Core.Gmail
-@inject IDbContextFactory<TowerDbContext> DbFactory
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceScopeFactory ScopeFactory
 @inject SettingsService Settings
 @inject SolaxClient Solax
 @inject GmailReader Reader
@@ -90,6 +91,25 @@
             @if (_daily.Count == 0)
             {
                 <div class="solar-notice solar-notice-idle">No daily reports imported yet.</div>
+            }
+        </div>
+    </section>
+
+    @* ── 3b. Monthly yield bar chart ─────────────────────────────────────────── *@
+    <section class="solar-section">
+        <h2 class="section-title">Monthly yield</h2>
+        <div class="atom-card">
+            @foreach (var m in _monthly)
+            {
+                <div class="solar-bar-row">
+                    <span class="text-muted">@m.PeriodEnd.ToString("yyyy-MM")</span>
+                    <span class="bar"><i style="width:@(BarPct(m.PeriodYieldKWh, _monthlyMax))%"></i></span>
+                    <span class="mono">@m.PeriodYieldKWh.ToString("0.0")</span>
+                </div>
+            }
+            @if (_monthly.Count == 0)
+            {
+                <div class="solar-notice solar-notice-idle">No monthly reports imported yet.</div>
             }
         </div>
     </section>
@@ -187,8 +207,8 @@
     private SolarSnapshot? _latest;
     private int _alarms;
     private double[] _todayPower = [], _todaySoc = [];
-    private List<SolarReport> _daily = new(), _reports = new();
-    private double _dailyMax = 1;
+    private List<SolarReport> _daily = new(), _monthly = new(), _reports = new();
+    private double _dailyMax = 1, _monthlyMax = 1;
     private SolarReportType _tab = SolarReportType.Daily;
     private string _tokenId = "", _sn = "", _labelId = "";
     private string? _testMsg;
@@ -196,7 +216,8 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await using var db = await DbFactory.CreateDbContextAsync();
+        using var scope = ScopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
         _latest = await db.SolarSnapshots.OrderByDescending(x => x.CapturedAt).FirstOrDefaultAsync();
 
         var since = DateTime.UtcNow.Date;
@@ -209,6 +230,8 @@
         _daily = _reports.Where(r => r.ReportType == SolarReportType.Daily)
             .OrderByDescending(r => r.PeriodEnd).Take(30).OrderBy(r => r.PeriodEnd).ToList();
         _dailyMax = _daily.Count > 0 ? Math.Max(1, _daily.Max(d => d.PeriodYieldKWh)) : 1;
+        _monthly = _reports.Where(r => r.ReportType == SolarReportType.Monthly).OrderBy(r => r.PeriodEnd).ToList();
+        _monthlyMax = _monthly.Count > 0 ? Math.Max(1, _monthly.Max(d => d.PeriodYieldKWh)) : 1;
         _alarms = _reports.OrderByDescending(r => r.PeriodEnd).FirstOrDefault()?.AlarmQuantity ?? 0;
 
         _tokenId = Settings.Get("solax.token_id") ?? "";

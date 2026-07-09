@@ -33,7 +33,7 @@ public class SolaxPollWorker(IServiceScopeFactory scopes) : BackgroundService
                             .OrderByDescending(x => x.CapturedAt)
                             .Select(x => x.UploadTime)
                             .FirstOrDefault();
-                        if (snap.UploadTime == null || snap.UploadTime != lastUpload)
+                        if (snap.UploadTime != lastUpload)
                         {
                             db.SolarSnapshots.Add(snap);
                             db.SaveChanges();

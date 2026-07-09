@@ -83,7 +83,11 @@ public class GmailReader(HttpClient http, GmailTokenService tokens)
                 var found = ExtractText(child);
                 if (!string.IsNullOrEmpty(found)) return found;
             }
-        return Decode(part);
+        var decoded = Decode(part);
+        if (part.TryGetProperty("mimeType", out var fallbackMt) &&
+            (fallbackMt.GetString() ?? "").StartsWith("text/html", StringComparison.OrdinalIgnoreCase))
+            return System.Text.RegularExpressions.Regex.Replace(decoded, "<[^>]+>", " ");
+        return decoded;
     }
 
     private static string Decode(JsonElement part)

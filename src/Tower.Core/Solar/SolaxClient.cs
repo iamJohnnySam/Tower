@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Tower.Core.Models;
 
@@ -40,8 +41,14 @@ public class SolaxClient(HttpClient http)
         };
     }
 
-    private static double Dbl(JsonElement e, string name) =>
-        e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : 0;
+    private static double Dbl(JsonElement e, string name)
+    {
+        if (!e.TryGetProperty(name, out var v)) return 0;
+        if (v.ValueKind == JsonValueKind.Number) return v.GetDouble();
+        if (v.ValueKind == JsonValueKind.String &&
+            double.TryParse(v.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var d)) return d;
+        return 0;
+    }
 
     private static string? Str(JsonElement e, string name) =>
         e.TryGetProperty(name, out var v) ? v.ToString() : null;
