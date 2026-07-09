@@ -97,6 +97,7 @@
             <DualLineChart Labels="_dailyLabels"
                            Left="_dailyYield" LeftName="Daily yield" LeftUnit="kWh" LeftColor="#e3b341"
                            Right="_dailyIrr" RightName="Irradiance" RightUnit="MJ/m²" RightColor="#58a6ff"
+                           Diff="_dailyGap" DiffName="Yield gap (7d avg)" DiffUnit="kWh" DiffColor="#db61a2"
                            Markers="_dailyAlarms" />
             @if (_dailyYield.Length > 1)
             {
@@ -246,7 +247,7 @@
     private DateTime _from, _to;
     // daily chart series
     private List<string> _dailyLabels = new();
-    private double[] _dailyYield = [], _dailyIrr = [];
+    private double[] _dailyYield = [], _dailyIrr = [], _dailyGap = [];
     private int[] _dailyAlarms = [];
     private int _alarmTotal;
     // weekly chart series
@@ -317,6 +318,19 @@
         _dailyIrr = d.Select(x => _weatherDict.GetValueOrDefault(x.PeriodEnd.Date)).ToArray();
         _dailyAlarms = d.Select(x => _alarmsByDate.GetValueOrDefault(x.PeriodEnd.Date)).ToArray();
         _alarmTotal = _dailyAlarms.Sum();
+
+        // "Gap" line: how far actual yield falls below what the sunlight predicts.
+        // expected = k·irradiance (k = median yield-per-MJ over the window); gap = expected − actual.
+        // Rising gap = panels increasingly underperforming the available sunlight. 7-day smoothed.
+        var prs = _dailyYield.Zip(_dailyIrr, (y, irr) => (y, irr)).Where(p => p.irr > 0)
+            .Select(p => p.y / p.irr).ToList();
+        if (prs.Count >= 2)
+        {
+            double k = Median(prs);
+            var gapRaw = _dailyYield.Zip(_dailyIrr, (y, irr) => irr > 0 ? k * irr - y : 0.0).ToArray();
+            _dailyGap = MovingAvg(gapRaw, 7);
+        }
+        else _dailyGap = [];
 
         // Weekly (Mon-start) aggregation over the selected range: yield summed, irradiance averaged.
         var weeks = d.GroupBy(x => StartOfWeek(x.PeriodEnd.Date)).OrderBy(g => g.Key).ToList();
@@ -397,6 +411,20 @@
         var s = xs.OrderBy(v => v).ToList();
         int m = s.Count / 2;
         return s.Count % 2 == 1 ? s[m] : (s[m - 1] + s[m]) / 2.0;
+    }
+
+    // Trailing moving average over up to `win` prior points.
+    private static double[] MovingAvg(double[] xs, int win)
+    {
+        var outp = new double[xs.Length];
+        for (int i = 0; i < xs.Length; i++)
+        {
+            int start = Math.Max(0, i - win + 1);
+            double sum = 0;
+            for (int j = start; j <= i; j++) sum += xs[j];
+            outp[i] = sum / (i - start + 1);
+        }
+        return outp;
     }
 
     private async Task ImportNow()
