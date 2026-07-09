@@ -78,17 +78,34 @@
         </div>
     </section>
 
-    @* ── 3. Daily yield trend ──────────────────────────────────────────────── *@
+    @* ── 3. Sunlight vs yield + maintenance ─────────────────────────────────── *@
     <section class="solar-section">
-        <h2 class="section-title">Daily yield trend (30d)</h2>
+        <h2 class="section-title">Sunlight vs yield (30d)</h2>
+
+        @if (_maintMsg != null)
+        {
+            <div class="solar-notice @(_maintAlert ? "solar-notice-alert" : "solar-notice-ok")">@_maintMsg</div>
+        }
+
         <div class="atom-card">
             @if (_daily.Count > 1)
             {
-                <Sparkline Data="_dailySeries" Width="640" Height="160" Color="#e3b341" FillColor="rgba(227,179,65,0.12)" />
+                <div class="text-muted" style="font-size:0.85rem;margin-bottom:0.2rem;">Sunlight — irradiance (MJ/m²)</div>
+                <Sparkline Data="_irradianceSeries" Width="640" Height="90" Color="#58a6ff" FillColor="rgba(88,166,255,0.10)" />
+
+                <div class="text-muted" style="font-size:0.85rem;margin:0.6rem 0 0.2rem;">Daily yield (kWh) · red dots = abnormal-power alarms</div>
+                <svg viewBox="0 0 640 160" width="640" height="160" preserveAspectRatio="none"
+                     style="max-width:100%;display:block;">
+                    <polyline points="@_dailyArea" fill="rgba(227,179,65,0.12)" stroke="none" />
+                    <polyline points="@_dailyLine" fill="none" stroke="#e3b341" stroke-width="1.5"
+                              stroke-linecap="round" stroke-linejoin="round" />
+                    @((MarkupString)_dailyMarkersSvg)
+                </svg>
                 <div class="text-muted mono" style="margin-top:0.4rem;">
                     @_daily.First().PeriodEnd.ToString("MMM d") – @_daily.Last().PeriodEnd.ToString("MMM d")
                     · latest @_daily.Last().PeriodYieldKWh.ToString("0.0") kWh
                     · max @_daily.Max(d => d.PeriodYieldKWh).ToString("0.0") kWh
+                    @if (_alarmTotal > 0) { <span> · @_alarmTotal alarm(s) in window</span> }
                 </div>
             }
             else
@@ -219,13 +236,18 @@
     private int _alarms;
     private double[] _todayPower = [], _todaySoc = [];
     private List<SolarReport> _daily = new(), _monthly = new(), _reports = new();
-    private double[] _dailySeries = [], _monthlySeries = [];
+    private double[] _dailySeries = [], _monthlySeries = [], _irradianceSeries = [];
+    private string _dailyLine = "", _dailyArea = "", _dailyMarkersSvg = "";
+    private int _alarmTotal;
+    private bool _maintAlert;
+    private string? _maintMsg;
     private SolarReportType _tab = SolarReportType.Daily;
     private string _tokenId = "", _sn = "", _labelId = "";
     private string? _testMsg;
     private bool _importing;
     private string? _importMsg;
     private List<(string Id, string Name)> _labels = new();
+    private static readonly System.Globalization.CultureInfo Inv = System.Globalization.CultureInfo.InvariantCulture;
 
     protected override async Task OnInitializedAsync()
     {
@@ -256,6 +278,101 @@
         _monthly = _reports.Where(r => r.ReportType == SolarReportType.Monthly).OrderBy(r => r.PeriodEnd).ToList();
         _monthlySeries = _monthly.Select(m => m.PeriodYieldKWh).ToArray();
         _alarms = _reports.OrderByDescending(r => r.PeriodEnd).FirstOrDefault()?.AlarmQuantity ?? 0;
+
+        var weather = (await db.SolarWeather.ToListAsync()).ToDictionary(w => w.Date.Date, w => w.ShortwaveRadiationMJ);
+        var alarmsByDate = (await db.SolarAlarms.ToListAsync())
+            .GroupBy(a => a.AlarmDate.Date).ToDictionary(g => g.Key, g => g.Count());
+
+        _irradianceSeries = _daily.Select(d => weather.GetValueOrDefault(d.PeriodEnd.Date)).ToArray();
+        BuildDailyChart(alarmsByDate);
+        ComputeMaintenance(weather, alarmsByDate);
+    }
+
+    // Yield line + area + red alarm markers, geometry over a 640x160 viewBox.
+    private void BuildDailyChart(Dictionary<DateTime, int> alarmsByDate)
+    {
+        _dailyLine = ""; _dailyArea = ""; _dailyMarkersSvg = ""; _alarmTotal = 0;
+        int n = _daily.Count;
+        if (n < 2) return;
+
+        const double W = 640, H = 160;
+        double max = _daily.Max(d => d.PeriodYieldKWh);
+        double min = _daily.Min(d => d.PeriodYieldKWh);
+        double range = max - min; if (range < 1) { min = 0; range = max < 1 ? 1 : max; }
+
+        var line = new System.Text.StringBuilder();
+        var area = new System.Text.StringBuilder($"0,{H.ToString(Inv)} ");
+        var markers = new System.Text.StringBuilder();
+        for (int i = 0; i < n; i++)
+        {
+            double x = i * (W - 1) / (n - 1);
+            double y = H - 1 - (_daily[i].PeriodYieldKWh - min) / range * (H - 2);
+            string xs = x.ToString("0.#", Inv), ys = y.ToString("0.#", Inv);
+            line.Append($"{xs},{ys} ");
+            area.Append($"{xs},{ys} ");
+
+            var c = alarmsByDate.GetValueOrDefault(_daily[i].PeriodEnd.Date);
+            if (c > 0)
+            {
+                _alarmTotal += c;
+                markers.Append($"<circle cx=\"{xs}\" cy=\"{ys}\" r=\"4\" fill=\"#f85149\" />");
+                markers.Append($"<text x=\"{xs}\" y=\"{(y - 7).ToString("0.#", Inv)}\" fill=\"#f85149\" font-size=\"10\" text-anchor=\"middle\">{c}</text>");
+            }
+        }
+        area.Append($"{(W - 1).ToString("0.#", Inv)},{H.ToString(Inv)}");
+        _dailyLine = line.ToString().TrimEnd();
+        _dailyArea = area.ToString();
+        _dailyMarkersSvg = markers.ToString();
+    }
+
+    // Flag maintenance when recent output is low relative to sunlight, or alarms fired recently.
+    // Performance ratio PR = yield / irradiance; compare last-7-day mean to the median baseline.
+    private void ComputeMaintenance(Dictionary<DateTime, double> weather, Dictionary<DateTime, int> alarmsByDate)
+    {
+        _maintAlert = false; _maintMsg = null;
+
+        var recentAlarms = alarmsByDate.Where(kv => kv.Key >= DateTime.UtcNow.Date.AddDays(-7)).Sum(kv => kv.Value);
+
+        var prs = _daily
+            .Select(d => new { d.PeriodEnd, Rad = weather.GetValueOrDefault(d.PeriodEnd.Date), d.PeriodYieldKWh })
+            .Where(x => x.Rad > 0)
+            .Select(x => new { x.PeriodEnd, Pr = x.PeriodYieldKWh / x.Rad })
+            .OrderBy(x => x.PeriodEnd)
+            .ToList();
+
+        double threshold = 0.80;
+        if (double.TryParse(Settings.Get("solar.maint.threshold"), System.Globalization.NumberStyles.Float, Inv, out var t) && t > 0)
+            threshold = t;
+
+        if (prs.Count >= 14)
+        {
+            var baseline = Median(prs.Select(p => p.Pr).ToList());
+            var recent = prs.TakeLast(7).Average(p => p.Pr);
+            var ratio = baseline > 0 ? recent / baseline : 1;
+            if (ratio < threshold)
+            {
+                _maintAlert = true;
+                _maintMsg = $"⚠ Maintenance likely — last-7-day output is {(1 - ratio) * 100:0}% below what the sunlight received predicts. Check panels for soiling, shading, or a faulty string.";
+            }
+        }
+
+        if (recentAlarms > 0)
+        {
+            _maintAlert = true;
+            _maintMsg = (_maintMsg == null ? "" : _maintMsg + " ")
+                + $"⚠ {recentAlarms} abnormal-power alarm(s) from the inverter in the last 7 days.";
+        }
+
+        if (!_maintAlert && prs.Count >= 14)
+            _maintMsg = "✓ Performance normal — output tracks the available sunlight, no recent alarms.";
+    }
+
+    private static double Median(List<double> xs)
+    {
+        if (xs.Count == 0) return 0;
+        var s = xs.OrderBy(v => v).ToList();
+        int m = s.Count / 2;
+        return s.Count % 2 == 1 ? s[m] : (s[m - 1] + s[m]) / 2.0;
     }
 
     private async Task ImportNow()
