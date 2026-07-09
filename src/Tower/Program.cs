@@ -139,6 +139,15 @@ builder.Services.AddSingleton<MediaBoxClient>();
 // Watchlist job (no trigger RPC exists for it).
 builder.Services.AddHostedService<MediaBoxScheduler>();
 
+// ── Solar (SolaX API + Gmail report import) ──────────────────────────────────
+builder.Services.AddHttpClient<Tower.Core.Solar.SolaxClient>();          // typed; page + worker resolve from scope
+builder.Services.AddSingleton<Tower.Core.Gmail.GmailTokenService>();
+builder.Services.AddHttpClient(nameof(Tower.Core.Gmail.GmailTokenService)); // named client used inside GmailTokenService
+builder.Services.AddHttpClient<Tower.Core.Gmail.GmailReader>();          // typed; page + worker resolve from scope
+builder.Services.AddSingleton<Tower.Core.Workers.SolarMailWorker>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<Tower.Core.Workers.SolarMailWorker>());
+builder.Services.AddHostedService<Tower.Core.Workers.SolaxPollWorker>();
+
 // ── Blazor ───────────────────────────────────────────────────────────────────
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -191,6 +200,40 @@ using (var scope = app.Services.CreateScope())
             Notes TEXT,
             UpdatedAt TEXT NOT NULL
         );
+    ");
+
+    db.Database.ExecuteSqlRaw(@"
+        CREATE TABLE IF NOT EXISTS SolarSnapshots (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            CapturedAt TEXT NOT NULL,
+            UploadTime TEXT,
+            AcPower REAL NOT NULL DEFAULT 0,
+            YieldToday REAL NOT NULL DEFAULT 0,
+            YieldTotal REAL NOT NULL DEFAULT 0,
+            FeedInPower REAL NOT NULL DEFAULT 0,
+            FeedInEnergy REAL NOT NULL DEFAULT 0,
+            ConsumeEnergy REAL NOT NULL DEFAULT 0,
+            Soc REAL NOT NULL DEFAULT 0,
+            BatPower REAL NOT NULL DEFAULT 0,
+            PowerDc1 REAL NOT NULL DEFAULT 0,
+            InverterStatus TEXT
+        );
+        CREATE INDEX IF NOT EXISTS IX_SolarSnapshots_CapturedAt ON SolarSnapshots (CapturedAt);
+        CREATE TABLE IF NOT EXISTS SolarReports (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ReportType INTEGER NOT NULL,
+            PeriodStart TEXT NOT NULL,
+            PeriodEnd TEXT NOT NULL,
+            PeriodYieldKWh REAL NOT NULL DEFAULT 0,
+            TotalYieldKWh REAL NOT NULL DEFAULT 0,
+            PeriodEarningsLkr TEXT NOT NULL DEFAULT '0',
+            TotalEarningsLkr TEXT NOT NULL DEFAULT '0',
+            Co2SavedTons REAL NOT NULL DEFAULT 0,
+            AlarmQuantity INTEGER NOT NULL DEFAULT 0,
+            GmailMessageId TEXT NOT NULL,
+            ImportedAt TEXT NOT NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS IX_SolarReports_GmailMessageId ON SolarReports (GmailMessageId);
     ");
 
     // Reset any jobs stuck in Converting state from a previous run
@@ -297,6 +340,21 @@ app.MapGet("/dropbox/callback", async (
     return ok
         ? Results.Redirect("/settings?dropbox=connected")
         : Results.Redirect("/settings?dropbox_error=" + Uri.EscapeDataString(err ?? "unknown"));
+});
+
+// ── Gmail OAuth callback ──────────────────────────────────────────────────────
+app.MapGet("/gmail/callback", async (
+    string? code, string? error,
+    Tower.Core.Gmail.GmailTokenService tokenSvc) =>
+{
+    if (!string.IsNullOrEmpty(error))
+        return Results.Redirect("/gmail?error=" + Uri.EscapeDataString(error));
+    if (string.IsNullOrEmpty(code))
+        return Results.Redirect("/gmail?error=no_code");
+    var (ok, err) = await tokenSvc.ExchangeCodeAsync(code);
+    return ok
+        ? Results.Redirect("/gmail?connected=1")
+        : Results.Redirect("/gmail?error=" + Uri.EscapeDataString(err ?? "unknown"));
 });
 
 app.Run();

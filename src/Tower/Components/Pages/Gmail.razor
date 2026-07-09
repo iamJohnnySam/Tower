@@ -1,0 +1,218 @@
+@page "/gmail"
+@rendermode InteractiveServer
+@using Tower.Core.Gmail
+@using Tower.Core.Settings
+@using Tower.Core.Workers
+@inject GmailTokenService Tokens
+@inject GmailReader Reader
+@inject SolarMailWorker Mail
+@inject SettingsService SettingsSvc
+@inject NavigationManager Navigation
+
+<PageTitle>Tower — Gmail</PageTitle>
+
+<div class="gmail-page">
+
+    <h1 class="page-title">Gmail</h1>
+
+    @* ── Connection ────────────────────────────────────────────────────────────── *@
+    <section class="atom-section-block">
+        <div class="atom-block-title">Connection</div>
+        <div class="config-form">
+
+            @if (_connected)
+            {
+                <div class="config-row">
+                    <label class="config-label">Status</label>
+                    <div class="config-control">
+                        <div class="key-configured-row">
+                            <span class="val-green configured-badge">&#10003; Connected (gmail.readonly)</span>
+                            <button class="btn-secondary btn-sm" @onclick="Disconnect">Disconnect</button>
+                        </div>
+                        @if (_flash is not null)
+                        {
+                            <span class="save-confirm">@_flash</span>
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="config-row">
+                    <label class="config-label">Client ID</label>
+                    <div class="config-control">
+                        <input type="text" class="config-input config-input-wide"
+                               @bind="_clientId" @bind:event="oninput" />
+                    </div>
+                </div>
+                <div class="config-row">
+                    <label class="config-label">Client Secret</label>
+                    <div class="config-control">
+                        <input type="password" class="config-input config-input-wide"
+                               @bind="_clientSecret" @bind:event="oninput" />
+                    </div>
+                </div>
+                <div class="config-row">
+                    <label class="config-label"></label>
+                    <div class="config-control">
+                        <button class="btn btn-primary btn-sm"
+                                disabled="@(string.IsNullOrWhiteSpace(_clientId) || string.IsNullOrWhiteSpace(_clientSecret))"
+                                @onclick="SaveCredsAndStart">Connect</button>
+                        @if (_flash is not null)
+                        {
+                            <span class="val-red">@_flash</span>
+                        }
+                    </div>
+                </div>
+                <div class="config-row">
+                    <label class="config-label"></label>
+                    <div class="config-control">
+                        <details>
+                            <summary class="config-hint">Remote browser? Paste the code</summary>
+                            <p class="config-hint">
+                                After approving, if the localhost page fails to load, copy the
+                                <code>code</code> value from the browser URL bar and paste it here.
+                            </p>
+                            <div class="key-input-row">
+                                <input type="text" class="config-input config-input-wide"
+                                       placeholder="4/0A..." @bind="_pasteCode" @bind:event="oninput" />
+                                <button class="btn btn-primary btn-sm"
+                                        disabled="@string.IsNullOrWhiteSpace(_pasteCode)"
+                                        @onclick="ExchangePasted">Submit code</button>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+            }
+
+        </div>
+    </section>
+
+    @if (_connected)
+    {
+        @* ── Labels ────────────────────────────────────────────────────────────── *@
+        <section class="atom-section-block">
+            <div class="atom-block-title">Labels</div>
+            <div class="config-form">
+                <div class="config-row">
+                    <label class="config-label"></label>
+                    <div class="config-control">
+                        <button class="btn-secondary btn-sm" @onclick="LoadLabels">Refresh</button>
+                    </div>
+                </div>
+            </div>
+
+            <table class="atom-table">
+                <thead>
+                    <tr><th>Name</th><th>Id</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var l in _labels)
+                    {
+                        <tr>
+                            <td>@l.Name</td>
+                            <td class="mono text-muted">@l.Id</td>
+                        </tr>
+                    }
+                    @if (!_labels.Any())
+                    {
+                        <tr><td colspan="2" class="text-muted">No labels loaded.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </section>
+
+        @* ── Import log ───────────────────────────────────────────────────────── *@
+        <section class="atom-section-block">
+            <div class="atom-block-title">Import Log</div>
+            <div class="config-form">
+                <div class="config-row">
+                    <label class="config-label">Last run</label>
+                    <div class="config-control">@(_lastRun ?? "never")</div>
+                </div>
+                <div class="config-row">
+                    <label class="config-label">Imported</label>
+                    <div class="config-control">@_lastCount</div>
+                </div>
+                <div class="config-row">
+                    <label class="config-label">Error</label>
+                    <div class="config-control">@(_lastError ?? "none")</div>
+                </div>
+                <div class="config-row">
+                    <label class="config-label"></label>
+                    <div class="config-control">
+                        <button class="btn btn-primary btn-sm" disabled="@_importing" @onclick="ImportNow">
+                            @(_importing ? "Importing…" : "Import now")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    }
+
+</div>
+
+@code {
+    private bool _connected;
+    private string _clientId = "", _clientSecret = "", _pasteCode = "";
+    private string? _flash, _lastRun, _lastError;
+    private int _lastCount;
+    private bool _importing;
+    private List<(string Id, string Name)> _labels = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var uri = new Uri(Navigation.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        if (query["connected"] is not null) _flash = "Gmail connected.";
+        else if (query["error"] is { } err) _flash = "Error: " + err;
+
+        _connected = Tokens.IsConnected;
+        _clientId = SettingsSvc.Get("gmail.client_id") ?? "";
+        _lastRun = SettingsSvc.Get("solar.mail.last_run");
+        _lastError = SettingsSvc.Get("solar.mail.last_error");
+        int.TryParse(SettingsSvc.Get("solar.mail.last_count"), out _lastCount);
+        if (_connected) await LoadLabels();
+    }
+
+    private void SaveCredsAndStart()
+    {
+        SettingsSvc.Set("gmail.client_id", _clientId.Trim());
+        SettingsSvc.Set("gmail.client_secret", _clientSecret.Trim());
+        Navigation.NavigateTo(Tokens.BuildAuthUrl(_clientId.Trim()), forceLoad: true);
+    }
+
+    private async Task ExchangePasted()
+    {
+        var (ok, err) = await Tokens.ExchangeCodeAsync(_pasteCode);
+        _flash = ok ? "Gmail connected." : "Error: " + err;
+        _connected = Tokens.IsConnected;
+        if (_connected) await LoadLabels();
+    }
+
+    private async Task LoadLabels()
+    {
+        try { _labels = await Reader.ListLabelsAsync(); }
+        catch (Exception ex) { _flash = "Label load failed: " + ex.Message; }
+    }
+
+    private void Disconnect()
+    {
+        Tokens.Disconnect();
+        _connected = false;
+        _labels.Clear();
+    }
+
+    private async Task ImportNow()
+    {
+        _importing = true;
+        try
+        {
+            _lastCount = await Mail.RunOnceAsync();
+            _lastRun = SettingsSvc.Get("solar.mail.last_run");
+            _lastError = SettingsSvc.Get("solar.mail.last_error");
+            _flash = $"Imported {_lastCount} report(s).";
+        }
+        finally { _importing = false; }
+    }
+}
