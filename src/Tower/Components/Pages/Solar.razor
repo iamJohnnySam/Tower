@@ -1,0 +1,231 @@
+@page "/solar"
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using Tower.Core.Data
+@using Tower.Core.Models
+@using Tower.Core.Settings
+@using Tower.Core.Solar
+@using Tower.Core.Gmail
+@inject IDbContextFactory<TowerDbContext> DbFactory
+@inject SettingsService Settings
+@inject SolaxClient Solax
+@inject GmailReader Reader
+
+<PageTitle>Tower — Solar</PageTitle>
+
+<div class="solar-page">
+
+    <h1 class="page-title">Solar</h1>
+
+    @* ── 1. Live Tiles ─────────────────────────────────────────────────────── *@
+    <section class="solar-section">
+        <h2 class="section-title">Live</h2>
+
+        @if (_latest is { } s)
+        {
+            <div class="atom-cards-grid">
+                <div class="atom-card">
+                    <div class="atom-card-title">AC Power</div>
+                    <div class="atom-big-value">@s.AcPower.ToString("0") W</div>
+                </div>
+                <div class="atom-card">
+                    <div class="atom-card-title">Battery</div>
+                    <div class="atom-big-value">@s.Soc.ToString("0")%</div>
+                </div>
+                <div class="atom-card">
+                    <div class="atom-card-title">Today</div>
+                    <div class="atom-big-value">@s.YieldToday.ToString("0.0") kWh</div>
+                </div>
+                <div class="atom-card">
+                    <div class="atom-card-title">Grid</div>
+                    <div class="atom-big-value">@s.FeedInPower.ToString("0") W</div>
+                </div>
+                <div class="atom-card">
+                    <div class="atom-card-title">Total</div>
+                    <div class="atom-big-value">@s.YieldTotal.ToString("0") kWh</div>
+                </div>
+                <div class="atom-card">
+                    <div class="atom-card-title">Status</div>
+                    <div class="atom-big-value">@(s.InverterStatus ?? "—")</div>
+                </div>
+                <div class="atom-card">
+                    <div class="atom-card-title">Alarms</div>
+                    <div class="atom-big-value @(_alarms > 0 ? "val-red" : "val-green")">@_alarms</div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="solar-notice solar-notice-info">No live data yet. Configure SolaX below.</div>
+        }
+    </section>
+
+    @* ── 2. Charts ─────────────────────────────────────────────────────────── *@
+    <section class="solar-section">
+        <h2 class="section-title">Power today</h2>
+        <div class="atom-card">
+            <Sparkline Data="_todayPower" Width="640" Height="140" />
+        </div>
+    </section>
+
+    <section class="solar-section">
+        <h2 class="section-title">Battery SOC today</h2>
+        <div class="atom-card">
+            <Sparkline Data="_todaySoc" Width="640" Height="140" Color="#3fb950" FillColor="rgba(63,185,80,0.12)" />
+        </div>
+    </section>
+
+    @* ── 3. Daily yield bar chart ──────────────────────────────────────────── *@
+    <section class="solar-section">
+        <h2 class="section-title">Daily yield (30d)</h2>
+        <div class="atom-card">
+            @foreach (var d in _daily)
+            {
+                <div class="solar-bar-row">
+                    <span class="text-muted">@d.PeriodEnd.ToString("MM-dd")</span>
+                    <span class="bar"><i style="width:@(BarPct(d.PeriodYieldKWh, _dailyMax))%"></i></span>
+                    <span class="mono">@d.PeriodYieldKWh.ToString("0.0")</span>
+                </div>
+            }
+            @if (_daily.Count == 0)
+            {
+                <div class="solar-notice solar-notice-idle">No daily reports imported yet.</div>
+            }
+        </div>
+    </section>
+
+    @* ── 4. Reports ────────────────────────────────────────────────────────── *@
+    <section class="solar-section">
+        <h2 class="section-title">Reports</h2>
+        <div class="pills">
+            <button class="@Tab(SolarReportType.Daily)" @onclick="() => SetTab(SolarReportType.Daily)">Daily</button>
+            <button class="@Tab(SolarReportType.Weekly)" @onclick="() => SetTab(SolarReportType.Weekly)">Weekly</button>
+            <button class="@Tab(SolarReportType.Monthly)" @onclick="() => SetTab(SolarReportType.Monthly)">Monthly</button>
+        </div>
+        <table class="atom-table">
+            <thead>
+                <tr><th>Period</th><th>Yield kWh</th><th>Earnings LKR</th><th>CO₂ t</th><th>Alarms</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var r in _reports.Where(r => r.ReportType == _tab).OrderByDescending(r => r.PeriodEnd))
+                {
+                    <tr>
+                        <td>@r.PeriodStart.ToString("yyyy-MM-dd")@(r.PeriodStart != r.PeriodEnd ? " – " + r.PeriodEnd.ToString("MM-dd") : "")</td>
+                        <td>@r.PeriodYieldKWh.ToString("0.0")</td>
+                        <td>@r.PeriodEarningsLkr.ToString("N2")</td>
+                        <td>@r.Co2SavedTons.ToString("0.0")</td>
+                        <td>@r.AlarmQuantity</td>
+                    </tr>
+                }
+                @if (!_reports.Any(r => r.ReportType == _tab))
+                {
+                    <tr><td colspan="5" class="text-muted">No @(_tab.ToString().ToLower()) reports yet.</td></tr>
+                }
+            </tbody>
+        </table>
+    </section>
+
+    @* ── 5. Configuration ──────────────────────────────────────────────────── *@
+    <section class="atom-section-block">
+        <div class="atom-block-title">SolaX</div>
+        <div class="config-form">
+            <div class="config-row">
+                <label class="config-label">Token ID</label>
+                <div class="config-control">
+                    <input type="text" class="config-input config-input-wide" @bind="_tokenId" @bind:event="oninput" />
+                </div>
+            </div>
+            <div class="config-row">
+                <label class="config-label">Inverter SN</label>
+                <div class="config-control">
+                    <input type="text" class="config-input config-input-wide" @bind="_sn" @bind:event="oninput" />
+                </div>
+            </div>
+            <div class="config-row">
+                <label class="config-label"></label>
+                <div class="config-control">
+                    <div class="solar-btn-row">
+                        <button class="btn btn-primary btn-sm" @onclick="SaveSolax">Save</button>
+                        <button class="btn-secondary btn-sm" @onclick="TestSolax">Test</button>
+                    </div>
+                    @if (_testMsg != null)
+                    {
+                        <span class="save-confirm">@_testMsg</span>
+                    }
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="atom-section-block">
+        <div class="atom-block-title">Gmail Reports</div>
+        <div class="config-form">
+            <div class="config-row">
+                <label class="config-label">Label</label>
+                <div class="config-control">
+                    <select class="config-input config-input-wide" @bind="_labelId">
+                        <option value="">— none —</option>
+                        @foreach (var l in _labels)
+                        {
+                            <option value="@l.Id">@l.Name</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="config-row">
+                <label class="config-label"></label>
+                <div class="config-control">
+                    <button class="btn btn-primary btn-sm" @onclick="SaveLabel">Save label</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+</div>
+
+@code {
+    private SolarSnapshot? _latest;
+    private int _alarms;
+    private double[] _todayPower = [], _todaySoc = [];
+    private List<SolarReport> _daily = new(), _reports = new();
+    private double _dailyMax = 1;
+    private SolarReportType _tab = SolarReportType.Daily;
+    private string _tokenId = "", _sn = "", _labelId = "";
+    private string? _testMsg;
+    private List<(string Id, string Name)> _labels = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _latest = await db.SolarSnapshots.OrderByDescending(x => x.CapturedAt).FirstOrDefaultAsync();
+
+        var since = DateTime.UtcNow.Date;
+        var today = await db.SolarSnapshots.Where(x => x.CapturedAt >= since)
+            .OrderBy(x => x.CapturedAt).ToListAsync();
+        _todayPower = today.Select(x => x.AcPower).ToArray();
+        _todaySoc = today.Select(x => x.Soc).ToArray();
+
+        _reports = await db.SolarReports.ToListAsync();
+        _daily = _reports.Where(r => r.ReportType == SolarReportType.Daily)
+            .OrderByDescending(r => r.PeriodEnd).Take(30).OrderBy(r => r.PeriodEnd).ToList();
+        _dailyMax = _daily.Count > 0 ? Math.Max(1, _daily.Max(d => d.PeriodYieldKWh)) : 1;
+        _alarms = _reports.OrderByDescending(r => r.PeriodEnd).FirstOrDefault()?.AlarmQuantity ?? 0;
+
+        _tokenId = Settings.Get("solax.token_id") ?? "";
+        _sn = Settings.Get("solax.sn") ?? "";
+        _labelId = Settings.Get("gmail.label_id") ?? "";
+        try { _labels = await Reader.ListLabelsAsync(); } catch { /* gmail not connected yet */ }
+    }
+
+    private double BarPct(double v, double max) => Math.Round(v / max * 100, 1);
+    private string Tab(SolarReportType t) => t == _tab ? "pill active" : "pill";
+    private void SetTab(SolarReportType t) => _tab = t;
+    private void SaveSolax() { Settings.Set("solax.token_id", _tokenId.Trim()); Settings.Set("solax.sn", _sn.Trim()); }
+    private void SaveLabel() => Settings.Set("gmail.label_id", _labelId);
+
+    private async Task TestSolax()
+    {
+        var snap = await Solax.GetRealtimeAsync(_tokenId.Trim(), _sn.Trim());
+        _testMsg = snap != null ? $"OK — {snap.AcPower:0} W now" : "No data / invalid token or SN";
+    }
+}
