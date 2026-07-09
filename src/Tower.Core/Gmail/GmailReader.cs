@@ -17,6 +17,17 @@ public class GmailReader(HttpClient http, GmailTokenService tokens)
         return req;
     }
 
+    // Move a message to Trash (auto-purges after ~30 days). Requires gmail.modify scope.
+    public async Task<bool> TrashMessageAsync(string id, CancellationToken ct = default)
+    {
+        var token = await tokens.GetAccessTokenAsync(ct)
+            ?? throw new InvalidOperationException("Gmail not connected");
+        using var req = new HttpRequestMessage(HttpMethod.Post, $"{Api}/messages/{id}/trash");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        using var resp = await http.SendAsync(req, ct);
+        return resp.IsSuccessStatusCode;
+    }
+
     public async Task<List<(string Id, string Name)>> ListLabelsAsync(CancellationToken ct = default)
     {
         using var req = await AuthGet($"{Api}/labels", ct);
