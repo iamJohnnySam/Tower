@@ -11,6 +11,12 @@
 }
 
 /* Notice / info / idle banners */
+/* Bootstrap's .text-muted (#6c757d, !important) is too dark on our near-black bg —
+   override it within this page to the app's readable body text colour. */
+.text-muted {
+    color: var(--text) !important;
+}
+
 .solar-notice {
     padding: 0.6rem 1rem;
     border-radius: 6px;
