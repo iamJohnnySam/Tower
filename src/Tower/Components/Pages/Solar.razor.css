@@ -17,6 +17,32 @@
     color: var(--text) !important;
 }
 
+.date-range {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.9rem;
+    margin-bottom: 0.7rem;
+    color: var(--text);
+    font-size: 0.85rem;
+}
+
+.date-range label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.date-range input[type="date"] {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 0.25rem 0.5rem;
+    font-size: 0.85rem;
+    color-scheme: dark;
+}
+
 .solar-notice {
     padding: 0.6rem 1rem;
     border-radius: 6px;

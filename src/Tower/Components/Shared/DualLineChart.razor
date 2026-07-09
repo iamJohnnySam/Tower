@@ -1,0 +1,124 @@
+@* Responsive full-width dual-axis line chart: two series on independent Y scales,
+   dated X axis, hover tooltips with values, optional alarm markers.
+   The whole SVG interior is built as a markup string because Razor reserves <text>. *@
+
+@if (Left.Length < 2)
+{
+    <div class="dual-empty">Not enough data for a chart.</div>
+}
+else
+{
+    <div class="dual-legend">
+        <span><i style="background:@LeftColor"></i>@LeftName (@LeftUnit)</span>
+        <span><i style="background:@RightColor"></i>@RightName (@RightUnit)</span>
+        @if (_hasMarkers) { <span><i style="background:#f85149;border-radius:50%"></i>alarms</span> }
+    </div>
+    <svg viewBox="0 0 @VbW @VbH" width="100%" preserveAspectRatio="xMidYMid meet"
+         style="display:block;font-family:var(--mono),monospace">
+        @((MarkupString)_svg)
+    </svg>
+}
+
+@code {
+    [Parameter] public List<string> Labels { get; set; } = new();
+    [Parameter] public double[] Left { get; set; } = [];
+    [Parameter] public string LeftName { get; set; } = "";
+    [Parameter] public string LeftUnit { get; set; } = "";
+    [Parameter] public string LeftColor { get; set; } = "#e3b341";
+    [Parameter] public double[] Right { get; set; } = [];
+    [Parameter] public string RightName { get; set; } = "";
+    [Parameter] public string RightUnit { get; set; } = "";
+    [Parameter] public string RightColor { get; set; } = "#58a6ff";
+    [Parameter] public int[]? Markers { get; set; }
+
+    private const double VbW = 1000, VbH = 340, PadL = 48, PadR = 54, PadT = 14, PadB = 40;
+    private static readonly System.Globalization.CultureInfo Inv = System.Globalization.CultureInfo.InvariantCulture;
+
+    private string _svg = "";
+    private bool _hasMarkers;
+
+    private static string F(double v) => v.ToString("0.#", Inv);
+    private static string N(double v) => v.ToString(Math.Abs(v) >= 100 ? "0" : "0.0", Inv);
+    private static string Esc(string s) => System.Net.WebUtility.HtmlEncode(s);
+
+    protected override void OnParametersSet()
+    {
+        _svg = ""; _hasMarkers = false;
+        int n = Left.Length;
+        if (n < 2 || Right.Length != n) return;
+
+        var (lMin, lMax) = Bounds(Left);
+        var (rMin, rMax) = Bounds(Right);
+        double plotW = VbW - PadL - PadR, plotH = VbH - PadT - PadB;
+
+        double X(int i) => PadL + i * plotW / (n - 1);
+        double YL(double v) => PadT + plotH - (v - lMin) / (lMax - lMin) * plotH;
+        double YR(double v) => PadT + plotH - (v - rMin) / (rMax - rMin) * plotH;
+
+        var sb = new System.Text.StringBuilder();
+
+        // gridlines
+        foreach (var f in new[] { 0.0, 0.25, 0.5, 0.75, 1.0 })
+        {
+            double y = PadT + plotH * f;
+            sb.Append($"<line x1=\"{F(PadL)}\" y1=\"{F(y)}\" x2=\"{F(VbW - PadR)}\" y2=\"{F(y)}\" stroke=\"rgba(255,255,255,0.06)\" stroke-width=\"1\" />");
+        }
+
+        // axis min/max value labels (left = Left series, right = Right series)
+        sb.Append(Txt(PadL - 6, PadT + 9, LeftColor, "end", N(lMax)));
+        sb.Append(Txt(PadL - 6, VbH - PadB, LeftColor, "end", N(lMin)));
+        sb.Append(Txt(VbW - PadR + 6, PadT + 9, RightColor, "start", N(rMax)));
+        sb.Append(Txt(VbW - PadR + 6, VbH - PadB, RightColor, "start", N(rMin)));
+
+        // x-axis date labels (~7 evenly spaced)
+        int step = Math.Max(1, (int)Math.Ceiling(n / 7.0));
+        for (int i = 0; i < n; i += step)
+            sb.Append(Txt(X(i), VbH - PadB + 18, "var(--text)", "middle", i < Labels.Count ? Labels[i] : ""));
+        if ((n - 1) % step != 0)
+            sb.Append(Txt(X(n - 1), VbH - PadB + 18, "var(--text)", "middle", Labels.Count > 0 ? Labels[^1] : ""));
+
+        // series polylines (draw right/irradiance first, yield on top)
+        var lPts = new System.Text.StringBuilder();
+        var rPts = new System.Text.StringBuilder();
+        for (int i = 0; i < n; i++)
+        {
+            lPts.Append($"{F(X(i))},{F(YL(Left[i]))} ");
+            rPts.Append($"{F(X(i))},{F(YR(Right[i]))} ");
+        }
+        sb.Append($"<polyline points=\"{rPts.ToString().TrimEnd()}\" fill=\"none\" stroke=\"{RightColor}\" stroke-width=\"2\" stroke-linejoin=\"round\" />");
+        sb.Append($"<polyline points=\"{lPts.ToString().TrimEnd()}\" fill=\"none\" stroke=\"{LeftColor}\" stroke-width=\"2\" stroke-linejoin=\"round\" />");
+
+        // points, alarm markers, hover tooltips
+        for (int i = 0; i < n; i++)
+        {
+            double x = X(i), yl = YL(Left[i]), yr = YR(Right[i]);
+            sb.Append($"<circle cx=\"{F(x)}\" cy=\"{F(yr)}\" r=\"2.5\" fill=\"{RightColor}\" />");
+            sb.Append($"<circle cx=\"{F(x)}\" cy=\"{F(yl)}\" r=\"2.5\" fill=\"{LeftColor}\" />");
+
+            int m = Markers != null && i < Markers.Length ? Markers[i] : 0;
+            if (m > 0)
+            {
+                _hasMarkers = true;
+                sb.Append($"<circle cx=\"{F(x)}\" cy=\"{F(yl)}\" r=\"4.5\" fill=\"#f85149\" />");
+                sb.Append(Txt(x, yl - 8, "#f85149", "middle", m.ToString(), 11));
+            }
+
+            var label = i < Labels.Count ? Labels[i] : "";
+            var tip = $"{label}\n{LeftName}: {Left[i].ToString("0.0", Inv)} {LeftUnit}\n{RightName}: {Right[i].ToString("0.0", Inv)} {RightUnit}"
+                + (m > 0 ? $"\nalarms: {m}" : "");
+            sb.Append($"<circle cx=\"{F(x)}\" cy=\"{F((yl + yr) / 2)}\" r=\"10\" fill=\"transparent\"><title>{Esc(tip)}</title></circle>");
+        }
+
+        _svg = sb.ToString();
+    }
+
+    private static string Txt(double x, double y, string fill, string anchor, string text, int size = 12) =>
+        $"<text x=\"{F(x)}\" y=\"{F(y)}\" fill=\"{fill}\" font-size=\"{size}\" text-anchor=\"{anchor}\">{Esc(text)}</text>";
+
+    private static (double Min, double Max) Bounds(double[] xs)
+    {
+        double min = xs.Min(), max = xs.Max();
+        if (max - min < 1e-6) { min = Math.Min(0, min); max = max < 1e-6 ? 1 : max * 1.1; }
+        return (min, max);
+    }
+}
