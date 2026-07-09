@@ -141,6 +141,7 @@ builder.Services.AddHostedService<MediaBoxScheduler>();
 
 // ── Solar (SolaX API + Gmail report import) ──────────────────────────────────
 builder.Services.AddHttpClient<Tower.Core.Solar.SolaxClient>();          // typed; page + worker resolve from scope
+builder.Services.AddHttpClient<Tower.Core.Solar.WeatherClient>();        // Open-Meteo irradiance backfill
 builder.Services.AddSingleton<Tower.Core.Gmail.GmailTokenService>();
 builder.Services.AddHttpClient(nameof(Tower.Core.Gmail.GmailTokenService)); // named client used inside GmailTokenService
 builder.Services.AddHttpClient<Tower.Core.Gmail.GmailReader>();          // typed; page + worker resolve from scope
@@ -234,6 +235,21 @@ using (var scope = app.Services.CreateScope())
             ImportedAt TEXT NOT NULL
         );
         CREATE UNIQUE INDEX IF NOT EXISTS IX_SolarReports_GmailMessageId ON SolarReports (GmailMessageId);
+        CREATE TABLE IF NOT EXISTS SolarWeather (
+            Date TEXT PRIMARY KEY,
+            ShortwaveRadiationMJ REAL NOT NULL DEFAULT 0,
+            SunshineHours REAL NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS SolarAlarms (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            AlarmDate TEXT NOT NULL,
+            DeviceSn TEXT NOT NULL DEFAULT '',
+            Detail TEXT,
+            GmailMessageId TEXT NOT NULL,
+            ImportedAt TEXT NOT NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS IX_SolarAlarms_GmailMessageId ON SolarAlarms (GmailMessageId);
+        CREATE INDEX IF NOT EXISTS IX_SolarAlarms_AlarmDate ON SolarAlarms (AlarmDate);
     ");
 
     // Reset any jobs stuck in Converting state from a previous run
