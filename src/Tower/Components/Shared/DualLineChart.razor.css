@@ -1,0 +1,27 @@
+.dual-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.2rem;
+    font-size: 0.85rem;
+    color: var(--text);
+    margin-bottom: 0.4rem;
+}
+
+.dual-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.dual-legend i {
+    display: inline-block;
+    width: 14px;
+    height: 3px;
+    border-radius: 2px;
+}
+
+.dual-empty {
+    color: var(--text);
+    font-size: 0.9rem;
+    padding: 0.6rem 0;
+}
