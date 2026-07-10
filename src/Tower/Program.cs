@@ -56,6 +56,7 @@ builder.Services.AddSingleton(new WebsiteOptions
     FtpRemotePath = towerCfg.Website.FtpRemotePath,
 });
 builder.Services.AddScoped<FtpSyncService>();
+builder.Services.AddScoped<BlogKeyService>();
 
 // ── Tuya ─────────────────────────────────────────────────────────────────────
 builder.Services.AddHttpClient<TuyaServiceClient>(c =>
@@ -107,6 +108,7 @@ builder.Services.AddHostedService<CpuProfileRecorder>();
 builder.Services.AddHostedService<MaintenanceScheduler>();
 builder.Services.AddHostedService<ConversionScheduler>();
 builder.Services.AddHostedService<SizeMonitorWorker>();
+builder.Services.AddHostedService<BlogKeyRotationWorker>();
 
 // ── Telegram ──────────────────────────────────────────────────────────────────
 builder.Services.AddHttpClient<TelegramApi>();
@@ -338,6 +340,16 @@ app.MapPost("/api/website/sync", async (
     {
         return Results.Problem(ex.Message);
     }
+});
+
+// ── Blog key fetch (clients present X-Fetch-Token to read the current key) ────
+app.MapGet("/api/blog-key", (HttpContext ctx, BlogKeyService svc) =>
+{
+    var token = ctx.Request.Headers["X-Fetch-Token"].ToString();
+    if (string.IsNullOrEmpty(token) || token != svc.EnsureFetchToken())
+        return Results.Unauthorized();
+    var current = svc.GetCurrent();
+    return current is null ? Results.NotFound() : Results.Ok(new { key = current });
 });
 
 // ── Dropbox OAuth callback ────────────────────────────────────────────────────

@@ -206,6 +206,34 @@ public class FtpSyncService(WebsiteOptions opts, SettingsService settings, ILogg
         return (uploaded, deleted, failed);
     }
 
+    // ── Single-file text I/O over an absolute remote path (blog_secrets.php) ──────
+    // remotePath is absolute (e.g. "/blog_secrets.php"), independent of the sync root.
+    public async Task<string> DownloadTextAsync(string remotePath)
+    {
+        var (user, pass) = GetCredentials();
+        if (user is null || pass is null)
+            throw new InvalidOperationException("FTP credentials not configured.");
+
+        using var ftp = CreateFtpClient(opts.FtpHost, user, pass, GetAcceptAnyCert());
+        await ftp.Connect();
+        using var ms = new MemoryStream();
+        await ftp.DownloadStream(ms, remotePath);
+        await ftp.Disconnect();
+        return System.Text.Encoding.UTF8.GetString(ms.ToArray());
+    }
+
+    public async Task UploadTextAsync(string remotePath, string content)
+    {
+        var (user, pass) = GetCredentials();
+        if (user is null || pass is null)
+            throw new InvalidOperationException("FTP credentials not configured.");
+
+        using var ftp = CreateFtpClient(opts.FtpHost, user, pass, GetAcceptAnyCert());
+        await ftp.Connect();
+        await ftp.UploadBytes(System.Text.Encoding.UTF8.GetBytes(content), remotePath, FtpRemoteExists.Overwrite);
+        await ftp.Disconnect();
+    }
+
     private static async Task<Dictionary<string, (long size, DateTime mtime)>> WalkRemoteAsync(
         string host, string user, string pass, bool acceptAnyCert,
         string rootPath, IProgress<string>? progress)

@@ -1,0 +1,172 @@
+@page "/blog-key"
+@rendermode InteractiveServer
+@using Tower.Core.Settings
+@using Tower.Core.Website
+@inject BlogKeyService BlogKeySvc
+
+<PageTitle>Tower — Blog Key</PageTitle>
+
+<div class="blogkey-page">
+
+    <h1 class="page-title">Blog API Key</h1>
+
+    @* ── Current key ─────────────────────────────────────────────────────────── *@
+    <section class="web-section">
+        <div class="atom-section-block">
+            <div class="atom-block-title">Current Key</div>
+            <div class="config-form">
+
+                <div class="config-row">
+                    <label class="config-label">BLOG_API_KEY</label>
+                    <div class="config-control">
+                        @if (_current is null)
+                        {
+                            <span class="config-hint">Not configured — rotate once to set it.</span>
+                        }
+                        else
+                        {
+                            <div class="key-input-row">
+                                <code class="blogkey-value">@(_reveal ? _current : Mask(_current))</code>
+                                <button class="btn-secondary btn-sm" @onclick="() => _reveal = !_reveal">
+                                    @(_reveal ? "Hide" : "Reveal")
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="config-row">
+                    <label class="config-label">Last rotated</label>
+                    <div class="config-control">
+                        <span class="config-hint">
+                            @(_rotatedAt is { } dt ? dt.ToString("yyyy-MM-dd HH:mm 'UTC'") : "never")
+                        </span>
+                    </div>
+                </div>
+
+                <div class="config-row">
+                    <label class="config-label"></label>
+                    <div class="config-control">
+                        <div class="key-input-row">
+                            <button class="btn btn-primary btn-sm" @onclick="RotateAsync" disabled="@_rotating">
+                                @(_rotating ? "Rotating…" : "Rotate now")
+                            </button>
+                        </div>
+                        @if (_rotateOk == true)
+                        {
+                            <span class="save-confirm">Rotated &#10003; new key: <code>@Mask(_current!)</code></span>
+                        }
+                        else if (_rotateOk == false)
+                        {
+                            <span class="val-red blogkey-error">✗ @_rotateError</span>
+                        }
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    @* ── Auto-rotation ───────────────────────────────────────────────────────── *@
+    <section class="web-section">
+        <div class="atom-section-block">
+            <div class="atom-block-title">Auto-rotation</div>
+            <div class="config-form">
+                <div class="config-row">
+                    <label class="config-label">Interval (days)</label>
+                    <div class="config-control">
+                        <div class="key-input-row">
+                            <input type="number" min="1" class="config-input"
+                                   placeholder="disabled"
+                                   @bind="_autoDays" @bind:event="oninput" />
+                            <button class="btn btn-primary btn-sm" @onclick="SaveAutoDays">Save</button>
+                            @if (_autoSaved) { <span class="save-confirm">Saved &#10003;</span> }
+                        </div>
+                        <span class="config-hint">Blank or 0 disables auto-rotation. Checked once a day.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    @* ── Client fetch token ──────────────────────────────────────────────────── *@
+    <section class="web-section">
+        <div class="atom-section-block">
+            <div class="atom-block-title">Client Fetch Token</div>
+            <div class="config-form">
+                <div class="config-row">
+                    <label class="config-label">X-Fetch-Token</label>
+                    <div class="config-control">
+                        <div class="key-input-row">
+                            <code class="blogkey-value">@(_tokenReveal ? _fetchToken : Mask(_fetchToken))</code>
+                            <button class="btn-secondary btn-sm" @onclick="() => _tokenReveal = !_tokenReveal">
+                                @(_tokenReveal ? "Hide" : "Reveal")
+                            </button>
+                        </div>
+                        <span class="config-hint">
+                            Clients send this as the <code>X-Fetch-Token</code> header to
+                            <code>GET /api/blog-key</code>.
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+</div>
+
+@code {
+    private string?   _current;
+    private DateTime? _rotatedAt;
+    private string    _fetchToken = "";
+    private int?      _autoDays;
+
+    private bool  _reveal;
+    private bool  _tokenReveal;
+    private bool  _rotating;
+    private bool? _rotateOk;
+    private string? _rotateError;
+    private bool  _autoSaved;
+
+    protected override void OnInitialized()
+    {
+        _current    = BlogKeySvc.GetCurrent();
+        _rotatedAt  = BlogKeySvc.RotatedAt;
+        _autoDays   = BlogKeySvc.AutoDays;
+        _fetchToken = BlogKeySvc.EnsureFetchToken();
+    }
+
+    private void SaveAutoDays()
+    {
+        BlogKeySvc.SetAutoDays(_autoDays is > 0 ? _autoDays : null);
+        _autoSaved = true;
+    }
+
+    private async Task RotateAsync()
+    {
+        _rotating   = true;
+        _rotateOk   = null;
+        _rotateError = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            _current   = await BlogKeySvc.RotateAsync();
+            _rotatedAt = BlogKeySvc.RotatedAt;
+            _rotateOk  = true;
+        }
+        catch (Exception ex)
+        {
+            _rotateOk    = false;
+            _rotateError = ex.Message;
+        }
+        finally
+        {
+            _rotating = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private static string Mask(string s) =>
+        s.Length <= 6 ? new string('•', s.Length) : new string('•', s.Length - 6) + s[^6..];
+}
