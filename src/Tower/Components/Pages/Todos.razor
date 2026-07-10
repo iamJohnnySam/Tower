@@ -1,0 +1,114 @@
+@page "/todos"
+@using Tower.Core.Todo
+@using Tower.Core.Models
+@inject TodoService TodoSvc
+
+<PageTitle>Tower — To-do</PageTitle>
+
+<div class="todos-page">
+
+    <section class="todos-section">
+        <h2 class="section-title">Open</h2>
+
+        <div class="todo-add-row">
+            <input class="todo-input" type="text" placeholder="New todo…"
+                   @bind="_newTitle" @bind:event="oninput"
+                   @onkeydown="OnTitleKeyDown" />
+            <input class="todo-date" type="date" value="@_newDeadlineStr"
+                   @onchange="e => _newDeadlineStr = e.Value?.ToString() ?? string.Empty" />
+            <button class="todo-add-btn" @onclick="AddTodoAsync" disabled="@_todoLoading">Add</button>
+        </div>
+
+        @if (_open.Count == 0)
+        {
+            <div class="todo-empty">No open todos</div>
+        }
+        else
+        {
+            <div class="todo-list">
+                @foreach (var item in _open)
+                {
+                    <div class="todo-row">
+                        <button class="todo-done-btn" title="Mark done"
+                                @onclick="() => MarkDoneAsync(item.Id)">✓</button>
+                        <span class="todo-title">@item.Title</span>
+                        @if (item.Deadline.HasValue)
+                        {
+                            <span class="todo-deadline">Due @item.Deadline.Value.ToString("MMM d")</span>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </section>
+
+    <section class="todos-section">
+        <h2 class="section-title">Completed</h2>
+
+        @if (_completed.Count == 0)
+        {
+            <div class="todo-empty">Nothing completed yet</div>
+        }
+        else
+        {
+            <div class="todo-list">
+                @foreach (var item in _completed)
+                {
+                    <div class="todo-row todo-row--done">
+                        <span class="todo-done-mark">✓</span>
+                        <span class="todo-title">@item.Title</span>
+                        @if (item.DoneAt.HasValue)
+                        {
+                            <span class="todo-donedate">@item.DoneAt.Value.ToString("MMM d")</span>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </section>
+
+</div>
+
+@code {
+    private List<TodoItem> _open = [];
+    private List<TodoItem> _completed = [];
+    private string _newTitle = "";
+    private string _newDeadlineStr = "";
+    private bool _todoLoading;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _open = await TodoSvc.GetOpenAsync();
+        _completed = await TodoSvc.GetCompletedAsync();
+    }
+
+    private async Task AddTodoAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newTitle)) return;
+        _todoLoading = true;
+        DateTime? deadline = null;
+        if (!string.IsNullOrWhiteSpace(_newDeadlineStr) &&
+            DateTime.TryParse(_newDeadlineStr, out var d))
+        {
+            deadline = DateTime.SpecifyKind(d.Date, DateTimeKind.Utc);
+        }
+        await TodoSvc.AddAsync(_newTitle.Trim(), deadline);
+        _newTitle = "";
+        _newDeadlineStr = "";
+        await LoadAsync();
+        _todoLoading = false;
+    }
+
+    private async Task MarkDoneAsync(int id)
+    {
+        await TodoSvc.MarkDoneAsync(id);
+        await LoadAsync();
+    }
+
+    private async Task OnTitleKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await AddTodoAsync();
+    }
+}

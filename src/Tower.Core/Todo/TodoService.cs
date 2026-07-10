@@ -14,6 +14,12 @@ public class TodoService(TowerDbContext db)
             .ThenBy(t => t.CreatedAt)
             .ToListAsync();
 
+    public async Task<List<TodoItem>> GetCompletedAsync() =>
+        await db.Todos
+            .Where(t => t.Done)
+            .OrderByDescending(t => t.DoneAt)
+            .ToListAsync();
+
     public async Task<List<TodoItem>> GetDueTodayAsync(DateTime today) =>
         await db.Todos
             .Where(t => !t.Done && t.Deadline != null && t.Deadline >= today && t.Deadline < today.AddDays(1))

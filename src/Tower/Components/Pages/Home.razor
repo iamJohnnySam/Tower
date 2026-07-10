@@ -5,12 +5,9 @@
 @using Microsoft.Extensions.Options
 @using Tower.Components.Shared
 @using System.Collections.Concurrent
-@using Tower.Core.Todo
-@using Tower.Core.Models
 @inject LiveState Live
 @inject IOptions<TowerConfig> Cfg
 @inject PiAgentClient PiClient
-@inject TodoService TodoSvc
 @implements IAsyncDisposable
 
 <PageTitle>Tower — Overview</PageTitle>
@@ -222,56 +219,14 @@
         </div>
     </section>
 
-    @* ── 6. To-do List ───────────────────────────────────────────────────────── *@
-    <section class="home-section">
-        <h2 class="section-title">To-do</h2>
-
-        @if (_todos.Count == 0)
-        {
-            <div class="todo-empty">No open todos</div>
-        }
-        else
-        {
-            <div class="todo-list">
-                @foreach (var item in _todos)
-                {
-                    <div class="todo-row">
-                        <button class="todo-done-btn" title="Mark done"
-                                @onclick="() => MarkDoneAsync(item.Id)">✓</button>
-                        <span class="todo-title">@item.Title</span>
-                        @if (item.Deadline.HasValue)
-                        {
-                            <span class="todo-deadline">Due @item.Deadline.Value.ToString("MMM d")</span>
-                        }
-                    </div>
-                }
-            </div>
-        }
-
-        <div class="todo-add-row">
-            <input class="todo-input" type="text" placeholder="New todo…"
-                   @bind="_newTitle" @bind:event="oninput"
-                   @onkeydown="OnTitleKeyDown" />
-            <input class="todo-date" type="date" value="@_newDeadlineStr"
-                   @onchange="e => _newDeadlineStr = e.Value?.ToString() ?? string.Empty" />
-            <button class="todo-add-btn" @onclick="AddTodoAsync" disabled="@_todoLoading">Add</button>
-        </div>
-    </section>
-
 </div>
 
 @code {
     private System.Threading.Timer? _timer;
     private readonly ConcurrentDictionary<string, bool?> _piOnline = new();
 
-    private List<TodoItem> _todos = [];
-    private string _newTitle = "";
-    private string _newDeadlineStr = "";
-    private bool _todoLoading;
-
-    protected override async Task OnInitializedAsync()
+    protected override Task OnInitializedAsync()
     {
-        await LoadTodosAsync();
         // seed pi state as null (checking) — existing code stays
         foreach (var dev in Cfg.Value.Devices.Where(d => d.Kind == "pi" && d.BaseUrl != null))
             _piOnline[dev.Id] = null;
@@ -285,39 +240,8 @@
             }
             await InvokeAsync(StateHasChanged);
         }, null, TimeSpan.Zero, TimeSpan.FromSeconds(2));
-    }
 
-    private async Task LoadTodosAsync()
-    {
-        _todos = await TodoSvc.GetOpenAsync();
-    }
-
-    private async Task AddTodoAsync()
-    {
-        if (string.IsNullOrWhiteSpace(_newTitle)) return;
-        _todoLoading = true;
-        DateTime? deadline = null;
-        if (!string.IsNullOrWhiteSpace(_newDeadlineStr) &&
-            DateTime.TryParse(_newDeadlineStr, out var d))
-        {
-            deadline = DateTime.SpecifyKind(d.Date, DateTimeKind.Utc);
-        }
-        await TodoSvc.AddAsync(_newTitle.Trim(), deadline);
-        _newTitle = "";
-        _newDeadlineStr = "";
-        await LoadTodosAsync();
-        _todoLoading = false;
-    }
-
-    private async Task MarkDoneAsync(int id)
-    {
-        await TodoSvc.MarkDoneAsync(id);
-        await LoadTodosAsync();
-    }
-
-    private async Task OnTitleKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter") await AddTodoAsync();
+        return Task.CompletedTask;
     }
 
     public async ValueTask DisposeAsync()
