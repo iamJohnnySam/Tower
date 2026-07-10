@@ -26,6 +26,15 @@ The target app needs its own systemd service (`/etc/systemd/system/<svc>.service
 `deploy.sh` at its repo root — see MediaBox/FinanceTracker/DesignWorks for the pattern
 (stop → `dotnet publish` to `/home/atom/<Project>` → start). Deploy workflow is stop→publish→start.
 
+## Automations (/automations page)
+
+Named smart-home routines in the `Automations` table (Id, Name, ActionsJson — JSON list of
+`{kind:"tuya"|"pi", target, targetName, on, temp}`). Executed by
+`Tower.Core/Automations/AutomationService` (Tuya via tinytuya service; Pi = shutdown via
+pi-agent). Telegram trigger: `run <name>` or `/run <name>` (case-insensitive, admin only).
+New action kinds later = extend the `kind` discriminator, no schema change.
+Spec/plan: `docs/superpowers/specs/2026-07-10-automations-design.md`.
+
 ## Passwords / secrets store (/secrets page)
 
 Project credentials live in the `Secrets` table in `tower.db`. Model: `Secret.cs`
