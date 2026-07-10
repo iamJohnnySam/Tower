@@ -466,8 +466,10 @@ public sealed class TelegramHub(
             }
         }
 
-        // 6. Dispatch text commands to registered internal handlers (admin only)
-        if (!u.IsCallback && u.Text.StartsWith('/') && _commandHandlers.Count > 0)
+        // 6. Dispatch text commands to registered internal handlers (admin only).
+        //    Commands may be registered with a slash ("/todo") or without ("run") —
+        //    the first token of the message must match the registered form exactly.
+        if (!u.IsCallback && u.Text.Length > 0 && _commandHandlers.Count > 0)
         {
             bool isCommandAdmin;
             using (var cmdScope = scopes.CreateScope())

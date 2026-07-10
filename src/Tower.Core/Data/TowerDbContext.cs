@@ -11,6 +11,7 @@ public class TowerDbContext(DbContextOptions<TowerDbContext> options) : DbContex
     public DbSet<TuyaDevice>    TuyaDevices  => Set<TuyaDevice>();
     public DbSet<ConversionJob> ConversionJobs => Set<ConversionJob>();
     public DbSet<TodoItem> Todos => Set<TodoItem>();
+    public DbSet<Automation> Automations => Set<Automation>();
     public DbSet<Secret> Secrets => Set<Secret>();
     public DbSet<SolarSnapshot> SolarSnapshots => Set<SolarSnapshot>();
     public DbSet<SolarReport> SolarReports => Set<SolarReport>();

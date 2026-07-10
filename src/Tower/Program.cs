@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Tower;
 using Tower.Components;
 using Tower.MediaBox;
+using Tower.Core.Automations;
 using Tower.Core.Backup;
 using Tower.Core.Conversion;
 using Tower.Core.Data;
@@ -125,6 +126,10 @@ builder.Services.AddScoped<TodoService>();
 builder.Services.AddSingleton<TodoTelegramHandler>();
 builder.Services.AddHostedService<TodoReminderWorker>();
 
+// ── Automations ──────────────────────────────────────────────────────────────
+builder.Services.AddScoped<AutomationService>();
+builder.Services.AddSingleton<AutomationTelegramHandler>();
+
 // ── gRPC ─────────────────────────────────────────────────────────────────────
 builder.Services.AddGrpc();
 
@@ -191,6 +196,14 @@ using (var scope = app.Services.CreateScope())
             CreatedAt TEXT NOT NULL,
             DoneAt TEXT,
             TelegramMessageId INTEGER
+        );
+    ");
+
+    db.Database.ExecuteSqlRaw(@"
+        CREATE TABLE IF NOT EXISTS Automations (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            Name TEXT NOT NULL,
+            ActionsJson TEXT NOT NULL DEFAULT '[]'
         );
     ");
 
@@ -288,6 +301,7 @@ var convSvc = app.Services.GetRequiredService<ConversionService>();
 var telegramHub = app.Services.GetRequiredService<TelegramHub>();
 convSvc.RegisterCallbacks(telegramHub);
 app.Services.GetRequiredService<TodoTelegramHandler>().Register();
+app.Services.GetRequiredService<AutomationTelegramHandler>().Register();
 
 // ── HTTP pipeline ─────────────────────────────────────────────────────────────
 if (!app.Environment.IsDevelopment())
