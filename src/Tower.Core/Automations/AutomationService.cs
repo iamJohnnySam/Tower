@@ -35,7 +35,8 @@ public class AutomationService(
         => db.Automations.OrderBy(a => a.Name).ToListAsync();
 
     public Task<List<TuyaDevice>> ListTuyaDevicesAsync()
-        => db.TuyaDevices.OrderBy(d => d.Room).ThenBy(d => d.Name).ToListAsync();
+        => db.TuyaDevices.Where(d => d.DeviceType != TuyaDeviceType.Sensor)
+            .OrderBy(d => d.Room).ThenBy(d => d.Name).ToListAsync();
 
     public List<DeviceConfig> PiDevices()
         => cfg.Value.Devices.Where(d => d.Kind == "pi" && !string.IsNullOrWhiteSpace(d.BaseUrl)).ToList();
@@ -95,9 +96,9 @@ public class AutomationService(
             else if (tuyaTypes.TryGetValue(act.Target, out var type) && type == TuyaDeviceType.AcRemote)
             {
                 ok = await tuya.SendCommandAsync(act.Target, new TuyaCommandRequest(
-                    Ac: new AcCommandPayload(Power: act.On, Temp: act.On ? act.Temp : null)));
+                    Ac: new AcCommandPayload(Power: act.On, Temp: act.On && act.Temp is int tc ? Math.Clamp(tc, 16, 30) : null)));
                 what = act.On
-                    ? $"{act.TargetName} ON{(act.Temp is int t ? $" {t}°C" : "")}"
+                    ? $"{act.TargetName} ON{(act.Temp is int t ? $" {Math.Clamp(t, 16, 30)}°C" : "")}"
                     : $"{act.TargetName} OFF";
             }
             else

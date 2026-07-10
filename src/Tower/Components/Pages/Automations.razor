@@ -205,7 +205,7 @@
                 r.IsAc && r.On ? r.Temp : null))
             .ToList();
 
-        var target = _editor.Id == 0 ? new Automation() : _automations.First(a => a.Id == _editor.Id);
+        var target = _editor.Id == 0 ? new Automation() : _automations.FirstOrDefault(a => a.Id == _editor.Id) ?? new Automation();
         target.Name        = _editor.Name.Trim();
         target.ActionsJson = AutomationService.SerializeActions(actions);
         await AutoSvc.SaveAsync(target);
@@ -224,8 +224,8 @@
         _running = true;
         _runResult = null;
         StateHasChanged();
-        _runResult = await AutoSvc.RunAsync(a);
-        _running = false;
+        try { _runResult = await AutoSvc.RunAsync(a); }
+        finally { _running = false; }
     }
 
     private class Editor
