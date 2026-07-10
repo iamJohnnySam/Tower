@@ -1,0 +1,248 @@
+@page "/automations"
+@using Tower.Core.Automations
+@using Tower.Core.Models
+@inject AutomationService AutoSvc
+
+<PageTitle>Tower — Automations</PageTitle>
+
+<div class="auto-page">
+
+    <div class="auto-header">
+        <h1 class="page-title">Automations</h1>
+        @if (_editor is null)
+        {
+            <button class="btn-primary btn-sm" @onclick="NewAutomation">New Automation</button>
+        }
+    </div>
+
+    <div class="auto-hint">
+        Trigger from Telegram: send <code>run &lt;name&gt;</code> to the Tower bot (case-insensitive), e.g. <code>run Bedtime</code>.
+    </div>
+
+    @if (_runResult is not null)
+    {
+        <div class="auto-result">@_runResult</div>
+    }
+
+    @if (_editor is not null)
+    {
+        <div class="auto-editor">
+            <div class="auto-editor-name">
+                <label>Name</label>
+                <input class="config-input" type="text" placeholder="e.g. Bedtime" @bind="_editor.Name" />
+            </div>
+
+            <table class="atom-table">
+                <thead><tr><th>Device</th><th>Action</th><th>Temp (AC)</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var row in _editor.Rows)
+                    {
+                        <tr>
+                            <td>
+                                <select class="config-input" value="@row.Key"
+                                        @onchange="e => SetDevice(row, e.Value?.ToString() ?? string.Empty)">
+                                    <option value="">— select device —</option>
+                                    @foreach (var d in _tuyaDevices)
+                                    {
+                                        <option value="@($"tuya:{d.DeviceId}")">@DevLabel(d)</option>
+                                    }
+                                    @foreach (var p in _piDevices)
+                                    {
+                                        <option value="@($"pi:{p.Id}")">@p.Name (Pi)</option>
+                                    }
+                                </select>
+                            </td>
+                            <td>
+                                @if (row.Kind == "pi")
+                                {
+                                    <span class="text-muted">Shutdown</span>
+                                }
+                                else if (row.Kind == "tuya")
+                                {
+                                    <select class="config-input" value="@(row.On ? "on" : "off")"
+                                            @onchange='e => row.On = e.Value?.ToString() == "on"'>
+                                        <option value="on">Turn ON</option>
+                                        <option value="off">Turn OFF</option>
+                                    </select>
+                                }
+                            </td>
+                            <td>
+                                @if (row.IsAc && row.On)
+                                {
+                                    <input class="config-input auto-temp" type="number" min="16" max="30" @bind="row.Temp" />
+                                }
+                            </td>
+                            <td>
+                                <button class="btn-secondary btn-sm" @onclick="() => _editor.Rows.Remove(row)">✕</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <div class="auto-editor-actions">
+                <button class="btn-secondary btn-sm" @onclick="() => _editor.Rows.Add(new Row())">+ Add action</button>
+                <span class="auto-spacer"></span>
+                <button class="btn-primary btn-sm" @onclick="SaveAsync"
+                        disabled="@(string.IsNullOrWhiteSpace(_editor.Name) || !_editor.Rows.Any(r => r.Kind != ""))">
+                    Save
+                </button>
+                <button class="btn-secondary btn-sm" @onclick="() => _editor = null">Cancel</button>
+            </div>
+        </div>
+    }
+
+    @if (_automations.Count == 0 && _editor is null)
+    {
+        <div class="auto-empty">No automations yet. Click <strong>New Automation</strong> to create one.</div>
+    }
+    else if (_automations.Count > 0)
+    {
+        <table class="atom-table">
+            <thead><tr><th>Name</th><th>Actions</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var a in _automations)
+                {
+                    <tr>
+                        <td class="auto-name">@a.Name</td>
+                        <td class="text-muted">@Summary(a)</td>
+                        <td>
+                            <div class="auto-row-btns">
+                                <button class="btn-primary btn-sm" disabled="@_running" @onclick="() => RunNowAsync(a)">
+                                    @(_running ? "…" : "Run")
+                                </button>
+                                <button class="btn-secondary btn-sm" @onclick="() => Edit(a)">Edit</button>
+                                <button class="btn-secondary btn-sm" @onclick="() => DeleteAsync(a)">Delete</button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private List<Automation>   _automations = [];
+    private List<TuyaDevice>   _tuyaDevices = [];
+    private List<DeviceConfig> _piDevices   = [];
+    private Editor?            _editor;
+    private string?            _runResult;
+    private bool               _running;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _tuyaDevices = await AutoSvc.ListTuyaDevicesAsync();
+        _piDevices   = AutoSvc.PiDevices();
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync() => _automations = await AutoSvc.ListAsync();
+
+    private static string DevLabel(TuyaDevice d)
+        => string.IsNullOrEmpty(d.Room) ? d.Name : $"{d.Room} — {d.Name}";
+
+    private static string Summary(Automation a)
+    {
+        var actions = AutomationService.ParseActions(a.ActionsJson);
+        if (actions.Count == 0) return "no actions";
+        return string.Join(", ", actions.Select(x =>
+            x.Kind == "pi" ? $"{x.TargetName} shutdown"
+            : x.On         ? $"{x.TargetName} on{(x.Temp is int t ? $" {t}°C" : "")}"
+                           : $"{x.TargetName} off"));
+    }
+
+    private void NewAutomation()
+    {
+        _editor = new Editor { Rows = { new Row() } };
+        _runResult = null;
+    }
+
+    private void Edit(Automation a)
+    {
+        var rows = AutomationService.ParseActions(a.ActionsJson).Select(x => new Row
+        {
+            Kind = x.Kind, Target = x.Target, TargetName = x.TargetName,
+            On   = x.On,   Temp   = x.Temp ?? 24,
+            IsAc = _tuyaDevices.Any(d => d.DeviceId == x.Target && d.DeviceType == TuyaDeviceType.AcRemote)
+        }).ToList();
+        if (rows.Count == 0) rows.Add(new Row());
+        _editor = new Editor { Id = a.Id, Name = a.Name, Rows = rows };
+        _runResult = null;
+    }
+
+    private void SetDevice(Row row, string key)
+    {
+        var parts = key.Split(':', 2);
+        if (parts.Length < 2)
+        {
+            row.Kind = ""; row.Target = ""; row.TargetName = ""; row.IsAc = false;
+            return;
+        }
+        row.Kind   = parts[0];
+        row.Target = parts[1];
+        if (row.Kind == "pi")
+        {
+            row.TargetName = _piDevices.FirstOrDefault(x => x.Id == row.Target)?.Name ?? row.Target;
+            row.IsAc = false;
+            row.On   = false; // Pi only supports shutdown
+        }
+        else
+        {
+            var d = _tuyaDevices.FirstOrDefault(x => x.DeviceId == row.Target);
+            row.TargetName = d?.Name ?? row.Target;
+            row.IsAc = d?.DeviceType == TuyaDeviceType.AcRemote;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_editor is null) return;
+        var actions = _editor.Rows
+            .Where(r => r.Kind != "" && r.Target != "")
+            .Select(r => new AutomationAction(r.Kind, r.Target, r.TargetName,
+                r.Kind != "pi" && r.On,
+                r.IsAc && r.On ? r.Temp : null))
+            .ToList();
+
+        var target = _editor.Id == 0 ? new Automation() : _automations.First(a => a.Id == _editor.Id);
+        target.Name        = _editor.Name.Trim();
+        target.ActionsJson = AutomationService.SerializeActions(actions);
+        await AutoSvc.SaveAsync(target);
+        _editor = null;
+        await ReloadAsync();
+    }
+
+    private async Task DeleteAsync(Automation a)
+    {
+        await AutoSvc.DeleteAsync(a.Id);
+        await ReloadAsync();
+    }
+
+    private async Task RunNowAsync(Automation a)
+    {
+        _running = true;
+        _runResult = null;
+        StateHasChanged();
+        _runResult = await AutoSvc.RunAsync(a);
+        _running = false;
+    }
+
+    private class Editor
+    {
+        public int       Id;
+        public string    Name = "";
+        public List<Row> Rows = [];
+    }
+
+    private class Row
+    {
+        public string Kind       = "";
+        public string Target     = "";
+        public string TargetName = "";
+        public bool   On         = true;
+        public int    Temp       = 24;
+        public bool   IsAc;
+        public string Key => Kind == "" ? "" : $"{Kind}:{Target}";
+    }
+}

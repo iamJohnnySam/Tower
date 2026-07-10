@@ -1,0 +1,21 @@
+.auto-page { max-width: 860px; }
+.auto-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem; }
+.auto-hint { font-size: 0.8rem; color: var(--faint); margin-bottom: 1rem; }
+.auto-hint code { color: var(--accent-fg); }
+.auto-result {
+    background: var(--accent-bg); border-left: 3px solid var(--accent);
+    padding: 0.5rem 0.75rem; border-radius: var(--r-sm);
+    font-size: 0.82rem; margin-bottom: 1rem; white-space: pre-line;
+}
+.auto-editor {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: var(--r); padding: 1rem; margin-bottom: 1.25rem;
+}
+.auto-editor-name { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.75rem; }
+.auto-editor-name label { font-size: 0.8rem; color: var(--faint); }
+.auto-editor-actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; align-items: center; }
+.auto-spacer { flex: 1; }
+.auto-temp { width: 70px; }
+.auto-name { font-weight: 600; }
+.auto-row-btns { display: flex; gap: 0.4rem; justify-content: flex-end; }
+.auto-empty { color: var(--faint); font-size: 0.85rem; padding: 1rem 0; }
