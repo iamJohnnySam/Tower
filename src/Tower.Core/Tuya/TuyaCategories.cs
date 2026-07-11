@@ -17,7 +17,8 @@ public record TuyaCategory(
     bool Ac = false,
     EnergySpec? Energy = null,
     IReadOnlyList<SensorReadout>? Sensors = null,
-    TuyaDeviceType Legacy = TuyaDeviceType.Plug)
+    TuyaDeviceType Legacy = TuyaDeviceType.Plug,
+    string? Note = null)
 {
     public bool Actuatable => PowerDps != null || Gangs > 0 || Ac;
 }
@@ -43,6 +44,11 @@ public static class TuyaCategories
         new TuyaCategory("climate_sensor", "Climate Sensor",
             Sensors: new[] { new SensorReadout("Temp", "101", "°C", 0.1), new SensorReadout("Humidity", "102", "%", 1) },
             Legacy: TuyaDeviceType.Sensor),
+        // Read-only categories: devices with no controls reachable on the current plan.
+        new TuyaCategory("hub", "Hub / Gateway", Legacy: TuyaDeviceType.Sensor,
+            Note: "Hub device — hosts sub-devices; no direct controls here."),
+        new TuyaCategory("ir_ac", "AC Remote (IR)", Legacy: TuyaDeviceType.AcRemote,
+            Note: "IR remote — sending commands needs the Tuya IR API (not on your current plan)."),
     };
 
     static readonly Dictionary<string, TuyaCategory> ByKey = All.ToDictionary(c => c.Key);

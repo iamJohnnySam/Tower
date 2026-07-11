@@ -39,5 +39,7 @@ public class TuyaCategoryTests
         Assert.True(TuyaCategories.Resolve("color_bulb", TuyaDeviceType.Plug).Actuatable);
         Assert.True(TuyaCategories.Resolve("switch_2", TuyaDeviceType.Plug).Actuatable);
         Assert.False(TuyaCategories.Resolve("climate_sensor", TuyaDeviceType.Plug).Actuatable);
+        Assert.False(TuyaCategories.Resolve("hub", TuyaDeviceType.Plug).Actuatable);
+        Assert.False(TuyaCategories.Resolve("ir_ac", TuyaDeviceType.Plug).Actuatable);
     }
 }

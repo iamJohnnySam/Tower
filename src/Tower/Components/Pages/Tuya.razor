@@ -291,6 +291,11 @@
                                     }
                                 </div>
                             }
+                            @* Read-only note (hubs / uncontrollable IR remotes) *@
+                            @if (cat.Note is not null)
+                            {
+                                <div class="tuya-note">@cat.Note</div>
+                            }
                         }
                     </div>
                 }
