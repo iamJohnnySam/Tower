@@ -32,6 +32,11 @@ def _poll(dev: dict) -> dict[str, Any]:
             version=str(dev.get("version", "3.3")),
         )
         d.set_socketTimeout(2)
+        # Bound each poll to one attempt: without this, a briefly-unresponsive
+        # device retries (default 5 × 2s) and blows the whole /devices call past
+        # the Tower client's 20s timeout — which drops every device to
+        # "unreachable" and re-prompts for keys. One try keeps /devices ~fast.
+        d.set_socketRetryLimit(1)
         result = d.status()
         if isinstance(result, dict) and "dps" in result:
             return result["dps"]
