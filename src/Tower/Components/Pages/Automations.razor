@@ -38,7 +38,7 @@
                 <tbody>
                     @foreach (var row in _editor.Rows)
                     {
-                        <tr>
+                        <tr class="@(row.Disabled ? "auto-row-disabled" : "")">
                             <td>
                                 <select class="config-input" value="@row.Key"
                                         @onchange="e => SetDevice(row, e.Value?.ToString() ?? string.Empty)">
@@ -74,7 +74,12 @@
                                 }
                             </td>
                             <td>
-                                <button class="btn-secondary btn-sm" @onclick="() => _editor.Rows.Remove(row)">✕</button>
+                                <div class="auto-row-btns">
+                                    <button class="btn-secondary btn-sm" @onclick="() => row.Disabled = !row.Disabled">
+                                        @(row.Disabled ? "Enable" : "Disable")
+                                    </button>
+                                    <button class="btn-secondary btn-sm" @onclick="() => _editor.Rows.Remove(row)">✕</button>
+                                </div>
                             </td>
                         </tr>
                     }
@@ -148,9 +153,10 @@
         var actions = AutomationService.ParseActions(a.ActionsJson);
         if (actions.Count == 0) return "no actions";
         return string.Join(", ", actions.Select(x =>
+            (x.Disabled ? "⏸ " : "") + (
             x.Kind == "pi" ? $"{x.TargetName} shutdown"
             : x.On         ? $"{x.TargetName} on{(x.Temp is int t ? $" {t}°C" : "")}"
-                           : $"{x.TargetName} off"));
+                           : $"{x.TargetName} off")));
     }
 
     private void NewAutomation()
@@ -164,7 +170,7 @@
         var rows = AutomationService.ParseActions(a.ActionsJson).Select(x => new Row
         {
             Kind = x.Kind, Target = x.Target, TargetName = x.TargetName,
-            On   = x.On,   Temp   = x.Temp ?? 24,
+            On   = x.On,   Temp   = x.Temp ?? 24, Disabled = x.Disabled,
             IsAc = _tuyaDevices.Any(d => d.DeviceId == x.Target && TuyaCategories.Resolve(d.Category, d.DeviceType).Ac)
         }).ToList();
         if (rows.Count == 0) rows.Add(new Row());
@@ -203,7 +209,8 @@
             .Where(r => r.Kind != "" && r.Target != "")
             .Select(r => new AutomationAction(r.Kind, r.Target, r.TargetName,
                 r.Kind != "pi" && r.On,
-                r.IsAc && r.On ? r.Temp : null))
+                r.IsAc && r.On ? r.Temp : null,
+                r.Disabled))
             .ToList();
 
         var target = _editor.Id == 0 ? new Automation() : _automations.FirstOrDefault(a => a.Id == _editor.Id) ?? new Automation();
@@ -244,6 +251,7 @@
         public bool   On         = true;
         public int    Temp       = 24;
         public bool   IsAc;
+        public bool   Disabled;
         public string Key => Kind == "" ? "" : $"{Kind}:{Target}";
     }
 }

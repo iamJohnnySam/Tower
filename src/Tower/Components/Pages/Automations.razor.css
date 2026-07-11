@@ -19,3 +19,5 @@
 .auto-name { font-weight: 600; }
 .auto-row-btns { display: flex; gap: 0.4rem; justify-content: flex-end; }
 .auto-empty { color: var(--faint); font-size: 0.85rem; padding: 1rem 0; }
+
+.auto-row-disabled { opacity: 0.5; }

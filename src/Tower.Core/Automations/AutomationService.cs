@@ -11,8 +11,10 @@ namespace Tower.Core.Automations;
 /// <summary>
 /// One step of an automation.
 /// Kind: "tuya" (Target = TuyaDevice.DeviceId) or "pi" (Target = DeviceConfig.Id; only supports shutdown).
+/// Disabled steps stay in the automation but are skipped at run time. Defaults false so
+/// steps saved before this field existed keep running.
 /// </summary>
-public record AutomationAction(string Kind, string Target, string TargetName, bool On, int? Temp);
+public record AutomationAction(string Kind, string Target, string TargetName, bool On, int? Temp, bool Disabled = false);
 
 public class AutomationService(
     TowerDbContext db,
@@ -85,6 +87,12 @@ public class AutomationService(
         var results = new List<string>();
         foreach (var act in actions)
         {
+            if (act.Disabled)
+            {
+                results.Add($"⏸ {act.TargetName} (disabled)");
+                continue;
+            }
+
             bool ok;
             string what;
 
