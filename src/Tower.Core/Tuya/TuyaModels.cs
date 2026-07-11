@@ -46,6 +46,7 @@ public record TuyaDeviceView(
     string                           Name,
     TuyaDeviceType                   DeviceType,
     string?                          Room,
+    string?                          Category,
     int                              SortOrder,
     bool                             Reachable,
     Dictionary<string, JsonElement>  Dps);

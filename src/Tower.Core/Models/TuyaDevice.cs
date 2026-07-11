@@ -9,5 +9,6 @@ public class TuyaDevice
     public string         Name       { get; set; } = "";
     public TuyaDeviceType DeviceType { get; set; }
     public string?        Room       { get; set; }
+    public string?        Category   { get; set; }
     public int            SortOrder  { get; set; }
 }

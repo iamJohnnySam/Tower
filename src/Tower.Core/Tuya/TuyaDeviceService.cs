@@ -28,6 +28,7 @@ public class TuyaDeviceService(TuyaServiceClient client, TowerDbContext db, Sett
                 Name:       d.Name,
                 DeviceType: d.DeviceType,
                 Room:       d.Room,
+                Category:   d.Category,
                 SortOrder:  d.SortOrder,
                 Reachable:  dto is not null,
                 Dps:        dto?.Dps ?? []);
@@ -60,6 +61,7 @@ public class TuyaDeviceService(TuyaServiceClient client, TowerDbContext db, Sett
             existing.Name       = device.Name;
             existing.DeviceType = device.DeviceType;
             existing.Room       = device.Room;
+            existing.Category   = device.Category;
             existing.SortOrder  = device.SortOrder;
         }
         await db.SaveChangesAsync();

@@ -34,9 +34,11 @@ public class AutomationService(
     public Task<List<Automation>> ListAsync()
         => db.Automations.OrderBy(a => a.Name).ToListAsync();
 
-    public Task<List<TuyaDevice>> ListTuyaDevicesAsync()
-        => db.TuyaDevices.Where(d => d.DeviceType != TuyaDeviceType.Sensor)
-            .OrderBy(d => d.Room).ThenBy(d => d.Name).ToListAsync();
+    public async Task<List<TuyaDevice>> ListTuyaDevicesAsync()
+    {
+        var all = await db.TuyaDevices.OrderBy(d => d.Room).ThenBy(d => d.Name).ToListAsync();
+        return all.Where(d => TuyaCategories.Resolve(d.Category, d.DeviceType).Actuatable).ToList();
+    }
 
     public List<DeviceConfig> PiDevices()
         => cfg.Value.Devices.Where(d => d.Kind == "pi" && !string.IsNullOrWhiteSpace(d.BaseUrl)).ToList();
@@ -78,8 +80,7 @@ public class AutomationService(
         var actions = ParseActions(auto.ActionsJson);
         if (actions.Count == 0) return $"{auto.Name}: no actions configured.";
 
-        var tuyaTypes = await db.TuyaDevices
-            .ToDictionaryAsync(d => d.DeviceId, d => d.DeviceType);
+        var devs = await db.TuyaDevices.ToDictionaryAsync(d => d.DeviceId, d => d);
 
         var results = new List<string>();
         foreach (var act in actions)
@@ -93,22 +94,25 @@ public class AutomationService(
                 ok   = dev?.BaseUrl is not null && await pi.ShutdownAsync(dev.BaseUrl);
                 what = $"{act.TargetName} shutdown";
             }
-            else if (tuyaTypes.TryGetValue(act.Target, out var type) && type == TuyaDeviceType.AcRemote)
-            {
-                ok = await tuya.SendCommandAsync(act.Target, new TuyaCommandRequest(
-                    Ac: new AcCommandPayload(Power: act.On, Temp: act.On && act.Temp is int tc ? Math.Clamp(tc, 16, 30) : null)));
-                what = act.On
-                    ? $"{act.TargetName} ON{(act.Temp is int t ? $" {Math.Clamp(t, 16, 30)}°C" : "")}"
-                    : $"{act.TargetName} OFF";
-            }
             else
             {
-                tuyaTypes.TryGetValue(act.Target, out var t2);
-                // ponytail: power DPS by device type (bulbs=20, everything else=1); read live DPS if a device ever differs
-                var key = t2 == TuyaDeviceType.Light ? "20" : "1";
-                ok = await tuya.SendCommandAsync(act.Target, new TuyaCommandRequest(
-                    Dps: new Dictionary<string, object> { [key] = act.On }));
-                what = $"{act.TargetName} {(act.On ? "ON" : "OFF")}";
+                var cat = devs.TryGetValue(act.Target, out var td)
+                    ? TuyaCategories.Resolve(td.Category, td.DeviceType) : null;
+                if (cat?.Ac == true)
+                {
+                    ok = await tuya.SendCommandAsync(act.Target, new TuyaCommandRequest(
+                        Ac: new AcCommandPayload(Power: act.On, Temp: act.On && act.Temp is int tc ? Math.Clamp(tc, 16, 30) : null)));
+                    what = act.On
+                        ? $"{act.TargetName} ON{(act.Temp is int t ? $" {Math.Clamp(t, 16, 30)}°C" : "")}"
+                        : $"{act.TargetName} OFF";
+                }
+                else
+                {
+                    var key = cat?.PowerDps ?? "1";
+                    ok = await tuya.SendCommandAsync(act.Target, new TuyaCommandRequest(
+                        Dps: new Dictionary<string, object> { [key] = act.On }));
+                    what = $"{act.TargetName} {(act.On ? "ON" : "OFF")}";
+                }
             }
 
             results.Add($"{(ok ? "✅" : "❌")} {what}");

@@ -207,6 +207,9 @@ using (var scope = app.Services.CreateScope())
         );
     ");
 
+    try { db.Database.ExecuteSqlRaw("ALTER TABLE TuyaDevices ADD COLUMN Category TEXT"); }
+    catch { /* column already exists */ }
+
     db.Database.ExecuteSqlRaw(@"
         CREATE TABLE IF NOT EXISTS Secrets (
             Id INTEGER PRIMARY KEY AUTOINCREMENT,
