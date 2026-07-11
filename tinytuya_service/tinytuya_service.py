@@ -128,16 +128,23 @@ async def scan(body: dict):
 
     # ── 3. If cloud has devices, merge and save ─────────────────────────────────
     if cloud_devices:
-        merged = [
-            {
-                "id":      dev.get("id", ""),
-                "name":    dev.get("name", dev.get("id", "")),
-                "ip":      dev.get("ip", "") or udp_map.get(dev.get("id", ""), ""),
-                "key":     dev.get("local_key", dev.get("key", "")),
-                "version": str(dev.get("version", "3.3")),
-            }
-            for dev in cloud_devices
-        ]
+        # Preserve locally-known LAN ip + protocol version. The cloud reports the
+        # device's IP as the *WAN/public* address of the network, which is useless
+        # for local control and would clobber the working 192.168.x address (and the
+        # 3.4/3.5 version detected on the LAN) every time someone hits "Scan".
+        # Rule: keep the existing LAN ip/version; take key/name from the cloud.
+        existing = {d["id"]: d for d in _load()}
+        merged = []
+        for dev in cloud_devices:
+            did   = dev.get("id", "")
+            prior = existing.get(did, {})
+            merged.append({
+                "id":      did,
+                "name":    dev.get("name", prior.get("name", did)),
+                "ip":      prior.get("ip", "") or udp_map.get(did, ""),
+                "key":     dev.get("local_key", dev.get("key", "")) or prior.get("key", ""),
+                "version": str(prior.get("version") or dev.get("version", "3.3")),
+            })
         _save(merged)
         return {"devices": merged, "cloud_error": None, "probe_ips": []}
 
