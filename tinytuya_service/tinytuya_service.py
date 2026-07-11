@@ -242,9 +242,9 @@ async def command(device_id: str, body: dict):
             version=str(dev.get("version", "3.3")),
         )
         d.set_socketTimeout(3)
-        if "dps" in body:
+        if body.get("dps"):
             d.set_multiple_values(body["dps"])
-        elif "ac" in body:
+        elif body.get("ac"):
             ac = body["ac"]
             dps: dict = {}
             if "power" in ac:

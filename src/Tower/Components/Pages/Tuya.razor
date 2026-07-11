@@ -404,7 +404,9 @@
                || (v.ValueKind == System.Text.Json.JsonValueKind.String && v.GetString() is "1" or "true" or "on" or "presence"));
 
     private static int GetDpsInt(TuyaDeviceView dev, string key, int dflt)
-        => dev.Dps.TryGetValue(key, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.Number ? v.GetInt32() : dflt;
+        => dev.Dps.TryGetValue(key, out var v)
+           && v.ValueKind == System.Text.Json.JsonValueKind.Number
+           && v.TryGetInt32(out var n) ? n : dflt;
 
     private static string GetDpsStr(TuyaDeviceView dev, string key)
         => dev.Dps.TryGetValue(key, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String ? v.GetString() ?? "" : "";
