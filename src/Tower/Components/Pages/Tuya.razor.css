@@ -1,5 +1,6 @@
+/* ── Page ──────────────────────────────────────────────────────────────────── */
 .tuya-page {
-    max-width: 1000px;
+    max-width: 1040px;
     margin: 0 auto;
     padding: 0 1rem 2rem;
 }
@@ -10,186 +11,256 @@
     gap: 1rem;
     margin-bottom: 1rem;
 }
-
 .tuya-header .page-title { margin-bottom: 0; }
+.tuya-header-actions { display: flex; gap: 0.5rem; margin-left: auto; }
 
-.tuya-header-actions {
-    display: flex;
-    gap: 0.5rem;
-    margin-left: auto;
-}
-
-/* Notice banners */
+/* ── Notice banners ────────────────────────────────────────────────────────── */
 .tuya-notice {
     padding: 0.6rem 1rem;
-    border-radius: 6px;
+    border-radius: 8px;
     margin-bottom: 1rem;
     font-size: 0.9rem;
 }
+.tuya-notice-info { background: rgba(88,166,255,0.1);  border: 1px solid rgba(88,166,255,0.25); color: #58a6ff; }
+.tuya-notice-warn { background: rgba(210,153,34,0.1);  border: 1px solid rgba(210,153,34,0.3);  color: #d29922; }
+.tuya-notice-idle { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #8b949e; }
 
-.tuya-notice-info {
-    background: rgba(88, 166, 255, 0.1);
-    border: 1px solid rgba(88, 166, 255, 0.25);
-    color: #58a6ff;
-}
-
-.tuya-notice-warn {
-    background: rgba(210, 153, 34, 0.1);
-    border: 1px solid rgba(210, 153, 34, 0.3);
-    color: #d29922;
-}
-
-.tuya-notice-idle {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #8b949e;
-}
-
-/* Room label */
+/* ── Room grouping ─────────────────────────────────────────────────────────── */
 .tuya-room-label {
     font-size: 0.72rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: #6e7681;
-    margin: 1.5rem 0 0.5rem;
+    margin: 1.75rem 0 0.6rem;
 }
 
-/* Device grid */
 .tuya-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.9rem;
     margin-bottom: 0.75rem;
+    align-items: start;               /* cards size to their own content height */
 }
 
-/* Device card */
+/* ── Device card ───────────────────────────────────────────────────────────── */
 .tuya-card {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 10px;
-    padding: 1rem;
+    box-sizing: border-box;
+    width: 100%;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 0.85rem;
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;             /* rows fill the card width — no overflow */
     gap: 0.6rem;
     transition: border-color 0.15s;
 }
+.tuya-card:hover { border-color: rgba(255,255,255,0.15); }
+.tuya-card-unreachable { opacity: 0.55; }
 
-.tuya-card:hover { border-color: rgba(255, 255, 255, 0.15); }
+/* Every control is border-box and can never exceed its row */
+.tuya-card input,
+.tuya-card select,
+.tuya-card button { box-sizing: border-box; max-width: 100%; font-family: inherit; }
 
-.tuya-card-unreachable { opacity: 0.5; }
-
-.tuya-card-name {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: #e6edf3;
-    line-height: 1.2;
-}
-
-.tuya-unreachable-badge {
-    font-size: 0.72rem;
-    color: #6e7681;
-    font-style: italic;
-}
-
-/* Toggle button */
-.tuya-toggle {
-    font-size: 0.75rem;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    padding: 4px 14px;
-    border-radius: 6px;
-    border: 1px solid transparent;
-    cursor: pointer;
-    transition: all 0.1s;
-}
-
-.tuya-toggle:disabled { opacity: 0.5; cursor: default; }
-
-.tuya-toggle-on {
-    background: rgba(63, 185, 80, 0.15);
-    border-color: rgba(63, 185, 80, 0.35);
-    color: #3fb950;
-}
-
-.tuya-toggle-off {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.1);
-    color: #6e7681;
-}
-
-.tuya-dim-label {
-    font-size: 0.68rem;
-    color: #6e7681;
-}
-
-/* AC controls */
-.tuya-ac-temp-row {
+/* Header: name (truncates) + category select (capped) */
+.tuya-card-top {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    min-width: 0;
+}
+.tuya-card-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #e6edf3;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.tuya-cat-select {
+    flex: 0 0 auto;
+    max-width: 46%;
+    font-size: 0.72rem;
+    background: rgba(255,255,255,0.05);
+    color: #c9d1d9;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 6px;
+    padding: 3px 6px;
+    cursor: pointer;
+}
+.tuya-cat-select:focus { outline: none; border-color: rgba(88,166,255,0.5); }
+
+/* ── Toggle (power / gang / AC) ────────────────────────────────────────────── */
+.tuya-toggle {
+    min-height: 34px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+}
+.tuya-toggle:disabled { opacity: 0.5; cursor: default; }
+.tuya-toggle-on  { background: rgba(63,185,80,0.15);  border-color: rgba(63,185,80,0.4);  color: #3fb950; }
+.tuya-toggle-off { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.12); color: #8b949e; }
+.tuya-toggle-on:hover:not(:disabled)  { background: rgba(63,185,80,0.22); }
+.tuya-toggle-off:hover:not(:disabled) { background: rgba(255,255,255,0.09); }
+
+/* ── Multi-gang switches ───────────────────────────────────────────────────── */
+.tuya-switch-gangs { display: flex; flex-direction: column; gap: 0.4rem; }
+.tuya-switch-gang {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+.tuya-gang-label { font-size: 0.72rem; color: #8b949e; }
+.tuya-switch-gang .tuya-toggle { flex: 0 0 auto; min-width: 66px; text-align: center; }
+
+/* ── Sliders (brightness / warm-cool) & color ──────────────────────────────── */
+.tuya-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    min-width: 0;
+}
+.tuya-slider-row input[type=range] {
+    flex: 1 1 auto;
+    min-width: 0;
+    accent-color: #58a6ff;
+    height: 20px;
+    margin: 0;
+}
+.tuya-dim-label {
+    flex: 0 0 auto;
+    font-size: 0.66rem;
+    color: #6e7681;
+    white-space: nowrap;
+}
+/* Color row: label left, swatch pushed to the right edge */
+.tuya-slider-row:has(.tuya-color) { justify-content: space-between; }
+.tuya-color {
+    flex: 0 0 auto;
+    width: 46px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 8px;
+    background: none;
+    cursor: pointer;
 }
 
+/* ── AC / IR remote ────────────────────────────────────────────────────────── */
+.tuya-ac-temp-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+}
 .tuya-temp-btn {
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.05);
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.05);
     color: #e6edf3;
-    font-size: 1rem;
+    font-size: 1.1rem;
+    line-height: 1;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
 }
-
-.tuya-temp-btn:hover { background: rgba(255, 255, 255, 0.1); }
+.tuya-temp-btn:hover:not(:disabled) { background: rgba(255,255,255,0.1); }
 .tuya-temp-btn:disabled { opacity: 0.4; cursor: default; }
-
 .tuya-temp-value {
-    font-size: 1.1rem;
+    flex: 1 1 auto;
+    font-size: 1.15rem;
     font-weight: 600;
     color: #e6edf3;
-    min-width: 52px;
     text-align: center;
+    font-variant-numeric: tabular-nums;
 }
-
-.tuya-ac-mode-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-}
-
+.tuya-ac-mode-row { display: flex; flex-wrap: wrap; gap: 5px; }
 .tuya-mode-btn {
+    flex: 0 0 auto;
+    min-height: 28px;
     font-size: 0.7rem;
-    padding: 3px 8px;
-    border-radius: 5px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(255, 255, 255, 0.04);
+    padding: 4px 9px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.04);
     color: #8b949e;
     cursor: pointer;
+    text-transform: capitalize;
 }
-
-.tuya-mode-btn:hover { color: #e6edf3; border-color: rgba(255, 255, 255, 0.2); }
+.tuya-mode-btn:hover:not(:disabled) { color: #e6edf3; border-color: rgba(255,255,255,0.2); }
 .tuya-mode-btn:disabled { opacity: 0.4; cursor: default; }
+.tuya-mode-active { background: rgba(88,166,255,0.15); border-color: rgba(88,166,255,0.4); color: #58a6ff; }
 
-.tuya-mode-active {
-    background: rgba(88, 166, 255, 0.15);
-    border-color: rgba(88, 166, 255, 0.35);
-    color: #58a6ff;
+/* ── Read-only readouts (energy / sensors) ─────────────────────────────────── */
+.tuya-readout {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding-top: 0.15rem;
+}
+.tuya-readout span {
+    font-size: 0.74rem;
+    color: #c9d1d9;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-variant-numeric: tabular-nums;
 }
 
-/* Scan panel */
+/* ── Local-key entry (unreachable cards) ───────────────────────────────────── */
+.tuya-key-entry { display: flex; gap: 0.35rem; min-width: 0; }
+.tuya-key-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 0.72rem;
+    font-family: monospace;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 6px;
+    padding: 5px 8px;
+    color: #e6edf3;
+}
+.tuya-key-input::placeholder { color: #6e7681; }
+.tuya-key-input:focus { outline: none; border-color: rgba(88,166,255,0.5); }
+.tuya-key-save {
+    flex: 0 0 auto;
+    font-size: 0.72rem;
+    padding: 5px 11px;
+    border-radius: 6px;
+    border: 1px solid rgba(88,166,255,0.3);
+    background: rgba(88,166,255,0.1);
+    color: #58a6ff;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.tuya-key-save:hover:not(:disabled) { background: rgba(88,166,255,0.2); }
+.tuya-key-save:disabled { opacity: 0.4; cursor: default; }
+
+/* ── Scan panel ────────────────────────────────────────────────────────────── */
 .tuya-scan-panel {
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
     padding: 1rem 1.25rem;
     margin-bottom: 1.5rem;
 }
-
 .tuya-scan-title {
     font-size: 0.8rem;
     font-weight: 700;
@@ -198,98 +269,19 @@
     color: #8b949e;
     margin-bottom: 0.75rem;
 }
-
 .tuya-scan-table { margin-bottom: 0.75rem; }
+.tuya-scan-actions { display: flex; gap: 0.5rem; }
 
-.tuya-scan-actions {
-    display: flex;
-    gap: 0.5rem;
-}
-
-.tuya-updated {
-    font-size: 0.75rem;
-    color: #6e7681;
-    margin-top: 0.5rem;
-}
-
-/* Local key entry on unreachable cards */
-.tuya-key-entry {
-    display: flex;
-    gap: 0.3rem;
-    width: 100%;
-    margin-top: 0.1rem;
-}
-
-.tuya-key-input {
-    flex: 1;
-    min-width: 0;
-    font-size: 0.72rem;
-    font-family: monospace;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 5px;
-    padding: 3px 7px;
-    color: #e6edf3;
-}
-
-.tuya-key-input::placeholder { color: #6e7681; }
-.tuya-key-input:focus { outline: none; border-color: rgba(88,166,255,0.5); }
-
-.tuya-key-save {
-    font-size: 0.72rem;
-    padding: 3px 9px;
-    border-radius: 5px;
-    border: 1px solid rgba(88,166,255,0.3);
-    background: rgba(88,166,255,0.1);
-    color: #58a6ff;
-    cursor: pointer;
-    white-space: nowrap;
-}
-
-.tuya-key-save:hover:not(:disabled) { background: rgba(88,166,255,0.2); }
-.tuya-key-save:disabled { opacity: 0.4; cursor: default; }
-
-/* Multi-gang switches */
-.tuya-switch-gangs {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-    width: 100%;
-}
-
-.tuya-switch-gang {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.tuya-gang-label {
-    font-size: 0.68rem;
-    color: #6e7681;
-    min-width: 2rem;
-}
-
-/* Probe IP chips */
-.tuya-probe-ips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    margin-top: 0.5rem;
-}
-
+/* ── Probe IP chips ────────────────────────────────────────────────────────── */
+.tuya-probe-ips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
 .tuya-probe-ip {
     font-family: monospace;
     font-size: 0.82rem;
-    background: rgba(88, 166, 255, 0.12);
-    border: 1px solid rgba(88, 166, 255, 0.2);
-    border-radius: 4px;
+    background: rgba(88,166,255,0.12);
+    border: 1px solid rgba(88,166,255,0.2);
+    border-radius: 6px;
     padding: 2px 8px;
     color: #58a6ff;
 }
 
-.tuya-card-top { display:flex; align-items:center; justify-content:space-between; gap:0.5rem; margin-bottom:0.5rem; }
-.tuya-cat-select { font-size:0.72rem; background:var(--surface-2); color:var(--text); border:1px solid var(--border); border-radius:var(--r-xs); padding:2px 4px; max-width:52%; }
-.tuya-slider-row { display:flex; align-items:center; gap:0.5rem; margin-top:0.5rem; }
-.tuya-slider-row input[type=range] { flex:1; }
-.tuya-color { width:44px; height:28px; border:1px solid var(--border); border-radius:var(--r-xs); background:none; padding:0; }
-.tuya-readout { display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem; font-size:0.78rem; color:var(--faint); }
+.tuya-updated { font-size: 0.75rem; color: #6e7681; margin-top: 0.5rem; }
