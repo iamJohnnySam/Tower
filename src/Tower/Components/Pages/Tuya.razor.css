@@ -321,3 +321,10 @@
     padding: 2px 8px;
     color: #58a6ff;
 }
+
+.tuya-card-top { display:flex; align-items:center; justify-content:space-between; gap:0.5rem; margin-bottom:0.5rem; }
+.tuya-cat-select { font-size:0.72rem; background:var(--surface-2); color:var(--text); border:1px solid var(--border); border-radius:var(--r-xs); padding:2px 4px; max-width:52%; }
+.tuya-slider-row { display:flex; align-items:center; gap:0.5rem; margin-top:0.5rem; }
+.tuya-slider-row input[type=range] { flex:1; }
+.tuya-color { width:44px; height:28px; border:1px solid var(--border); border-radius:var(--r-xs); background:none; padding:0; }
+.tuya-readout { display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem; font-size:0.78rem; color:var(--faint); }

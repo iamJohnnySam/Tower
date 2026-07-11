@@ -96,15 +96,12 @@
                                        @bind="a.Name" @bind:event="oninput" />
                             </td>
                             <td>
-                                <select class="config-input" value="@a.DeviceType"
-                                        @onchange="e => a.DeviceType = Enum.Parse<TuyaDeviceType>(e.Value!.ToString()!)">
-                                    <option value="Plug">Plug</option>
-                                    <option value="Light">Light</option>
-                                    <option value="AcRemote">AC Remote</option>
-                                    <option value="Switch1">Switch (1-gang)</option>
-                                    <option value="Switch2">Switch (2-gang)</option>
-                                    <option value="Switch4">Switch (4-gang)</option>
-                                    <option value="Sensor">Sensor</option>
+                                <select class="config-input" value="@a.Category"
+                                        @onchange="e => a.Category = e.Value?.ToString() ?? string.Empty">
+                                    @foreach (var c in TuyaCategories.All)
+                                    {
+                                        <option value="@c.Key">@c.Name</option>
+                                    }
                                 </select>
                             </td>
                             <td>
@@ -155,217 +152,147 @@
             <div class="tuya-grid">
                 @foreach (var dev in group)
                 {
-                    @if (dev.DeviceType == TuyaDeviceType.Plug)
-                    {
-                        <div class="tuya-card @(dev.Reachable ? "" : "tuya-card-unreachable")">
-                            <div class="tuya-card-icon">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-                                </svg>
-                            </div>
+                    var cat = TuyaCategories.Resolve(dev.Category, dev.DeviceType);
+                    <div class="tuya-card @(dev.Reachable ? "" : "tuya-card-unreachable")">
+                        <div class="tuya-card-top">
                             <div class="tuya-card-name">@dev.Name</div>
-                            @if (!dev.Reachable)
-                            {
-                                <div class="tuya-key-entry">
-                                    <input class="tuya-key-input" type="text" placeholder="Paste local key…"
-                                           value="@PendingKey(dev.DeviceId)"
-                                           @oninput="e => _pendingKeys[dev.DeviceId] = e.Value?.ToString() ?? string.Empty"
-                                           disabled="@IsBusy(dev.DeviceId)" />
-                                    <button class="tuya-key-save" disabled="@(IsBusy(dev.DeviceId) || string.IsNullOrWhiteSpace(PendingKey(dev.DeviceId)))"
-                                            @onclick="() => SaveKeyAsync(dev)">
-                                        @(IsBusy(dev.DeviceId) ? "…" : "Save")
-                                    </button>
-                                </div>
-                            }
-                            else
-                            {
-                                <button class="tuya-toggle @(GetPower(dev) ? "tuya-toggle-on" : "tuya-toggle-off")"
-                                        disabled="@IsBusy(dev.DeviceId)"
-                                        @onclick="() => TogglePowerAsync(dev)">
-                                    @(GetPower(dev) ? "ON" : "OFF")
-                                </button>
-                            }
-                        </div>
-                    }
-                    else if (dev.DeviceType == TuyaDeviceType.Light)
-                    {
-                        <div class="tuya-card @(dev.Reachable ? "" : "tuya-card-unreachable")">
-                            <div class="tuya-card-icon">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-                                    <line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/>
-                                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-                                    <line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/>
-                                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-                                    <circle cx="12" cy="12" r="5"/>
-                                </svg>
-                            </div>
-                            <div class="tuya-card-name">@dev.Name</div>
-                            @if (!dev.Reachable)
-                            {
-                                <div class="tuya-key-entry">
-                                    <input class="tuya-key-input" type="text" placeholder="Paste local key…"
-                                           value="@PendingKey(dev.DeviceId)"
-                                           @oninput="e => _pendingKeys[dev.DeviceId] = e.Value?.ToString() ?? string.Empty"
-                                           disabled="@IsBusy(dev.DeviceId)" />
-                                    <button class="tuya-key-save" disabled="@(IsBusy(dev.DeviceId) || string.IsNullOrWhiteSpace(PendingKey(dev.DeviceId)))"
-                                            @onclick="() => SaveKeyAsync(dev)">
-                                        @(IsBusy(dev.DeviceId) ? "…" : "Save")
-                                    </button>
-                                </div>
-                            }
-                            else
-                            {
-                                <button class="tuya-toggle @(GetPower(dev) ? "tuya-toggle-on" : "tuya-toggle-off")"
-                                        disabled="@IsBusy(dev.DeviceId)"
-                                        @onclick="() => TogglePowerAsync(dev)">
-                                    @(GetPower(dev) ? "ON" : "OFF")
-                                </button>
-                                @if (GetPower(dev))
+                            <select class="tuya-cat-select" value="@cat.Key"
+                                    @onchange="e => SaveCategoryAsync(dev, e.Value?.ToString() ?? cat.Key)">
+                                @foreach (var c in TuyaCategories.All)
                                 {
-                                    <div class="tuya-brightness-row">
-                                        <span class="tuya-dim-label">Dim</span>
-                                        <input type="range" min="10" max="1000"
-                                               value="@GetBrightness(dev)"
-                                               disabled="@IsBusy(dev.DeviceId)"
-                                               @onchange="e => SetBrightnessAsync(dev, int.Parse(e.Value!.ToString()!))" />
-                                        <span class="tuya-dim-label">Bright</span>
-                                    </div>
+                                    <option value="@c.Key">@c.Name</option>
                                 }
-                            }
+                            </select>
                         </div>
-                    }
-                    else if (dev.DeviceType == TuyaDeviceType.AcRemote)
-                    {
-                        <div class="tuya-card tuya-card-ac @(dev.Reachable ? "" : "tuya-card-unreachable")">
-                            <div class="tuya-card-icon">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="1" y="3" width="22" height="9" rx="2"/>
-                                    <path d="M7 12v4M12 12v6M17 12v4M3 21h18"/>
-                                </svg>
-                            </div>
-                            <div class="tuya-card-name">@dev.Name</div>
-                            @if (!dev.Reachable)
-                            {
-                                <div class="tuya-key-entry">
-                                    <input class="tuya-key-input" type="text" placeholder="Paste local key…"
-                                           value="@PendingKey(dev.DeviceId)"
-                                           @oninput="e => _pendingKeys[dev.DeviceId] = e.Value?.ToString() ?? string.Empty"
-                                           disabled="@IsBusy(dev.DeviceId)" />
-                                    <button class="tuya-key-save" disabled="@(IsBusy(dev.DeviceId) || string.IsNullOrWhiteSpace(PendingKey(dev.DeviceId)))"
-                                            @onclick="() => SaveKeyAsync(dev)">
-                                        @(IsBusy(dev.DeviceId) ? "…" : "Save")
-                                    </button>
-                                </div>
-                            }
-                            else
-                            {
-                                <button class="tuya-toggle @(GetPower(dev) ? "tuya-toggle-on" : "tuya-toggle-off")"
-                                        disabled="@IsBusy(dev.DeviceId)"
-                                        @onclick="() => TogglePowerAsync(dev)">
-                                    @(GetPower(dev) ? "ON" : "OFF")
+
+                        @if (!dev.Reachable)
+                        {
+                            <div class="tuya-key-entry">
+                                <input class="tuya-key-input" type="text" placeholder="Paste local key…"
+                                       value="@PendingKey(dev.DeviceId)"
+                                       @oninput="e => _pendingKeys[dev.DeviceId] = e.Value?.ToString() ?? string.Empty"
+                                       disabled="@IsBusy(dev.DeviceId)" />
+                                <button class="tuya-key-save" disabled="@(IsBusy(dev.DeviceId) || string.IsNullOrWhiteSpace(PendingKey(dev.DeviceId)))"
+                                        @onclick="() => SaveKeyAsync(dev)">
+                                    @(IsBusy(dev.DeviceId) ? "…" : "Save")
                                 </button>
-                                @if (GetPower(dev))
-                                {
-                                    <div class="tuya-ac-temp-row">
-                                        <button class="tuya-temp-btn" disabled="@IsBusy(dev.DeviceId)"
-                                                @onclick="() => AdjustTempAsync(dev, -1)">−</button>
-                                        <span class="tuya-temp-value">@GetTemp(dev)°C</span>
-                                        <button class="tuya-temp-btn" disabled="@IsBusy(dev.DeviceId)"
-                                                @onclick="() => AdjustTempAsync(dev, +1)">+</button>
-                                    </div>
-                                    <div class="tuya-ac-mode-row">
-                                        @foreach (var mode in new[] { "cool", "heat", "fan", "dry", "auto" })
-                                        {
-                                            <button class="tuya-mode-btn @(GetMode(dev) == mode ? "tuya-mode-active" : "")"
-                                                    disabled="@IsBusy(dev.DeviceId)"
-                                                    @onclick="() => SetModeAsync(dev, mode)">
-                                                @char.ToUpper(mode[0])@mode[1..]
-                                            </button>
-                                        }
-                                    </div>
-                                }
-                            }
-                        </div>
-                    }
-                    else if (dev.DeviceType is TuyaDeviceType.Switch1 or TuyaDeviceType.Switch2 or TuyaDeviceType.Switch4)
-                    {
-                        var gangs = dev.DeviceType == TuyaDeviceType.Switch4 ? 4
-                                  : dev.DeviceType == TuyaDeviceType.Switch2 ? 2 : 1;
-                        <div class="tuya-card @(dev.Reachable ? "" : "tuya-card-unreachable")">
-                            <div class="tuya-card-icon">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="2" y="3" width="20" height="18" rx="2"/>
-                                    <circle cx="12" cy="12" r="2"/>
-                                </svg>
                             </div>
-                            <div class="tuya-card-name">@dev.Name</div>
-                            @if (!dev.Reachable)
+                        }
+                        else
+                        {
+                            @* Power *@
+                            @if (cat.PowerDps is not null)
                             {
-                                <div class="tuya-key-entry">
-                                    <input class="tuya-key-input" type="text" placeholder="Paste local key…"
-                                           value="@PendingKey(dev.DeviceId)"
-                                           @oninput="e => _pendingKeys[dev.DeviceId] = e.Value?.ToString() ?? string.Empty"
-                                           disabled="@IsBusy(dev.DeviceId)" />
-                                    <button class="tuya-key-save" disabled="@(IsBusy(dev.DeviceId) || string.IsNullOrWhiteSpace(PendingKey(dev.DeviceId)))"
-                                            @onclick="() => SaveKeyAsync(dev)">
-                                        @(IsBusy(dev.DeviceId) ? "…" : "Save")
-                                    </button>
-                                </div>
+                                <button class="tuya-toggle @(GetDpsBool(dev, cat.PowerDps) ? "tuya-toggle-on" : "tuya-toggle-off")"
+                                        disabled="@IsBusy(dev.DeviceId)"
+                                        @onclick="() => ToggleDpsAsync(dev, cat.PowerDps!)">
+                                    @(GetDpsBool(dev, cat.PowerDps) ? "ON" : "OFF")
+                                </button>
                             }
-                            else
+                            @* Gangs *@
+                            @if (cat.Gangs > 0)
                             {
                                 <div class="tuya-switch-gangs">
-                                    @for (int g = 1; g <= gangs; g++)
+                                    @for (int g = 1; g <= cat.Gangs; g++)
                                     {
                                         var gang = g;
-                                        var on = GetGangPower(dev, gang);
+                                        var on = GetDpsBool(dev, gang.ToString());
                                         <div class="tuya-switch-gang">
-                                            @if (gangs > 1)
-                                            {
-                                                <span class="tuya-gang-label">CH@gang</span>
-                                            }
+                                            @if (cat.Gangs > 1) { <span class="tuya-gang-label">CH@gang</span> }
                                             <button class="tuya-toggle @(on ? "tuya-toggle-on" : "tuya-toggle-off")"
                                                     disabled="@IsBusy(dev.DeviceId)"
-                                                    @onclick="() => ToggleGangAsync(dev, gang)">
+                                                    @onclick="() => ToggleDpsAsync(dev, gang.ToString())">
                                                 @(on ? "ON" : "OFF")
                                             </button>
                                         </div>
                                     }
                                 </div>
                             }
-                        </div>
-                    }
-                    else if (dev.DeviceType == TuyaDeviceType.Sensor)
-                    {
-                        <div class="tuya-card @(dev.Reachable ? "" : "tuya-card-unreachable")">
-                            <div class="tuya-card-icon">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M12 22c5.52 0 10-4.48 10-10S17.52 2 12 2 2 6.48 2 12s4.48 10 10 10z"/>
-                                    <path d="M12 8v4M12 16h.01"/>
-                                </svg>
-                            </div>
-                            <div class="tuya-card-name">@dev.Name</div>
-                            @if (!dev.Reachable)
+                            @* White brightness *@
+                            @if (cat.BrightnessDps is not null && GetDpsBool(dev, cat.PowerDps ?? "20"))
                             {
-                                <div class="tuya-key-entry">
-                                    <input class="tuya-key-input" type="text" placeholder="Paste local key…"
-                                           value="@PendingKey(dev.DeviceId)"
-                                           @oninput="e => _pendingKeys[dev.DeviceId] = e.Value?.ToString() ?? string.Empty"
-                                           disabled="@IsBusy(dev.DeviceId)" />
-                                    <button class="tuya-key-save" disabled="@(IsBusy(dev.DeviceId) || string.IsNullOrWhiteSpace(PendingKey(dev.DeviceId)))"
-                                            @onclick="() => SaveKeyAsync(dev)">
-                                        @(IsBusy(dev.DeviceId) ? "…" : "Save")
-                                    </button>
+                                <div class="tuya-slider-row">
+                                    <span class="tuya-dim-label">Dim</span>
+                                    <input type="range" min="10" max="1000" value="@GetDpsInt(dev, cat.BrightnessDps, 500)"
+                                           disabled="@IsBusy(dev.DeviceId)"
+                                           @onchange="e => SetWhiteAsync(dev, cat, cat.BrightnessDps!, int.Parse(e.Value!.ToString()!))" />
+                                    <span class="tuya-dim-label">Bright</span>
                                 </div>
                             }
-                            else
+                            @* Warm-cool *@
+                            @if (cat.ColorTempDps is not null && GetDpsBool(dev, cat.PowerDps ?? "20"))
                             {
-                                <div class="tuya-sensor-state @(GetPresence(dev) ? "tuya-sensor-active" : "tuya-sensor-idle")">
-                                    @(GetPresence(dev) ? "Presence Detected" : "No Presence")
+                                <div class="tuya-slider-row">
+                                    <span class="tuya-dim-label">Warm</span>
+                                    <input type="range" min="0" max="1000" value="@GetDpsInt(dev, cat.ColorTempDps, 500)"
+                                           disabled="@IsBusy(dev.DeviceId)"
+                                           @onchange="e => SetWhiteAsync(dev, cat, cat.ColorTempDps!, int.Parse(e.Value!.ToString()!))" />
+                                    <span class="tuya-dim-label">Cool</span>
                                 </div>
                             }
-                        </div>
-                    }
+                            @* Color *@
+                            @if (cat.ColorDps is not null && GetDpsBool(dev, cat.PowerDps ?? "20"))
+                            {
+                                <div class="tuya-slider-row">
+                                    <span class="tuya-dim-label">Color</span>
+                                    <input type="color" class="tuya-color" value="@GetColorHex(dev, cat.ColorDps)"
+                                           disabled="@IsBusy(dev.DeviceId)"
+                                           @onchange='e => SetColorAsync(dev, cat, e.Value?.ToString() ?? "#ffffff")' />
+                                </div>
+                            }
+                            @* AC / IR *@
+                            @if (cat.Ac)
+                            {
+                                var acOn = GetDpsBool(dev, "1");
+                                <button class="tuya-toggle @(acOn ? "tuya-toggle-on" : "tuya-toggle-off")"
+                                        disabled="@IsBusy(dev.DeviceId)"
+                                        @onclick="() => ToggleAcPowerAsync(dev)">
+                                    @(acOn ? "ON" : "OFF")
+                                </button>
+                                <div class="tuya-ac-temp-row">
+                                    <button class="tuya-temp-btn" disabled="@IsBusy(dev.DeviceId)" @onclick="() => AdjustAcTempAsync(dev, -1)">−</button>
+                                    <span class="tuya-temp-value">@GetDpsInt(dev, "3", 24)°C</span>
+                                    <button class="tuya-temp-btn" disabled="@IsBusy(dev.DeviceId)" @onclick="() => AdjustAcTempAsync(dev, +1)">+</button>
+                                </div>
+                                <div class="tuya-ac-mode-row">
+                                    @foreach (var mode in new[] { "cool", "heat", "fan", "dry", "auto" })
+                                    {
+                                        <button class="tuya-mode-btn @(GetAcMode(dev) == mode ? "tuya-mode-active" : "")"
+                                                disabled="@IsBusy(dev.DeviceId)"
+                                                @onclick="() => SetAcModeAsync(dev, mode)">
+                                            @(char.ToUpper(mode[0]) + mode[1..])
+                                        </button>
+                                    }
+                                </div>
+                                <div class="tuya-ac-mode-row">
+                                    @foreach (var fan in new[] { "low", "mid", "high", "auto" })
+                                    {
+                                        <button class="tuya-mode-btn" disabled="@IsBusy(dev.DeviceId)"
+                                                @onclick="() => SetAcFanAsync(dev, fan)">@fan</button>
+                                    }
+                                </div>
+                            }
+                            @* Energy readout *@
+                            @if (cat.Energy is not null)
+                            {
+                                <div class="tuya-readout">
+                                    <span>@(GetDpsInt(dev, cat.Energy.PowerDps, 0) / 10.0) W</span>
+                                    <span>@(GetDpsInt(dev, cat.Energy.VoltageDps, 0) / 10.0) V</span>
+                                    <span>@GetDpsInt(dev, cat.Energy.CurrentDps, 0) mA</span>
+                                </div>
+                            }
+                            @* Sensor readouts *@
+                            @if (cat.Sensors is not null)
+                            {
+                                <div class="tuya-readout">
+                                    @foreach (var s in cat.Sensors)
+                                    {
+                                        <span>@s.Label: @FormatSensor(dev, s)</span>
+                                    }
+                                </div>
+                            }
+                        }
+                    </div>
                 }
             </div>
         }
@@ -442,11 +369,11 @@
         {
             await TuyaSvc.SaveDeviceAsync(new TuyaDevice
             {
-                DeviceId   = a.DeviceId,
-                Name       = a.Name.Trim(),
-                DeviceType = a.DeviceType,
-                Room       = string.IsNullOrWhiteSpace(a.Room) ? null : a.Room.Trim(),
-                SortOrder  = order++,
+                DeviceId  = a.DeviceId,
+                Name      = a.Name.Trim(),
+                Category  = a.Category,
+                Room      = string.IsNullOrWhiteSpace(a.Room) ? null : a.Room.Trim(),
+                SortOrder = order++,
             });
         }
 
@@ -460,38 +387,6 @@
 
     // ── Commands ──────────────────────────────────────────────────────────────
 
-    private async Task TogglePowerAsync(TuyaDeviceView dev)
-    {
-        var current = GetPower(dev);
-        var powerKey = dev.Dps.ContainsKey("20") ? "20" : "1";
-        await SendAsync(dev.DeviceId, new TuyaCommandRequest(
-            Dps: new Dictionary<string, object> { [powerKey] = !current }));
-        await LoadAsync();
-    }
-
-    private async Task SetBrightnessAsync(TuyaDeviceView dev, int value)
-    {
-        await SendAsync(dev.DeviceId, new TuyaCommandRequest(
-            Dps: new Dictionary<string, object> { ["22"] = value }));
-        await LoadAsync();
-    }
-
-    private async Task AdjustTempAsync(TuyaDeviceView dev, int delta)
-    {
-        var current = GetTemp(dev);
-        var next = Math.Clamp(current + delta, 16, 30);
-        await SendAsync(dev.DeviceId, new TuyaCommandRequest(
-            Ac: new AcCommandPayload(Temp: next)));
-        await LoadAsync();
-    }
-
-    private async Task SetModeAsync(TuyaDeviceView dev, string mode)
-    {
-        await SendAsync(dev.DeviceId, new TuyaCommandRequest(
-            Ac: new AcCommandPayload(Mode: mode)));
-        await LoadAsync();
-    }
-
     private async Task SendAsync(string deviceId, TuyaCommandRequest cmd)
     {
         _busyDevices.Add(deviceId);
@@ -503,37 +398,97 @@
 
     // ── DPS helpers ───────────────────────────────────────────────────────────
 
-    private static bool GetPower(TuyaDeviceView dev)
+    private static bool GetDpsBool(TuyaDeviceView dev, string key)
+        => dev.Dps.TryGetValue(key, out var v)
+           && (v.ValueKind == System.Text.Json.JsonValueKind.True
+               || (v.ValueKind == System.Text.Json.JsonValueKind.String && v.GetString() is "1" or "true" or "on" or "presence"));
+
+    private static int GetDpsInt(TuyaDeviceView dev, string key, int dflt)
+        => dev.Dps.TryGetValue(key, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.Number ? v.GetInt32() : dflt;
+
+    private static string GetDpsStr(TuyaDeviceView dev, string key)
+        => dev.Dps.TryGetValue(key, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String ? v.GetString() ?? "" : "";
+
+    private static string GetColorHex(TuyaDeviceView dev, string key)
     {
-        if (dev.Dps.TryGetValue("1", out var v) || dev.Dps.TryGetValue("20", out v))
-            return v.ValueKind == System.Text.Json.JsonValueKind.True;
-        return false;
+        var raw = GetDpsStr(dev, key);
+        return raw.Length >= 12 ? TuyaColor.RgbHexFromHsvHex(raw) : "#ffffff";
     }
 
-    private static int GetBrightness(TuyaDeviceView dev)
+    private static string FormatSensor(TuyaDeviceView dev, SensorReadout s)
     {
-        if (dev.Dps.TryGetValue("22", out var v) && v.ValueKind == System.Text.Json.JsonValueKind.Number)
-            return v.GetInt32();
-        if (dev.Dps.TryGetValue("4", out v) && v.ValueKind == System.Text.Json.JsonValueKind.Number)
-            return v.GetInt32() * 4; // 0-255 → 0-1000 approx
-        return 500;
-    }
-
-    private static int GetTemp(TuyaDeviceView dev)
-    {
-        if (dev.Dps.TryGetValue("3", out var v) && v.ValueKind == System.Text.Json.JsonValueKind.Number)
-            return v.GetInt32();
-        return 24;
-    }
-
-    private static string GetMode(TuyaDeviceView dev)
-    {
-        if (dev.Dps.TryGetValue("2", out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String)
+        if (dev.Dps.TryGetValue(s.Dps, out var v))
         {
-            var raw = v.GetString() ?? "";
-            return raw switch { "cold" => "cool", "hot" => "heat", "wind" => "fan", "wet" => "dry", _ => raw };
+            if (v.ValueKind == System.Text.Json.JsonValueKind.Number)
+                return $"{v.GetInt32() * s.Scale:0.#} {s.Unit}".Trim();
+            if (v.ValueKind == System.Text.Json.JsonValueKind.String) return v.GetString() ?? "-";
+            if (v.ValueKind == System.Text.Json.JsonValueKind.True) return "yes";
+            if (v.ValueKind == System.Text.Json.JsonValueKind.False) return "no";
         }
-        return "cool";
+        return "-";
+    }
+
+    private async Task ToggleDpsAsync(TuyaDeviceView dev, string key)
+    {
+        await SendAsync(dev.DeviceId, new TuyaCommandRequest(Dps: new() { [key] = !GetDpsBool(dev, key) }));
+        await LoadAsync();
+    }
+
+    private async Task SetWhiteAsync(TuyaDeviceView dev, TuyaCategory cat, string key, int value)
+    {
+        var dps = new Dictionary<string, object> { [key] = value };
+        if (cat.WorkModeDps is not null) dps[cat.WorkModeDps] = "white";
+        await SendAsync(dev.DeviceId, new TuyaCommandRequest(Dps: dps));
+        await LoadAsync();
+    }
+
+    private async Task SetColorAsync(TuyaDeviceView dev, TuyaCategory cat, string rgbHex)
+    {
+        var dps = new Dictionary<string, object> { [cat.ColorDps!] = TuyaColor.HsvHexFromRgb(rgbHex) };
+        if (cat.WorkModeDps is not null) dps[cat.WorkModeDps] = "colour";
+        await SendAsync(dev.DeviceId, new TuyaCommandRequest(Dps: dps));
+        await LoadAsync();
+    }
+
+    private async Task ToggleAcPowerAsync(TuyaDeviceView dev)
+    {
+        await SendAsync(dev.DeviceId, new TuyaCommandRequest(Ac: new AcCommandPayload(Power: !GetDpsBool(dev, "1"))));
+        await LoadAsync();
+    }
+
+    private async Task AdjustAcTempAsync(TuyaDeviceView dev, int delta)
+    {
+        var next = Math.Clamp(GetDpsInt(dev, "3", 24) + delta, 16, 30);
+        await SendAsync(dev.DeviceId, new TuyaCommandRequest(Ac: new AcCommandPayload(Temp: next)));
+        await LoadAsync();
+    }
+
+    private string GetAcMode(TuyaDeviceView dev)
+    {
+        var raw = GetDpsStr(dev, "2");
+        return raw switch { "cold" => "cool", "hot" => "heat", "wind" => "fan", "wet" => "dry", "" => "cool", _ => raw };
+    }
+
+    private async Task SetAcModeAsync(TuyaDeviceView dev, string mode)
+    {
+        await SendAsync(dev.DeviceId, new TuyaCommandRequest(Ac: new AcCommandPayload(Mode: mode)));
+        await LoadAsync();
+    }
+
+    private async Task SetAcFanAsync(TuyaDeviceView dev, string fan)
+    {
+        await SendAsync(dev.DeviceId, new TuyaCommandRequest(Ac: new AcCommandPayload(Fan: fan)));
+        await LoadAsync();
+    }
+
+    private async Task SaveCategoryAsync(TuyaDeviceView dev, string category)
+    {
+        await TuyaSvc.SaveDeviceAsync(new TuyaDevice
+        {
+            Id = dev.Id, DeviceId = dev.DeviceId, Name = dev.Name,
+            DeviceType = dev.DeviceType, Room = dev.Room, Category = category, SortOrder = dev.SortOrder
+        });
+        await LoadAsync();
     }
 
     private bool IsBusy(string deviceId) => _busy || _busyDevices.Contains(deviceId);
@@ -560,41 +515,17 @@
         await InvokeAsync(StateHasChanged);
     }
 
-    private static bool GetGangPower(TuyaDeviceView dev, int gang)
-    {
-        var key = gang.ToString();
-        return dev.Dps.TryGetValue(key, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.True;
-    }
-
-    private async Task ToggleGangAsync(TuyaDeviceView dev, int gang)
-    {
-        var current = GetGangPower(dev, gang);
-        await SendAsync(dev.DeviceId, new TuyaCommandRequest(
-            Dps: new Dictionary<string, object> { [gang.ToString()] = !current }));
-        await LoadAsync();
-    }
-
-    private static bool GetPresence(TuyaDeviceView dev)
-    {
-        if (dev.Dps.TryGetValue("1", out var v))
-            return v.ValueKind == System.Text.Json.JsonValueKind.True
-                || (v.ValueKind == System.Text.Json.JsonValueKind.String && v.GetString() is "1" or "true" or "presence");
-        if (dev.Dps.TryGetValue("101", out v))
-            return v.ValueKind == System.Text.Json.JsonValueKind.True;
-        return false;
-    }
-
     // ── Scan assignment model ─────────────────────────────────────────────────
 
     private class DeviceAssignment
     {
-        public string          DeviceId   { get; set; } = "";
-        public string          Ip         { get; set; } = "";
-        public string          Version    { get; set; } = "";
-        public string          Name       { get; set; } = "";
-        public TuyaDeviceType  DeviceType { get; set; } = TuyaDeviceType.Plug;
-        public string          Room       { get; set; } = "";
-        public bool            Include    { get; set; } = true;
+        public string DeviceId { get; set; } = "";
+        public string Ip       { get; set; } = "";
+        public string Version  { get; set; } = "";
+        public string Name     { get; set; } = "";
+        public string Category { get; set; } = "plug";
+        public string Room     { get; set; } = "";
+        public bool   Include  { get; set; } = true;
     }
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;

@@ -1,6 +1,7 @@
 @page "/automations"
 @using Tower.Core.Automations
 @using Tower.Core.Models
+@using Tower.Core.Tuya
 @inject AutomationService AutoSvc
 
 <PageTitle>Tower — Automations</PageTitle>
@@ -164,7 +165,7 @@
         {
             Kind = x.Kind, Target = x.Target, TargetName = x.TargetName,
             On   = x.On,   Temp   = x.Temp ?? 24,
-            IsAc = _tuyaDevices.Any(d => d.DeviceId == x.Target && d.DeviceType == TuyaDeviceType.AcRemote)
+            IsAc = _tuyaDevices.Any(d => d.DeviceId == x.Target && TuyaCategories.Resolve(d.Category, d.DeviceType).Ac)
         }).ToList();
         if (rows.Count == 0) rows.Add(new Row());
         _editor = new Editor { Id = a.Id, Name = a.Name, Rows = rows };
@@ -191,7 +192,7 @@
         {
             var d = _tuyaDevices.FirstOrDefault(x => x.DeviceId == row.Target);
             row.TargetName = d?.Name ?? row.Target;
-            row.IsAc = d?.DeviceType == TuyaDeviceType.AcRemote;
+            row.IsAc = d is not null && TuyaCategories.Resolve(d.Category, d.DeviceType).Ac;
         }
     }
 
