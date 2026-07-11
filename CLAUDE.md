@@ -35,6 +35,16 @@ pi-agent). Telegram trigger: `run <name>` or `/run <name>` (case-insensitive, ad
 New action kinds later = extend the `kind` discriminator, no schema change.
 Spec/plan: `docs/superpowers/specs/2026-07-10-automations-design.md`.
 
+## Tuya device categories & controls (/tuya page)
+
+Device controls are driven by a **category** (not the `TuyaDeviceType` enum). Categories are
+code-defined in `src/Tower.Core/Tuya/TuyaCategories.cs` — each declares capabilities as DPS codes
+(power/brightness/colortemp/color/workmode/gangs/ac/energy/sensors). Assign a category to a device
+via the dropdown on its card on `/tuya`; `TuyaDevice.Category` (nullable) stores it, null falls back
+to the legacy `DeviceType`. Adding a device = pick a category; a new *category* is a few lines in
+that one file. Color codec (RGB↔Tuya HSV hex) is `TuyaColor.cs`. Local keys/IPs live in the separate
+`tuyaservice` (tinytuya_service/devices.json), NOT tower.db — see spec/plan under docs/superpowers/.
+
 ## Passwords / secrets store (/secrets page)
 
 Project credentials live in the `Secrets` table in `tower.db`. Model: `Secret.cs`
