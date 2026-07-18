@@ -105,12 +105,16 @@ public class GmailReader(HttpClient http, GmailTokenService tokens)
             .PadRight((b64.Length + 3) / 4 * 4, '='));
     }
 
+    // Some senders (e.g. older PickMe receipts) ship an HTML-only email whose text/plain part is
+    // just this sentinel — treat it as empty so extraction falls through to the real HTML body.
+    private const string NoTextPlaceholder = "This email has no text content";
+
     // Recursively find the first text/plain part; fall back to any body data.
     private static string ExtractText(JsonElement part)
     {
         if (part.TryGetProperty("mimeType", out var mt) && mt.GetString() == "text/plain")
         {
-            var d = Decode(part);
+            var d = Clean(Decode(part));
             if (d.Length > 0) return d;
         }
         if (part.TryGetProperty("parts", out var parts))
@@ -123,8 +127,10 @@ public class GmailReader(HttpClient http, GmailTokenService tokens)
         if (part.TryGetProperty("mimeType", out var fallbackMt) &&
             (fallbackMt.GetString() ?? "").StartsWith("text/html", StringComparison.OrdinalIgnoreCase))
             return System.Text.RegularExpressions.Regex.Replace(decoded, "<[^>]+>", " ");
-        return decoded;
+        return Clean(decoded);
     }
+
+    private static string Clean(string s) => s.Trim() == NoTextPlaceholder ? "" : s;
 
     private static string Decode(JsonElement part)
     {
