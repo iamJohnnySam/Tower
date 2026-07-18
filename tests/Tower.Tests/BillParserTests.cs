@@ -49,6 +49,16 @@ public class BillParserTests
     }
 
     [Fact]
+    public void Keells_old_bill_subject_variant_also_matches()
+    {
+        var body = "Bill No : 1006973 Total Gross Amount 2,600.00 Total Net Amount 2,600.00 Credit Card - SCB 2,600.00";
+        var r = BillParser.TryParse("web.jms@keells.com", "Keells Bill - 1006973", body);
+        Assert.NotNull(r);
+        Assert.Equal("Grocery", r!.Value.Profile.Category);
+        Assert.Equal(2600.00m, r.Value.Amount);
+    }
+
+    [Fact]
     public void Unrecognized_subject_returns_null()
     {
         var r = BillParser.TryParse("support@pickme.lk", "PickMe | Promo of the week", TripBody);
