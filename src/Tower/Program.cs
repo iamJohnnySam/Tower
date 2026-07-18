@@ -156,6 +156,11 @@ builder.Services.AddSingleton<Tower.Core.Workers.SolarMailWorker>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Tower.Core.Workers.SolarMailWorker>());
 builder.Services.AddHostedService<Tower.Core.Workers.SolaxPollWorker>();
 
+// ── Bill mail importer (Gmail "Bills" label → FinanceTracker expenses) ───────
+builder.Services.AddHttpClient<Tower.Core.Bills.FinanceTrackerClient>();
+builder.Services.AddSingleton<Tower.Core.Workers.BillMailWorker>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<Tower.Core.Workers.BillMailWorker>());
+
 // ── Blazor ───────────────────────────────────────────────────────────────────
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
