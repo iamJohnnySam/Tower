@@ -1,0 +1,153 @@
+@page "/bills"
+@rendermode InteractiveServer
+@using Tower.Core.Bills
+@using Tower.Core.Data
+@using Tower.Core.Gmail
+@using Tower.Core.Settings
+@using Tower.Core.Workers
+@inject BillMailWorker BillMail
+@inject GmailTokenService Tokens
+@inject SettingsService SettingsSvc
+@inject TowerDbContext Db
+
+<PageTitle>Tower — Bill Importer</PageTitle>
+
+<div class="gmail-page">
+
+    <h1 class="page-title">Bill Importer</h1>
+
+    @if (!Tokens.IsConnected)
+    {
+        <section class="atom-section-block">
+            <div class="config-hint" style="padding:8px 0;color:#b00020;">
+                &#9888; Gmail isn't connected — imports are paused. <a href="/gmail">Connect Gmail</a>.
+            </div>
+        </section>
+    }
+
+    @* ── Schedule & run ─────────────────────────────────────────────────────── *@
+    <section class="atom-section-block">
+        <div class="atom-block-title">Schedule &amp; Run</div>
+        <div class="config-form">
+            <div class="config-row">
+                <label class="config-label">Run every</label>
+                <div class="config-control">
+                    <input type="number" min="1" class="config-input" style="width:80px" @bind="_interval" /> hours
+                    <button class="btn-secondary btn-sm" @onclick="SaveInterval">Save</button>
+                    @if (_intervalSaved)
+                    {
+                        <span class="save-confirm">Saved — applies from next cycle.</span>
+                    }
+                </div>
+            </div>
+            <div class="config-row">
+                <label class="config-label">Bills label</label>
+                <div class="config-control">@_labelName</div>
+            </div>
+            <div class="config-row">
+                <label class="config-label">Last run</label>
+                <div class="config-control">@(_lastRun ?? "never")</div>
+            </div>
+            <div class="config-row">
+                <label class="config-label">Imported (last run)</label>
+                <div class="config-control">@_lastCount</div>
+            </div>
+            <div class="config-row">
+                <label class="config-label">Error</label>
+                <div class="config-control">@(_lastError ?? "none")</div>
+            </div>
+            <div class="config-row">
+                <label class="config-label"></label>
+                <div class="config-control">
+                    <button class="btn btn-primary btn-sm" disabled="@(_importing || !Tokens.IsConnected)" @onclick="ImportNow">
+                        @(_importing ? "Importing…" : "Import bills now")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    @* ── Loaded profiles ────────────────────────────────────────────────────── *@
+    <section class="atom-section-block">
+        <div class="atom-block-title">Loaded Profiles (@BillProfiles.All.Count)</div>
+        <p class="config-hint">
+            Emails in the Bills label are matched against these rules in order — first match wins;
+            unmatched emails are left untouched.
+        </p>
+        <table class="atom-table">
+            <thead>
+                <tr>
+                    <th>Name</th><th>From contains</th><th>Subject match</th>
+                    <th>Amount field</th><th>Category</th><th>Currency</th><th>Imported</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in BillProfiles.All)
+                {
+                    var s = _stats.TryGetValue(p.Name, out var v) ? v : (0, 0m);
+                    <tr>
+                        <td>@p.Name</td>
+                        <td class="mono">@p.FromContains</td>
+                        <td class="mono text-muted">@p.SubjectRegex</td>
+                        <td class="mono text-muted">@p.AmountRegex</td>
+                        <td>@p.Category</td>
+                        <td>@p.Currency</td>
+                        <td>@(s.Item1 == 0 ? "—" : $"{s.Item1} · {s.Item2:N0} {p.Currency}")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <p class="config-hint">
+            Profiles are defined in code (<code>Tower.Core/Bills/BillProfiles.cs</code>) — adding a
+            bill type is a few lines there.
+        </p>
+    </section>
+
+</div>
+
+@code {
+    private int _interval = 6;
+    private bool _intervalSaved, _importing;
+    private string? _lastRun, _lastError, _labelName;
+    private int _lastCount;
+    private Dictionary<string, (int, decimal)> _stats = new();
+
+    protected override void OnInitialized()
+    {
+        if (int.TryParse(SettingsSvc.Get("bills.interval_hours"), out var bi) && bi > 0) _interval = bi;
+        _labelName = SettingsSvc.Get("bills.label_name") ?? "Bills";
+        _lastRun = SettingsSvc.Get("bills.mail.last_run");
+        _lastError = SettingsSvc.Get("bills.mail.last_error");
+        int.TryParse(SettingsSvc.Get("bills.mail.last_count"), out _lastCount);
+        LoadStats();
+    }
+
+    // decimal is stored as TEXT in SQLite, so aggregate client-side (row count is small).
+    private void LoadStats() =>
+        _stats = Db.ImportedBills
+            .Where(b => b.TransactionId != null)
+            .Select(b => new { b.Profile, b.Amount })
+            .AsEnumerable()
+            .GroupBy(r => r.Profile)
+            .ToDictionary(g => g.Key, g => (g.Count(), g.Sum(x => x.Amount)));
+
+    private void SaveInterval()
+    {
+        if (_interval < 1) _interval = 1;
+        SettingsSvc.Set("bills.interval_hours", _interval.ToString());
+        _intervalSaved = true;
+    }
+
+    private async Task ImportNow()
+    {
+        _importing = true;
+        try
+        {
+            _lastCount = await BillMail.RunOnceAsync();
+            _lastRun = SettingsSvc.Get("bills.mail.last_run");
+            _lastError = SettingsSvc.Get("bills.mail.last_error");
+            LoadStats();
+        }
+        finally { _importing = false; }
+    }
+}

@@ -6,7 +6,6 @@
 @inject GmailTokenService Tokens
 @inject GmailReader Reader
 @inject SolarMailWorker Mail
-@inject BillMailWorker BillMail
 @inject SettingsService SettingsSvc
 @inject NavigationManager Navigation
 
@@ -172,45 +171,6 @@
                 </div>
             </div>
         </section>
-
-        @* ── Bill importer (Gmail "Bills" label → FinanceTracker) ──────────────── *@
-        <section class="atom-section-block">
-            <div class="atom-block-title">Bill Importer</div>
-            <div class="config-form">
-                <div class="config-row">
-                    <label class="config-label">Run every</label>
-                    <div class="config-control">
-                        <input type="number" min="1" class="config-input" style="width:80px"
-                               @bind="_billInterval" /> hours
-                        <button class="btn-secondary btn-sm" @onclick="SaveBillInterval">Save</button>
-                        @if (_billIntervalSaved)
-                        {
-                            <span class="save-confirm">Saved — applies from next cycle.</span>
-                        }
-                    </div>
-                </div>
-                <div class="config-row">
-                    <label class="config-label">Last run</label>
-                    <div class="config-control">@(_billLastRun ?? "never")</div>
-                </div>
-                <div class="config-row">
-                    <label class="config-label">Imported (last run)</label>
-                    <div class="config-control">@_billLastCount</div>
-                </div>
-                <div class="config-row">
-                    <label class="config-label">Error</label>
-                    <div class="config-control">@(_billLastError ?? "none")</div>
-                </div>
-                <div class="config-row">
-                    <label class="config-label"></label>
-                    <div class="config-control">
-                        <button class="btn btn-primary btn-sm" disabled="@_billImporting" @onclick="ImportBillsNow">
-                            @(_billImporting ? "Importing…" : "Import bills now")
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </section>
     }
 
 </div>
@@ -222,12 +182,6 @@
     private int _lastCount;
     private bool _importing;
     private List<(string Id, string Name)> _labels = new();
-
-    // Bill importer state
-    private int _billInterval = 6;
-    private bool _billIntervalSaved, _billImporting;
-    private string? _billLastRun, _billLastError;
-    private int _billLastCount;
 
     protected override async Task OnInitializedAsync()
     {
@@ -244,11 +198,6 @@
         _lastError = SettingsSvc.Get("solar.mail.last_error");
         int.TryParse(SettingsSvc.Get("solar.mail.last_count"), out _lastCount);
 
-        if (int.TryParse(SettingsSvc.Get("bills.interval_hours"), out var bi) && bi > 0) _billInterval = bi;
-        _billLastRun = SettingsSvc.Get("bills.mail.last_run");
-        _billLastError = SettingsSvc.Get("bills.mail.last_error");
-        int.TryParse(SettingsSvc.Get("bills.mail.last_count"), out _billLastCount);
-
         if (_connected) await LoadLabels();
     }
 
@@ -261,24 +210,6 @@
             _flash = "No stored Client ID — enter credentials below.";
     }
 
-    private void SaveBillInterval()
-    {
-        if (_billInterval < 1) _billInterval = 1;
-        SettingsSvc.Set("bills.interval_hours", _billInterval.ToString());
-        _billIntervalSaved = true;
-    }
-
-    private async Task ImportBillsNow()
-    {
-        _billImporting = true;
-        try
-        {
-            _billLastCount = await BillMail.RunOnceAsync();
-            _billLastRun = SettingsSvc.Get("bills.mail.last_run");
-            _billLastError = SettingsSvc.Get("bills.mail.last_error");
-        }
-        finally { _billImporting = false; }
-    }
 
     private void SaveCredsAndStart()
     {
