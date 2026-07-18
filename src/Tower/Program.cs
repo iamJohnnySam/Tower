@@ -188,6 +188,20 @@ using (var scope = app.Services.CreateScope())
     ");
 
     db.Database.ExecuteSqlRaw(@"
+        CREATE TABLE IF NOT EXISTS ImportedBills (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            GmailMessageId TEXT NOT NULL,
+            Profile TEXT NOT NULL,
+            Category TEXT NOT NULL,
+            Amount TEXT NOT NULL,
+            Currency TEXT NOT NULL,
+            TransactionId INTEGER,
+            ImportedAt TEXT NOT NULL,
+            Error TEXT
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS IX_ImportedBills_GmailMessageId ON ImportedBills (GmailMessageId);");
+
+    db.Database.ExecuteSqlRaw(@"
         CREATE TABLE IF NOT EXISTS Todos (
             Id INTEGER PRIMARY KEY AUTOINCREMENT,
             Title TEXT NOT NULL,

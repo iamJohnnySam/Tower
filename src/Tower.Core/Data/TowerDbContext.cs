@@ -17,6 +17,7 @@ public class TowerDbContext(DbContextOptions<TowerDbContext> options) : DbContex
     public DbSet<SolarReport> SolarReports => Set<SolarReport>();
     public DbSet<SolarWeather> SolarWeather => Set<SolarWeather>();
     public DbSet<SolarAlarm> SolarAlarms => Set<SolarAlarm>();
+    public DbSet<Tower.Core.Models.ImportedBill> ImportedBills => Set<Tower.Core.Models.ImportedBill>();
     protected override void OnModelCreating(ModelBuilder b) {
         b.Entity<CpuProfileSlot>().HasKey(x => x.Slot);
         b.Entity<CpuProfileSlot>().Property(x => x.Slot).ValueGeneratedNever();
@@ -35,5 +36,6 @@ public class TowerDbContext(DbContextOptions<TowerDbContext> options) : DbContex
         b.Entity<SolarWeather>().Property(x => x.Date).ValueGeneratedNever();
         b.Entity<SolarAlarm>().HasIndex(x => x.GmailMessageId).IsUnique();
         b.Entity<SolarAlarm>().HasIndex(x => x.AlarmDate);
+        b.Entity<Tower.Core.Models.ImportedBill>().HasIndex(x => x.GmailMessageId).IsUnique();
     }
 }
