@@ -62,7 +62,7 @@ public class GmailReader(HttpClient http, GmailTokenService tokens)
         return ids;
     }
 
-    public async Task<(string Subject, string Body, DateTime Date)?> GetMessageAsync(string id, CancellationToken ct = default)
+    public async Task<(string From, string Subject, string Body, DateTime Date)?> GetMessageAsync(string id, CancellationToken ct = default)
     {
         using var req = await AuthGet($"{Api}/messages/{id}?format=full", ct);
         using var resp = await http.SendAsync(req, ct);
@@ -71,20 +71,38 @@ public class GmailReader(HttpClient http, GmailTokenService tokens)
         var root = doc.RootElement;
         var payload = root.GetProperty("payload");
 
-        string subject = "";
+        string subject = "", from = "";
         if (payload.TryGetProperty("headers", out var headers))
             foreach (var h in headers.EnumerateArray())
-                if (h.GetProperty("name").GetString()!.Equals("Subject", StringComparison.OrdinalIgnoreCase))
+            {
+                var name = h.GetProperty("name").GetString() ?? "";
+                if (name.Equals("Subject", StringComparison.OrdinalIgnoreCase))
                     subject = h.GetProperty("value").GetString() ?? "";
+                else if (name.Equals("From", StringComparison.OrdinalIgnoreCase))
+                    from = h.GetProperty("value").GetString() ?? "";
+            }
 
-        // internalDate = epoch milliseconds the message was received.
         var date = DateTime.UtcNow;
         if (root.TryGetProperty("internalDate", out var idt) &&
             long.TryParse(idt.GetString(), out var ms))
             date = DateTimeOffset.FromUnixTimeMilliseconds(ms).UtcDateTime;
 
         var body = ExtractText(payload);
-        return (subject, body, date);
+        return (from, subject, body, date);
+    }
+
+    // Full RFC822 message bytes (the .eml), for archiving as an attachment.
+    public async Task<byte[]?> GetRawMessageAsync(string id, CancellationToken ct = default)
+    {
+        using var req = await AuthGet($"{Api}/messages/{id}?format=raw", ct);
+        using var resp = await http.SendAsync(req, ct);
+        if (!resp.IsSuccessStatusCode) return null;
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+        if (!doc.RootElement.TryGetProperty("raw", out var raw)) return null;
+        var b64 = raw.GetString();
+        if (string.IsNullOrEmpty(b64)) return null;
+        return Convert.FromBase64String(b64.Replace('-', '+').Replace('_', '/')
+            .PadRight((b64.Length + 3) / 4 * 4, '='));
     }
 
     // Recursively find the first text/plain part; fall back to any body data.
