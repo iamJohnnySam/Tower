@@ -58,6 +58,29 @@ public class BillParserTests
         Assert.Equal(2600.00m, r.Value.Amount);
     }
 
+    // Older PickMe trip template: no "Paid Amount"; falls back to "Total trip fare".
+    [Fact]
+    public void Old_trip_falls_back_to_total_trip_fare()
+    {
+        var body = "Trip ID - 327372273 Total LKR 145.88 Total trip fare LKR 145.88 PAID BY **** LKR 145.88";
+        var r = BillParser.TryParse("support@pickme.lk", "PickMe | Email Receipt for Trip ID 327372273", body);
+        Assert.NotNull(r);
+        Assert.Equal("Transportation", r!.Value.Profile.Category);
+        Assert.Equal(145.88m, r.Value.Amount);
+    }
+
+    [Fact]
+    public void Daraz_order_uses_total_inclusive_of_tax_and_maps_to_online_shopping()
+    {
+        var body = "Subtotal: Rs 600.00 Shipping fee: Rs 345.00 Total Saving: Rs (0.00) " +
+                   "Total (inclusive of tax, if any): Rs 960.00 Paid by: Credit or Debit Card";
+        var r = BillParser.TryParse("noreply@support.daraz.lk", "Yay, your Order 225252071710771 is confirmed!", body);
+        Assert.NotNull(r);
+        Assert.Equal("Daraz Order", r!.Value.Profile.Name);
+        Assert.Equal("Online Shopping", r.Value.Profile.Category);
+        Assert.Equal(960.00m, r.Value.Amount);
+    }
+
     [Fact]
     public void Unrecognized_subject_returns_null()
     {

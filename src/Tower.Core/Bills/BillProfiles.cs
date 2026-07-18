@@ -8,7 +8,7 @@ public record BillProfile(
     string FromContains,
     Regex SubjectRegex,
     string Category,
-    Regex AmountRegex,
+    Regex[] AmountRegexes,   // tried in order; first match wins — put the preferred field first
     string Currency);
 
 public static class BillProfiles
@@ -21,17 +21,23 @@ public static class BillProfiles
         new BillProfile("PickMe Trip", "pickme.lk",
             Rx(@"^PickMe \| Email Receipt for Trip"),
             "Transportation",
-            Rx(@"Paid Amount\s*LKR\s*([\d,]+\.\d{2})"),
+            [Rx(@"Paid Amount\s*LKR\s*([\d,]+\.\d{2})"),        // current template: includes tip
+             Rx(@"Total Trip Fare\s*LKR\s*([\d,]+\.\d{2})")],   // older template has no "Paid Amount"
             "LKR"),
         new BillProfile("PickMe Delivery", "pickme.lk",
             Rx(@"^PickMe \| Delivery Email Receipt"),
             "Food",
-            Rx(@"Paid by.*?LKR\s*([\d,]+\.\d{2})"),   // "Paid by <method> LKR <amount>" — method (Card/FriMi/Cash) sits between
+            [Rx(@"Paid by.*?LKR\s*([\d,]+\.\d{2})")],   // "Paid by <method> LKR <amount>" — method sits between
             "LKR"),
         new BillProfile("Keells E-Bill", "keells.com",
             Rx(@"^Keells (E-)?Bill"),   // new "Keells E-Bill | …" and older "Keells Bill - …"
             "Grocery",
-            Rx(@"Total Net Amount\s*(?:Rs\.?|LKR)?\s*([\d,]+\.\d{2})"),   // net of discounts = amount charged
+            [Rx(@"Total Net Amount\s*(?:Rs\.?|LKR)?\s*([\d,]+\.\d{2})")],   // net of discounts = amount charged
+            "LKR"),
+        new BillProfile("Daraz Order", "daraz.lk",
+            Rx(@"your Order .* is confirmed"),   // "Yay, your Order <id> is confirmed!"
+            "Online Shopping",
+            [Rx(@"Total \(inclusive of tax.*?(?:Rs\.?|LKR)\s*([\d,]+\.\d{2})")],   // grand total incl. shipping + fees
             "LKR"),
     ];
 }
@@ -47,12 +53,15 @@ public static class BillParser
         if (profile is null) return null;
 
         var text = Normalize(body);
-        var m = profile.AmountRegex.Match(text);
-        if (!m.Success) return null;
-        if (!decimal.TryParse(m.Groups[1].Value.Replace(",", ""),
-                NumberStyles.Number, CultureInfo.InvariantCulture, out var amount) || amount <= 0)
-            return null;
-        return (profile, amount);
+        foreach (var rx in profile.AmountRegexes)
+        {
+            var m = rx.Match(text);
+            if (m.Success &&
+                decimal.TryParse(m.Groups[1].Value.Replace(",", ""),
+                    NumberStyles.Number, CultureInfo.InvariantCulture, out var amount) && amount > 0)
+                return (profile, amount);
+        }
+        return null;
     }
 
     // GmailReader yields tag-stripped HTML that still contains entities like &nbsp;. Decode the

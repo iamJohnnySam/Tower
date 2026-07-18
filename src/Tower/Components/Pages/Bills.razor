@@ -89,7 +89,7 @@
                         <td>@p.Name</td>
                         <td class="mono">@p.FromContains</td>
                         <td class="mono text-muted">@p.SubjectRegex</td>
-                        <td class="mono text-muted">@p.AmountRegex</td>
+                        <td class="mono text-muted">@string.Join("  |  ", p.AmountRegexes.Select(r => r.ToString()))</td>
                         <td>@p.Category</td>
                         <td>@p.Currency</td>
                         <td>@(s.Item1 == 0 ? "—" : $"{s.Item1} · {s.Item2:N0} {p.Currency}")</td>
