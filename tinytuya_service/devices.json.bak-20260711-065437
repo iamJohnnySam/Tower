@@ -1,0 +1,93 @@
+[
+  {
+    "id": "bf4b4dd286c0ec9a078np3",
+    "name": "Upstair Corridor",
+    "ip": "123.231.125.221",
+    "key": "Hm:UfDeNDHzv`bm/",
+    "version": "3.3"
+  },
+  {
+    "id": "bf840e519120968914vwmg",
+    "name": "Garage lights",
+    "ip": "175.157.12.119",
+    "key": "p3l;U:4|P~.j{#8}",
+    "version": "3.3"
+  },
+  {
+    "id": "bfa7e193b4f8cb0416yjss",
+    "name": "Raspberry pi ",
+    "ip": "175.157.28.238",
+    "key": "zos_-zpBK$RWRITI",
+    "version": "3.3"
+  },
+  {
+    "id": "bfcaa624d7e9ffd5cdgied",
+    "name": "Smart IR",
+    "ip": "111.223.188.33",
+    "key": "4oL<0_H@c:[>@!Zn",
+    "version": "3.3"
+  },
+  {
+    "id": "bf6c78482679270e99owbg",
+    "name": "Attic Human presence",
+    "ip": "175.157.16.128",
+    "key": "AZ2D5B}h7]E4idlN",
+    "version": "3.3"
+  },
+  {
+    "id": "bf52d5589200370976dl5k",
+    "name": "AC controller",
+    "ip": "123.231.120.98",
+    "key": "ggnB_J>QHk-._fMs",
+    "version": "3.3"
+  },
+  {
+    "id": "bf5d699766a06521e2btqa",
+    "name": "Attic Main",
+    "ip": "123.231.120.98",
+    "key": "Wv]VNgrzkpybyr|`",
+    "version": "3.3"
+  },
+  {
+    "id": "bf7f8ad3434b92f2f3rgjb",
+    "name": "Master Bedroom Air",
+    "ip": "",
+    "key": "4oL<0_H@c:[>@!Zn",
+    "version": "3.3"
+  },
+  {
+    "id": "bf1e9cf101ec829979hyq9",
+    "name": "Baby Room Air",
+    "ip": "",
+    "key": "ggnB_J>QHk-._fMs",
+    "version": "3.3"
+  },
+  {
+    "id": "bf8af4f6a2db654052ocpj",
+    "name": "Relay switch ",
+    "ip": "111.223.188.33",
+    "key": "Ce[QnmeyPBydrRMB",
+    "version": "3.3"
+  },
+  {
+    "id": "bfe62ea75d77e2795a5z53",
+    "name": "Smart Bulb",
+    "ip": "111.223.188.230",
+    "key": "ldLUOYtXOK&3+ZDu",
+    "version": "3.3"
+  },
+  {
+    "id": "bfb18911018d504ff2axux",
+    "name": "Mosquito repellent ",
+    "ip": "111.223.191.216",
+    "key": "a&&t-Y8`#-SjanHz",
+    "version": "3.3"
+  },
+  {
+    "id": "bfd24b002b7aa10734dg6b",
+    "name": "Gateway",
+    "ip": "116.206.244.28",
+    "key": "`j+v(*X]^E'^]G~m",
+    "version": "3.3"
+  }
+]

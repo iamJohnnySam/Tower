@@ -27,7 +27,32 @@ public class GmailTokenService(IServiceScopeFactory scopes, IHttpClientFactory h
         {
             using var scope = scopes.CreateScope();
             var settings = scope.ServiceProvider.GetRequiredService<SettingsService>();
-            return !string.IsNullOrEmpty(settings.Get("gmail.refresh_token"));
+            return !string.IsNullOrEmpty(settings.Get("gmail.refresh_token"))
+                && string.IsNullOrEmpty(settings.Get("gmail.disconnected_at"));
+        }
+    }
+
+    /// <summary>True when credentials are stored (a token exists), regardless of health.
+    /// Distinguishes "never set up" from "set up but token went dead".</summary>
+    public bool IsConfigured
+    {
+        get
+        {
+            using var scope = scopes.CreateScope();
+            var settings = scope.ServiceProvider.GetRequiredService<SettingsService>();
+            return !string.IsNullOrEmpty(settings.Get("gmail.refresh_token"))
+                && !string.IsNullOrEmpty(settings.Get("gmail.client_id"))
+                && !string.IsNullOrEmpty(settings.Get("gmail.client_secret"));
+        }
+    }
+
+    /// <summary>ISO timestamp of when the token was last found dead, or null while healthy.</summary>
+    public string? DisconnectedAt
+    {
+        get
+        {
+            using var scope = scopes.CreateScope();
+            return scope.ServiceProvider.GetRequiredService<SettingsService>().Get("gmail.disconnected_at");
         }
     }
 
@@ -44,6 +69,9 @@ public class GmailTokenService(IServiceScopeFactory scopes, IHttpClientFactory h
         if (_cachedToken != null && DateTime.UtcNow < _tokenExpiry.AddMinutes(-5))
             return _cachedToken;
 
+        string? result = null;
+        bool justDisconnected = false;
+
         await _lock.WaitAsync(ct);
         try
         {
@@ -52,26 +80,55 @@ public class GmailTokenService(IServiceScopeFactory scopes, IHttpClientFactory h
             var refreshToken = settings.Get("gmail.refresh_token");
             var clientId = settings.Get("gmail.client_id");
             var clientSecret = settings.Get("gmail.client_secret");
-            if (string.IsNullOrEmpty(refreshToken) || string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(clientSecret))
-                return null;
-
-            using var http = httpFactory.CreateClient(nameof(GmailTokenService));
-            var form = new FormUrlEncodedContent(new Dictionary<string, string>
+            if (!string.IsNullOrEmpty(refreshToken) && !string.IsNullOrEmpty(clientId) && !string.IsNullOrEmpty(clientSecret))
             {
-                ["grant_type"] = "refresh_token",
-                ["refresh_token"] = refreshToken,
-                ["client_id"] = clientId,
-                ["client_secret"] = clientSecret,
-            });
-            var resp = await http.PostAsync(TokenEndpoint, form, ct);
-            if (!resp.IsSuccessStatusCode) return null;
-
-            using var json = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
-            _cachedToken = json.RootElement.GetProperty("access_token").GetString();
-            _tokenExpiry = DateTime.UtcNow.AddSeconds(json.RootElement.GetProperty("expires_in").GetInt32());
-            return _cachedToken;
+                using var http = httpFactory.CreateClient(nameof(GmailTokenService));
+                var form = new FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    ["grant_type"] = "refresh_token",
+                    ["refresh_token"] = refreshToken,
+                    ["client_id"] = clientId,
+                    ["client_secret"] = clientSecret,
+                });
+                var resp = await http.PostAsync(TokenEndpoint, form, ct);
+                if (resp.IsSuccessStatusCode)
+                {
+                    using var json = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+                    _cachedToken = json.RootElement.GetProperty("access_token").GetString();
+                    _tokenExpiry = DateTime.UtcNow.AddSeconds(json.RootElement.GetProperty("expires_in").GetInt32());
+                    result = _cachedToken;
+                    if (!string.IsNullOrEmpty(settings.Get("gmail.disconnected_at")))
+                        settings.Set("gmail.disconnected_at", null);      // recovered
+                }
+                else if (string.IsNullOrEmpty(settings.Get("gmail.disconnected_at")))
+                {
+                    // Refresh of a stored token failed (typically invalid_grant) → token is dead.
+                    // Record it once; the alert below fires only on this connected→disconnected edge.
+                    settings.Set("gmail.disconnected_at", DateTime.UtcNow.ToString("O"));
+                    justDisconnected = true;
+                }
+            }
         }
         finally { _lock.Release(); }
+
+        if (justDisconnected)
+            await NotifyDisconnectedAsync(ct);
+
+        return result;
+    }
+
+    // One-shot admin alert when Gmail goes dead. Never lets a notification failure affect token logic.
+    private async Task NotifyDisconnectedAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var scope = scopes.CreateScope();
+            var hub = scope.ServiceProvider.GetRequiredService<Tower.Core.Telegram.TelegramHub>();
+            await hub.SendAsync(Tower.Core.Telegram.TgAudience.Admin, 0,
+                "⚠️ Tower: Gmail disconnected — the OAuth token was rejected (expired or revoked). " +
+                "Solar + bill imports are paused. Open Tower → Gmail and tap Reconnect.", null, ct);
+        }
+        catch { /* best-effort */ }
     }
 
     public async Task<(bool Ok, string? Error)> ExchangeCodeAsync(string code, CancellationToken ct = default)
@@ -100,6 +157,7 @@ public class GmailTokenService(IServiceScopeFactory scopes, IHttpClientFactory h
         if (!json.RootElement.TryGetProperty("refresh_token", out var rt))
             return (false, "No refresh_token returned (revoke access and retry with prompt=consent)");
         settings.Set("gmail.refresh_token", rt.GetString());
+        settings.Set("gmail.disconnected_at", null);   // reconnected → healthy again
         _cachedToken = json.RootElement.GetProperty("access_token").GetString();
         _tokenExpiry = DateTime.UtcNow.AddSeconds(json.RootElement.GetProperty("expires_in").GetInt32());
         return (true, null);

@@ -1,0 +1,13 @@
+@inject Tower.Core.Gmail.GmailTokenService Gmail
+
+@{
+    var down = Gmail.DisconnectedAt;
+}
+@if (!string.IsNullOrEmpty(down))
+{
+    <div style="background:#b00020;color:#fff;padding:8px 16px;display:flex;gap:12px;
+                align-items:center;font-size:.9rem;justify-content:center;flex-wrap:wrap;">
+        <span>⚠️ Gmail disconnected — solar &amp; bill imports are paused.</span>
+        <a href="/gmail" style="color:#fff;font-weight:600;text-decoration:underline;">Reconnect</a>
+    </div>
+}
