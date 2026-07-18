@@ -377,43 +377,63 @@ public sealed class TelegramHub(
             return;
         }
 
-        // 2. Auto-registration for non-callback messages from unknown users
-        if (!u.IsCallback && !subscriberSvc.IsActive(u.ChatId))
+        var admin = subscriberSvc.GetAdmin();
+
+        // 1b. Admin tapping Approve/Deny on a connection request — handle and stop.
+        if (u.IsCallback && admin == u.ChatId &&
+            (u.CallbackData.StartsWith("tgapprove:", StringComparison.Ordinal) ||
+             u.CallbackData.StartsWith("tgdeny:", StringComparison.Ordinal)))
         {
-            var displayName = string.IsNullOrWhiteSpace(u.Username)
-                ? string.IsNullOrWhiteSpace(u.FirstName) ? u.ChatId.ToString()
-                : $"{u.FirstName} {u.LastName}".Trim()
-                : $"@{u.Username}";
+            await HandleConnectionDecisionAsync(subscriberSvc, u, ct);
+            return;
+        }
 
-            subscriberSvc.AddOrReactivate(u.ChatId, displayName);
-            logger.LogInformation("TelegramHub: new subscriber {ChatId} ({Name})", u.ChatId, displayName);
-
-            // First subscriber = admin (mirrors MediaBox TelegramBotService.HandleMessageAsync)
-            if (subscriberSvc.GetAdmin() is null)
+        // 2. Bootstrap: no admin configured yet → first person to talk becomes admin
+        //    (mirrors MediaBox). Only reachable before an admin exists.
+        if (admin is null && !u.IsCallback && !subscriberSvc.IsActive(u.ChatId))
+        {
+            subscriberSvc.AddOrReactivate(u.ChatId, DisplayName(u));
+            subscriberSvc.SetAdmin(u.ChatId);
+            logger.LogInformation("TelegramHub: first subscriber set as admin: {ChatId}", u.ChatId);
+            await SendAsync(TgAudience.Chat, u.ChatId,
+                "Welcome to Tower! You have been registered as the Telegram admin.", null, ct);
+        }
+        // 3. Approval gate: anyone who is neither the admin nor an already-approved
+        //    subscriber is a stranger. Their message is NOT logged-through, NOT
+        //    replied to, and NOT broadcast to MediaBox/handlers. We only ask the
+        //    admin to approve (once), then drop the message.
+        else if (admin is not null && u.ChatId != admin && !subscriberSvc.IsActive(u.ChatId))
+        {
+            if (!subscriberSvc.IsPending(u.ChatId))
             {
-                subscriberSvc.SetAdmin(u.ChatId);
-                logger.LogInformation("TelegramHub: first subscriber set as admin: {ChatId}", u.ChatId);
+                var name = DisplayName(u);
+                subscriberSvc.SetPending(u.ChatId, name);
+                logger.LogWarning(
+                    "TelegramHub: connection request from {ChatId} ({Name}) — awaiting admin approval",
+                    u.ChatId, name);
 
-                // Send a brief welcome to the new admin
-                var welcomeResult = await SendAsync(
-                    TgAudience.Chat, u.ChatId,
-                    "Welcome to Tower! You have been registered as the Telegram admin.",
-                    null, ct);
-
-                if (!welcomeResult.Ok)
-                    logger.LogWarning("TelegramHub: welcome send failed: {Error}", welcomeResult.Error);
+                var preview = u.IsCallback ? u.CallbackData : u.Text;
+                if (preview.Length > 80) preview = preview[..80] + "…";
+                var buttons = new List<IReadOnlyList<(string, string)>>
+                {
+                    new List<(string, string)>
+                    {
+                        ("✅ Approve", $"tgapprove:{u.ChatId}"),
+                        ("⛔ Deny",    $"tgdeny:{u.ChatId}"),
+                    }
+                };
+                await SendKeyboardAsync(admin.Value,
+                    $"🔔 New person wants to use the bot:\n{name} (id {u.ChatId})\nThey said: {preview}\n\nAllow them to connect?",
+                    buttons, null, ct);
             }
             else
             {
-                // Welcome non-admin subscriber
-                await SendAsync(
-                    TgAudience.Chat, u.ChatId,
-                    "You have been subscribed to Tower notifications.",
-                    null, ct);
+                logger.LogDebug("TelegramHub: dropping message from pending user {ChatId}", u.ChatId);
             }
+            return; // never process a stranger's message before approval
         }
 
-        // 3. Persist inbound message to log
+        // 4. Persist inbound message to log
         try
         {
             string? command = null;
@@ -492,6 +512,47 @@ public sealed class TelegramHub(
                 }
             }
         }
+    }
+
+    // ── Connection approval ───────────────────────────────────────────────────
+
+    private static string DisplayName(ParsedUpdate u) =>
+        !string.IsNullOrWhiteSpace(u.Username) ? $"@{u.Username}"
+        : !string.IsNullOrWhiteSpace(u.FirstName) ? $"{u.FirstName} {u.LastName}".Trim()
+        : u.ChatId.ToString();
+
+    /// <summary>
+    /// Handles the admin tapping Approve/Deny on a connection request.
+    /// Approve → subscriber becomes active and is welcomed; Deny → blocked.
+    /// </summary>
+    private async Task HandleConnectionDecisionAsync(SubscriberService subs, ParsedUpdate u, CancellationToken ct)
+    {
+        bool approve = u.CallbackData.StartsWith("tgapprove:", StringComparison.Ordinal);
+        var idStr = u.CallbackData[(u.CallbackData.IndexOf(':') + 1)..];
+        if (!long.TryParse(idStr, out var targetId))
+        {
+            await AnswerCallbackAsync(u.CallbackId, "Invalid request", ct);
+            return;
+        }
+
+        var name = subs.Get(targetId)?.Name ?? targetId.ToString();
+
+        if (approve)
+        {
+            subs.AddOrReactivate(targetId, null); // keeps existing name, status → active
+            logger.LogInformation("TelegramHub: admin approved connection for {ChatId}", targetId);
+            await EditAsync(u.ChatId, u.MessageId, $"✅ Approved — {name} can now use the bot.", null, null, ct);
+            await SendAsync(TgAudience.Chat, targetId,
+                "You've been approved to use this bot. Send /help to get started.", null, ct);
+        }
+        else
+        {
+            subs.Block(targetId);
+            logger.LogInformation("TelegramHub: admin denied connection for {ChatId}", targetId);
+            await EditAsync(u.ChatId, u.MessageId, $"⛔ Denied — {name} is blocked.", null, null, ct);
+        }
+
+        await AnswerCallbackAsync(u.CallbackId, null, ct);
     }
 
     // ── Snapshot ──────────────────────────────────────────────────────────────

@@ -8,10 +8,11 @@ public class BillParserTests
         "Trip ID - 1458530325 Estimated Fare LKR 308.88 Surge LKR +100.00 " +
         "Total Trip Fare LKR 408.88 Paid Amount LKR 408.88 FriMi";
 
-    // Delivery receipt uses the &nbsp; HTML entity between LKR and the number.
+    // Delivery receipt: &nbsp; entity between LKR and number, and a payment method ("Card")
+    // sits between "Paid by" and the amount — this is the real wording from live receipts.
     const string DeliveryBody =
         "Order ID - 178671638 Sub Total LKR&nbsp;2970.00 Delivery Fee +LKR&nbsp;159.00 " +
-        "Total LKR&nbsp;3158.00 Paid by LKR&nbsp;3158.00";
+        "Temporary Fuel Surcharge +LKR&nbsp;29.00 Total LKR&nbsp;3158.00 Paid by Card LKR&nbsp;3158.00";
 
     [Fact]
     public void Trip_uses_paid_amount_not_estimate()

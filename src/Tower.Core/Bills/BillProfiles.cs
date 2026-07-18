@@ -26,7 +26,7 @@ public static class BillProfiles
         new BillProfile("PickMe Delivery", "pickme.lk",
             Rx(@"^PickMe \| Delivery Email Receipt"),
             "Food",
-            Rx(@"Paid by\s*LKR\s*([\d,]+\.\d{2})"),
+            Rx(@"Paid by.*?LKR\s*([\d,]+\.\d{2})"),   // "Paid by <method> LKR <amount>" — method (Card/FriMi/Cash) sits between
             "LKR"),
     ];
 }

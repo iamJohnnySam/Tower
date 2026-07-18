@@ -21,6 +21,30 @@ public class SubscriberService(TowerDbContext db, SettingsService settings) {
         db.SaveChanges();
     }
 
+    /// <summary>Marks a chat as awaiting admin approval. Creates the row if new.</summary>
+    public void SetPending(long chatId, string? name) {
+        var sub = db.Subscribers.Find(chatId);
+        if (sub is null) {
+            db.Subscribers.Add(new TelegramSubscriber {
+                ChatId = chatId,
+                Name = name,
+                Status = "pending",
+                AddedAt = DateTime.Now
+            });
+        } else {
+            sub.Status = "pending";
+            if (name is not null) sub.Name = name;
+        }
+        db.SaveChanges();
+    }
+
+    public bool IsPending(long chatId) {
+        var sub = db.Subscribers.Find(chatId);
+        return sub is not null && sub.Status == "pending";
+    }
+
+    public TelegramSubscriber? Get(long chatId) => db.Subscribers.Find(chatId);
+
     public void Kick(long chatId) {
         var sub = db.Subscribers.Find(chatId);
         if (sub is null) return;

@@ -132,6 +132,38 @@ public class SubscriberServiceTests {
     }
 
     [Fact]
+    public void SetPending_marks_pending_and_is_not_active_or_blocked() {
+        using var db = NewDb();
+        var svc = Svc(db);
+        svc.SetPending(555L, "Stranger");
+        Assert.True(svc.IsPending(555L));
+        Assert.False(svc.IsActive(555L));   // stranger cannot be processed
+        Assert.False(svc.IsBlocked(555L));
+        Assert.Equal("Stranger", svc.Get(555L)!.Name);
+    }
+
+    [Fact]
+    public void Approve_flow_pending_then_active_keeps_name() {
+        using var db = NewDb();
+        var svc = Svc(db);
+        svc.SetPending(556L, "Stranger");
+        svc.AddOrReactivate(556L, null);    // admin approves (null name keeps existing)
+        Assert.True(svc.IsActive(556L));
+        Assert.False(svc.IsPending(556L));
+        Assert.Equal("Stranger", svc.Get(556L)!.Name);
+    }
+
+    [Fact]
+    public void Deny_flow_pending_then_blocked() {
+        using var db = NewDb();
+        var svc = Svc(db);
+        svc.SetPending(557L, "Stranger");
+        svc.Block(557L);                     // admin denies
+        Assert.True(svc.IsBlocked(557L));
+        Assert.False(svc.IsActive(557L));
+    }
+
+    [Fact]
     public void IsBlocked_returns_false_for_unknown_chat_id() {
         using var db = NewDb();
         var svc = Svc(db);
