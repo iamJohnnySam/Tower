@@ -34,6 +34,20 @@ public class BillParserTests
         Assert.Equal(3158.00m, r.Value.Amount);
     }
 
+    // Keells e-bill: "Total Net Amount" (net of discounts) with no currency prefix on the number.
+    const string KeellsBody =
+        "Bill No : 4300423 Rs: 233.00 Total Gross Amount 4,602.00 Total Net Amount 4,369.00 Credit Card 4,369.00";
+
+    [Fact]
+    public void Keells_uses_total_net_amount_and_maps_to_grocery()
+    {
+        var r = BillParser.TryParse("web.jms@keells.com", "Keells E-Bill | 07-Jul-2026 at Keells - Pitakotte 2 | 4300423", KeellsBody);
+        Assert.NotNull(r);
+        Assert.Equal("Keells E-Bill", r!.Value.Profile.Name);
+        Assert.Equal("Grocery", r.Value.Profile.Category);
+        Assert.Equal(4369.00m, r.Value.Amount);
+    }
+
     [Fact]
     public void Unrecognized_subject_returns_null()
     {

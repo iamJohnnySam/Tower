@@ -28,6 +28,11 @@ public static class BillProfiles
             "Food",
             Rx(@"Paid by.*?LKR\s*([\d,]+\.\d{2})"),   // "Paid by <method> LKR <amount>" — method (Card/FriMi/Cash) sits between
             "LKR"),
+        new BillProfile("Keells E-Bill", "keells.com",
+            Rx(@"^Keells E-Bill"),
+            "Grocery",
+            Rx(@"Total Net Amount\s*(?:Rs\.?|LKR)?\s*([\d,]+\.\d{2})"),   // net of discounts = amount charged
+            "LKR"),
     ];
 }
 
