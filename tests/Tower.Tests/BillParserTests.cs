@@ -212,6 +212,49 @@ public class BillParserTests
     }
 
     [Fact]
+    public void PayHere_gateway_splits_by_merchant_subject()
+    {
+        var d = BillParser.TryParse("receipts@mail.payhere.lk", "Dominos Pizza Sri Lanka Payment Receipt #320048107474",
+            "Item Qty Amount PIZZA LKR 6,325.00 Subtotal LKR 6,325.00 Total LKR 6,325.00");
+        Assert.Equal("Food", d!.Value.Profile.Category);
+        Assert.Equal(6325.00m, d.Value.Amount);
+
+        var r = BillParser.TryParse("receipts@mail.payhere.lk", "Riyasewana Lanka Private Limited Payment Receipt #320045996094",
+            "Subtotal LKR 1,000.00 Total LKR 1,000.00");
+        Assert.Equal("Ads", r!.Value.Profile.Category);
+        Assert.Equal(1000.00m, r.Value.Amount);
+    }
+
+    [Fact]
+    public void Namecheap_skips_zero_subtotal_takes_total_usd()
+    {
+        var body = "Initial Charge: $14.98 Sub Total $0.00 TOTAL $14.98";
+        var r = BillParser.TryParse("support@namecheap.com", "Namecheap Order Summary (Order# 200087354);", body);
+        Assert.NotNull(r);
+        Assert.Equal("Website", r!.Value.Profile.Category);
+        Assert.Equal("USD", r.Value.Profile.Currency);
+        Assert.Equal(14.98m, r.Value.Amount);
+    }
+
+    [Fact]
+    public void Other_new_profiles_parse()
+    {
+        var p = BillParser.TryParse("receipts@payablepayments.lk", "Invoice for your Order from Lexi Pro Service", "TOTAL AMOUNT : LKR 1,850.00");
+        Assert.Equal("Home", p!.Value.Profile.Category); Assert.Equal(1850.00m, p.Value.Amount);
+
+        var k = BillParser.TryParse("mail@kandos.lk", "Kandos.lk - Order Confirmation #KAN2603240002",
+            "Subtotal Rs 3,000.00 Total Amount Rs 3,000.00 Paid Amount Rs 3,000.00 Balance Due Rs 0.00");
+        Assert.Equal("Groceries", k!.Value.Profile.Category); Assert.Equal(3000.00m, k.Value.Amount);
+
+        var e = BillParser.TryParse("receipt@echannelling.com", "Welcome to eChanneling - eRewards",
+            "CHANNELLING DONE Total Fee : 114.00 LKR Breakdown Doctor Fee: 0.00 /= Booking Fee:114.00 /=");
+        Assert.Equal("eChanneling", e!.Value.Profile.Category); Assert.Equal(114.00m, e.Value.Amount);
+
+        var m = BillParser.TryParse("support@pickme.lk", "Membership Payment Invoice", "PickMe PASS Total LKR 549.00 Paid Amount LKR 549.00");
+        Assert.Equal("Membership", m!.Value.Profile.Category); Assert.Equal(549.00m, m.Value.Amount);
+    }
+
+    [Fact]
     public void Unrecognized_subject_returns_null()
     {
         var r = BillParser.TryParse("support@pickme.lk", "PickMe | Promo of the week", TripBody);

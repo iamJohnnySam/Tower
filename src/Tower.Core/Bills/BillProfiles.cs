@@ -80,7 +80,7 @@ public static class BillProfiles
             [Rx(@"A total of\s*(?:S\$|SGD|\$)\s*([\d,]+\.\d{2})")],
             "SGD"),
         new BillProfile("PickMe Membership", "pickme.lk",
-            Rx(@"^Membership Renewal Receipt"),
+            Rx(@"^Membership (Renewal Receipt|Payment Invoice)"),
             "Membership",
             [Rx(@"Paid Amount\s*LKR\s*([\d,]+\.\d{2})"),
              Rx(@"Total\s*LKR\s*([\d,]+\.\d{2})")],
@@ -101,6 +101,38 @@ public static class BillProfiles
             "Food",
             [Rx(@"Grand Total\s*:?\s*Rs\.?\s*([\d,]+\.\d{2})")],
             "LKR"),
+        // PayHere is a gateway — the merchant is in the subject, so each merchant is its own profile
+        new BillProfile("PayHere Dominos", "receipts@mail.payhere.lk",
+            Rx(@"^Dominos Pizza Sri Lanka Payment Receipt"),
+            "Food",
+            [Rx(@"\bTotal\s+LKR\s*([\d,]+\.\d{2})")],
+            "LKR"),
+        new BillProfile("PayHere Riyasewana", "receipts@mail.payhere.lk",
+            Rx(@"^Riyasewana Lanka Private Limited Payment Receipt"),
+            "Ads",
+            [Rx(@"\bTotal\s+LKR\s*([\d,]+\.\d{2})")],
+            "LKR"),
+        new BillProfile("PayablePayments", "payablepayments.lk",
+            Rx(@"^Invoice for your Order"),
+            "Home",
+            [Rx(@"TOTAL AMOUNT\s*:?\s*(?:Rs\.?|LKR)?\s*([\d,]+\.\d{2})")],
+            "LKR"),
+        new BillProfile("Namecheap", "namecheap.com",
+            Rx(@"^Namecheap Order Summary"),
+            "Website",
+            [Rx(@"\bTOTAL\s*:?\s*(?:US\$|USD|\$)?\s*([\d,]+\.\d{2})")],   // iterate-positive skips "Sub Total $0.00"
+            "USD"),
+        new BillProfile("Kandos", "kandos.lk",
+            Rx(@"Order Confirmation"),
+            "Groceries",
+            [Rx(@"Paid Amount\s*Rs\.?\s*([\d,]+\.\d{2})"),
+             Rx(@"Total Amount\s*Rs\.?\s*([\d,]+\.\d{2})")],
+            "LKR"),
+        new BillProfile("eChannelling", "echannelling.com",
+            Rx(@"eChanneling"),
+            "eChanneling",
+            [Rx(@"Total Fee\s*:?\s*([\d,]+\.\d{2})\s*LKR")],   // "Total Fee : 114.00 LKR"
+            "LKR"),
     ];
 }
 
@@ -116,13 +148,10 @@ public static class BillParser
 
         var text = Normalize(body);
         foreach (var rx in profile.AmountRegexes)
-        {
-            var m = rx.Match(text);
-            if (m.Success &&
-                decimal.TryParse(m.Groups[1].Value.Replace(",", ""),
-                    NumberStyles.Number, CultureInfo.InvariantCulture, out var amount) && amount > 0)
-                return (profile, amount);
-        }
+            foreach (Match m in rx.Matches(text))
+                if (decimal.TryParse(m.Groups[1].Value.Replace(",", ""),
+                        NumberStyles.Number, CultureInfo.InvariantCulture, out var amount) && amount > 0)
+                    return (profile, amount);   // first positive match wins (skips 0.00 sub-totals / credits)
         return null;
     }
 
