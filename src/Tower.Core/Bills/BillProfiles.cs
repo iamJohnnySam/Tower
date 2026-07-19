@@ -10,7 +10,8 @@ public record BillProfile(
     string Category,
     Regex[] AmountRegexes,   // tried in order; first match wins — put the preferred field first
     string Currency,
-    bool FromPdf = false);   // when true: amount comes from the attached PDF (via pdftotext), and the PDF is attached instead of the .eml
+    bool FromPdf = false,    // when true: amount comes from the attached PDF (via pdftotext), and the PDF is attached instead of the .eml
+    bool Preferred = false); // processed first, so it wins same-order dedup (e.g. PayHere gateway over the merchant email)
 
 public static class BillProfiles
 {
@@ -111,12 +112,14 @@ public static class BillProfiles
             Rx(@"^Dominos Pizza Sri Lanka Payment Receipt"),
             "Food",
             [Rx(@"\bTotal\s+LKR\s*([\d,]+\.\d{2})")],
-            "LKR"),
+            "LKR",
+            Preferred: true),
         new BillProfile("PayHere Riyasewana", "receipts@mail.payhere.lk",
             Rx(@"^Riyasewana Lanka Private Limited Payment Receipt"),
             "Ads",
             [Rx(@"\bTotal\s+LKR\s*([\d,]+\.\d{2})")],
-            "LKR"),
+            "LKR",
+            Preferred: true),
         new BillProfile("PayablePayments", "payablepayments.lk",
             Rx(@"^Invoice for your Order"),
             "Home",
@@ -153,7 +156,8 @@ public static class BillProfiles
             Rx(@"^Viana Cosmetics Payment Receipt"),
             "Health and Wellness",
             [Rx(@"\bTotal\s+LKR\s*([\d,]+\.\d{2})")],
-            "LKR"),
+            "LKR",
+            Preferred: true),
         // Chinese Dragon: the order arrives from both the merchant and PayHere — dedup (below) keeps one
         new BillProfile("Chinese Dragon", "chinesedragoncafe.com",
             Rx(@"Order .* confirmed"),
@@ -164,7 +168,8 @@ public static class BillProfiles
             Rx(@"^CHINESE DRAGON CAFE"),
             "Food",
             [Rx(@"\bTotal\s+LKR\s*([\d,]+\.\d{2})")],
-            "LKR"),
+            "LKR",
+            Preferred: true),
     ];
 }
 

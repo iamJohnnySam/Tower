@@ -77,6 +77,14 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
             .ToHashSet();
 
         var ids = await reader.ListMessageIdsAsync(labelId, null, ct);
+        // Process 'preferred' senders (the PayHere gateway) first, so they win same-order dedup over merchant emails.
+        var preferredIds = new HashSet<string>();
+        foreach (var sender in BillProfiles.All.Where(p => p.Preferred).Select(p => p.FromContains).Distinct())
+            foreach (var pid in await reader.ListMessageIdsAsync(labelId, null, ct, fromContains: sender))
+                preferredIds.Add(pid);
+        if (preferredIds.Count > 0)
+            ids = ids.OrderByDescending(preferredIds.Contains).ToList();
+
         int imported = 0;
         string? lastError = null;
         RunTotal = ids.Count;

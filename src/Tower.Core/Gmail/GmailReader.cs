@@ -41,11 +41,14 @@ public class GmailReader(HttpClient http, GmailTokenService tokens)
         return list;
     }
 
-    public async Task<List<string>> ListMessageIdsAsync(string labelId, DateTime? after, CancellationToken ct = default)
+    public async Task<List<string>> ListMessageIdsAsync(string labelId, DateTime? after, CancellationToken ct = default, string? fromContains = null)
     {
         var ids = new List<string>();
         string? pageToken = null;
-        var q = after is { } a ? $"&q=after:{a:yyyy/MM/dd}" : "";
+        var terms = new List<string>();
+        if (after is { } a) terms.Add($"after:{a:yyyy/MM/dd}");
+        if (!string.IsNullOrEmpty(fromContains)) terms.Add($"from:{fromContains}");
+        var q = terms.Count > 0 ? $"&q={Uri.EscapeDataString(string.Join(" ", terms))}" : "";
         do
         {
             var url = $"{Api}/messages?labelIds={Uri.EscapeDataString(labelId)}&maxResults=100{q}" +
