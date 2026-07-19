@@ -258,10 +258,10 @@ public class BillParserTests
     public void AliExpress_detects_currency_per_email()
     {
         var usd = BillParser.TryParse("transaction@notice.aliexpress.com", "Order 1113362589405896: order confirmed",
-            "Cable x1 Order total US$9.15 Payment method Visa");
+            "Cable x1 Order total US $9.15 See order details");
         Assert.NotNull(usd);
         Assert.Equal(9.15m, usd!.Value.Amount);
-        Assert.Equal("USD", usd.Value.Currency);   // detected from "US$"
+        Assert.Equal("USD", usd.Value.Currency);   // detected from "US $"
 
         var lkr = BillParser.TryParse("transaction@notice.aliexpress.com", "Order 111: order confirmed",
             "Item x1 Order total LKR 42,200.61 Payment");

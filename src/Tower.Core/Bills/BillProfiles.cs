@@ -50,8 +50,8 @@ public static class BillProfiles
         new BillProfile("AliExpress Order", "aliexpress.com",
             Rx(@"Order .* order confirmed"),
             "Online Shopping",
-            // orders come in USD (US$) or LKR — detect per-email via the (?<cur>) group
-            [Rx(@"Order total\s*(?<cur>US\$|USD|LKR|Rs\.?)?\s*([\d,]+\.\d{2})")],
+            // orders come in USD ("US $9.15") or LKR — detect per-email via the (?<cur>) group
+            [Rx(@"Order total\s*(?<cur>US\s*\$|USD|LKR|Rs\.?)?\s*([\d,]+\.\d{2})")],
             "LKR"),
         new BillProfile("Dialog Fixed", "dialog.lk",
             Rx(@"Dialog Fixed_Solutions E-Bill"),   // NOT the "Dialog Mobile E-Bill" from the same sender
