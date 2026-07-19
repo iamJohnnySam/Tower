@@ -42,6 +42,21 @@ public static class BillProfiles
              Rx(@"Total Payment \(VAT Incl.*?(?:Rs\.?|LKR)\s*([\d,]+(?:\.\d{2})?)"),   // "…has been placed!" template
              Rx(@"\bTotal\s+(?:Rs\.?|LKR)\s*([\d,]+(?:\.\d{2})?)")],                    // oldest "…is placed!" template ("Total Rs 1723")
             "LKR"),
+        new BillProfile("Pizza Hut", "gamma.lk",
+            Rx(@"^Online Order Confirmation"),
+            "Food",
+            [Rx(@"Total Amount\s*(?:Rs\.?|LKR)?\s*([\d,]+\.\d{2})")],   // grand total (after Sub Total)
+            "LKR"),
+        new BillProfile("AliExpress Order", "aliexpress.com",
+            Rx(@"Order .* order confirmed"),
+            "Online Shopping",
+            [Rx(@"Order total\s*(?:LKR|Rs\.?|USD|\$)?\s*([\d,]+\.\d{2})")],
+            "LKR"),
+        new BillProfile("Dialog Fixed", "dialog.lk",
+            Rx(@"Dialog Fixed_Solutions E-Bill"),   // NOT the "Dialog Mobile E-Bill" from the same sender
+            "Home Broadband",
+            [Rx(@"(?:Rs\.?|LKR)\s*([\d,]+\.\d{2})\s*Pay on or before")],   // amount payable sits before the due date
+            "LKR"),
     ];
 }
 

@@ -99,6 +99,40 @@ public class BillParserTests
     }
 
     [Fact]
+    public void PizzaHut_uses_total_amount_and_maps_to_food()
+    {
+        var body = "ORDER PLACED SUCCESSFULLY Order No B003532601 Sub Total 6,320.00 Delivery 474.00 Total Amount 6,794.00";
+        var r = BillParser.TryParse("online.phsl@gamma.lk", "Online Order Confirmation - B003532601 @ Pizza Hut - Sri Lanka", body);
+        Assert.NotNull(r);
+        Assert.Equal("Food", r!.Value.Profile.Category);
+        Assert.Equal(6794.00m, r.Value.Amount);
+    }
+
+    [Fact]
+    public void AliExpress_uses_order_total_and_maps_to_online_shopping()
+    {
+        var body = "Banana Plug x1 Order total LKR 42,200.61 Payment method Visa";
+        var r = BillParser.TryParse("transaction@notice.aliexpress.com", "Order 1118358739575896: order confirmed", body);
+        Assert.NotNull(r);
+        Assert.Equal("Online Shopping", r!.Value.Profile.Category);
+        Assert.Equal(42200.61m, r.Value.Amount);
+    }
+
+    [Fact]
+    public void Dialog_fixed_uses_amount_before_due_date_and_ignores_mobile()
+    {
+        var body = "e-bill statement for the month of August 2024. 114103678 Rs. 3,053.77 Pay on or before 04.09.2024";
+        var r = BillParser.TryParse("ebill@dialog.lk", "Dialog Fixed_Solutions E-Bill for the month of Aug-2024 - 70073153", body);
+        Assert.NotNull(r);
+        Assert.Equal("Home Broadband", r!.Value.Profile.Category);
+        Assert.Equal(3053.77m, r.Value.Amount);
+
+        // The "Dialog Mobile E-Bill" from the same sender must NOT match this profile.
+        var mobile = BillParser.TryParse("ebill@dialog.lk", "Dialog Mobile E-Bill for the month of Apr-2025 - 28577056", body);
+        Assert.Null(mobile);
+    }
+
+    [Fact]
     public void Unrecognized_subject_returns_null()
     {
         var r = BillParser.TryParse("support@pickme.lk", "PickMe | Promo of the week", TripBody);
