@@ -332,6 +332,34 @@ public class BillParserTests
     }
 
     [Fact]
+    public void Batch_lassana_anim8_feelo_adidas_glow_phoenix_bbc()
+    {
+        Assert.Equal(("Gifts",7240.00m), Cat(BillParser.TryParse("orders@lassanaflora.com","Lassana.com - Order Confirmation - 23-01","Sub Total LKR 1 Grand Total LKR 7,240.00")));
+        Assert.Equal(("Home",3500.00m), Cat(BillParser.TryParse("chethana@anim8.lk","Receipt for Online Payment | Anim8 | #30404","Rs. 3500.00 for order reference #30404")));
+        Assert.Equal(("Food",999.00m), Cat(BillParser.TryParse("store+73659515154@t.shopifyemail.com","Order #11549 confirmed","Total 999.00 LKR Subtotal Rs. 999.00")));
+        Assert.Equal(("Clothing",25950m), Cat(BillParser.TryParse("do-not-reply@global-e.com","Order confirmed - adidas by Global-e","Subtotal SL Rs25950 Free Total SL Rs25950")));
+        Assert.Equal(("Health and Wellness",5650.00m), Cat(BillParser.TryParse("contact@glowbnb.com","Your Glow Body and Beauty order has been received","Subtotal: Rs 5,400.00 Total: Rs 5,650.00")));
+        Assert.Equal(("Home",7540.00m), Cat(BillParser.TryParse("onlinesales@phoenix.lk","Your Phoenix Online Shop order has been received","Total: රු 7,540.00 Billing")));
+        Assert.Equal(("Online Shopping",1.99m), Cat(BillParser.TryParse("bbcshop@bbc.com","Thank you for your BBC Shop order 3607799","Subtotal: £1.99 Order Total: £1.99")));
+    }
+
+    [Fact]
+    public void Grab_detects_currency_namecheap_and_daraz_orders_fixed()
+    {
+        var g = BillParser.TryParse("no-reply@grab.com","Your Grab E-Receipt","Fare RM 22.00 Total Paid RM 22.00");
+        Assert.Equal(22.00m, g!.Value.Amount); Assert.Equal("MYR", g.Value.Currency); Assert.Equal("Transport", g.Value.Profile.Category);
+
+        var n = BillParser.TryParse("support@namecheap.com","Namecheap Order Summary (Order# 200087354);","Initial Charge : $14.98 Final Cost : $14.98");
+        Assert.Equal(14.98m, n!.Value.Amount); Assert.Equal("Website", n.Value.Profile.Category);
+
+        var d = BillParser.TryParse("orders@orders.daraz.lk","Your Order has been Confirmed (#201912072210771)","Subtotal: Rs. 989 Total: Rs. 1352");
+        Assert.Equal(1352m, d!.Value.Amount); Assert.Equal("Online Shopping", d.Value.Profile.Category);
+    }
+
+    private static (string,decimal)? Cat((BillProfile Profile, decimal Amount, string Currency)? r) =>
+        r is { } v ? (v.Profile.Category, v.Amount) : null;
+
+    [Fact]
     public void Unrecognized_subject_returns_null()
     {
         var r = BillParser.TryParse("support@pickme.lk", "PickMe | Promo of the week", TripBody);

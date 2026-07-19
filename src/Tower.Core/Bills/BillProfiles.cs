@@ -45,7 +45,7 @@ public static class BillProfiles
             // amounts here may lack decimals (e.g. "Rs 1532"), so the .00 is optional
             [Rx(@"Total \(inclusive of tax.*?(?:Rs\.?|LKR)\s*([\d,]+(?:\.\d{2})?)"),   // "…is confirmed!" template
              Rx(@"Total Payment \(VAT Incl.*?(?:Rs\.?|LKR)\s*([\d,]+(?:\.\d{2})?)"),   // "…has been placed!" template
-             Rx(@"\bTotal\s+(?:Rs\.?|LKR)\s*([\d,]+(?:\.\d{2})?)")],                    // oldest "…is placed!" template ("Total Rs 1723")
+             Rx(@"\bTotal\s*:?\s*(?:Rs\.?|LKR)\s*([\d,]+(?:\.\d{2})?)")],                // "Total Rs 1723" (is placed) + "Total: Rs. 1352" (orders@orders.daraz.lk)
             "LKR"),
         new BillProfile("Pizza Hut", "gamma.lk",
             Rx(@"^Online Order Confirmation"),
@@ -132,7 +132,8 @@ public static class BillProfiles
         new BillProfile("Namecheap", "namecheap.com",
             Rx(@"^Namecheap Order Summary"),
             "Website",
-            [Rx(@"\bTOTAL\s*:?\s*(?:US\$|USD|\$)?\s*([\d,]+\.\d{2})")],   // iterate-positive skips "Sub Total $0.00"
+            [Rx(@"Final Cost\s*:?\s*(?:US\$|USD|\$)?\s*([\d,]+\.\d{2})"),   // plain-text total
+             Rx(@"\bTOTAL\s*:?\s*(?:US\$|USD|\$)?\s*([\d,]+\.\d{2})")],     // html fallback (skips "Sub Total $0.00")
             "USD"),
         new BillProfile("Kandos", "kandos.lk",
             Rx(@"Order Confirmation"),
@@ -174,6 +175,54 @@ public static class BillProfiles
             [Rx(@"\bTotal\s+LKR\s*([\d,]+\.\d{2})")],
             "LKR",
             Preferred: true),
+        new BillProfile("Lassana", "lassanaflora.com",
+            Rx(@"^Lassana\.com - Order Confirmation"),
+            "Gifts",
+            [Rx(@"Grand Total\s*LKR\s*([\d,]+\.\d{2})")],
+            "LKR"),
+        new BillProfile("Anim8", "anim8.lk",
+            Rx(@"^Receipt for Online Payment"),
+            "Home",
+            [Rx(@"Rs\.?\s*([\d,]+\.\d{2})\s*for order reference")],
+            "LKR"),
+        new BillProfile("Feelo", "73659515154@t.shopifyemail.com",
+            Rx(@"Order .* confirmed"),
+            "Food",
+            [Rx(@"\bTotal\s*([\d,]+\.\d{2})\s*LKR")],
+            "LKR"),
+        new BillProfile("Adidas (Global-e)", "global-e.com",
+            Rx(@"Order confirmed - adidas"),
+            "Clothing",
+            [Rx(@"\bTotal\s*(?:SL\s*)?Rs\.?\s*([\d,]+(?:\.\d{2})?)")],
+            "LKR"),
+        new BillProfile("GlowBnB", "glowbnb.com",
+            Rx(@"order has been received"),
+            "Health and Wellness",
+            [Rx(@"\bTotal\s*:?\s*Rs\.?\s*([\d,]+\.\d{2})")],
+            "LKR"),
+        new BillProfile("Phoenix", "phoenix.lk",
+            Rx(@"order has been received"),
+            "Home",
+            [Rx(@"\bTotal\s*:\s*[^\d]*([\d,]+\.\d{2})")],   // "Total: රු 7,540.00" (Sinhala rupee mark)
+            "LKR"),
+        new BillProfile("Grab", "grab.com",
+            Rx(@"Grab.*[Rr]eceipt"),
+            "Transport",
+            // multi-country: RM (Malaysia), SGD/S$ (Singapore) … detect per-ride
+            [Rx(@"Total Paid\s*(?<cur>RM|S ?\$|SGD|US ?\$|USD|Rs\.?|LKR|\$)?\s*([\d,]+\.\d{2})")],
+            "SGD"),
+        new BillProfile("BBC Shop", "bbc.com",
+            Rx(@"^Thank you for your BBC Shop order"),
+            "Online Shopping",
+            [Rx(@"Order Total\s*:?\s*£?\s*([\d,]+\.\d{2})")],
+            "GBP"),
+        // Generic Dialog e-bill ("E-Bill for the month …", no Fixed/Mobile prefix) — PDF, → Phone
+        new BillProfile("Dialog", "dialog.lk",
+            Rx(@"^E-Bill for the month"),
+            "Phone",
+            [Rx(@"Total Charges for Bill Period\s*(?:Rs\.?|LKR)?\s*([\d,]+\.\d{2})")],
+            "LKR",
+            FromPdf: true),
     ];
 }
 
@@ -219,6 +268,8 @@ public static class BillParser
         var t = token.ToUpperInvariant();
         if (t.Contains("US")) return "USD";
         if (t.StartsWith("S$") || t.Contains("SGD")) return "SGD";
+        if (t.Contains("RM") || t.Contains("MYR")) return "MYR";
+        if (t.Contains("£") || t.Contains("GBP")) return "GBP";
         return "LKR";
     }
 
