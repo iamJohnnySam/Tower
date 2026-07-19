@@ -63,6 +63,22 @@ public static class BillProfiles
             "Phone",
             [Rx(@"(?:Rs\.?|LKR)\s*(-?[\d,]+\.\d{2})\s*Pay on or before")],   // credit months (negative) are skipped
             "LKR"),
+        // ── Foreign-currency receipts: stored in their own currency; FinanceTracker converts to base (LKR) via FX ──
+        new BillProfile("Anthropic", "anthropic.com",
+            Rx(@"^Your receipt from Anthropic"),
+            "AI",
+            [Rx(@"Amount paid\s*(?:US\$|USD|\$)\s*([\d,]+\.\d{2})")],
+            "USD"),
+        new BillProfile("GitHub", "github.com",
+            Rx(@"^\[GitHub\] Payment Receipt"),
+            "AI",
+            [Rx(@"\bTotal:\s*(?:US\$|USD|\$)?\s*([\d,]+\.\d{2})")],
+            "USD"),
+        new BillProfile("NETS NPC", "nets.com.sg",
+            Rx(@"^NPC"),
+            "Transport",
+            [Rx(@"A total of\s*(?:S\$|SGD|\$)\s*([\d,]+\.\d{2})")],
+            "SGD"),
     ];
 }
 

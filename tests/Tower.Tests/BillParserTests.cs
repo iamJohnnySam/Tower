@@ -147,6 +147,30 @@ public class BillParserTests
     }
 
     [Fact]
+    public void Foreign_currency_receipts_keep_their_currency()
+    {
+        var a = BillParser.TryParse("invoice+statements@mail.anthropic.com", "Your receipt from Anthropic, PBC #2936-6462-4103",
+            "Claude Pro Qty 1 $20.00 Total $20.00 Amount paid $20.00");
+        Assert.NotNull(a);
+        Assert.Equal("AI", a!.Value.Profile.Category);
+        Assert.Equal("USD", a.Value.Profile.Currency);
+        Assert.Equal(20.00m, a.Value.Amount);
+
+        var g = BillParser.TryParse("noreply@github.com", "[GitHub] Payment Receipt for iamJohnnySam",
+            "GitHub Copilot Pro - month: $7.67 Tax: $0.00 USD Total: $7.67");
+        Assert.NotNull(g);
+        Assert.Equal("USD", g!.Value.Profile.Currency);
+        Assert.Equal(7.67m, g.Value.Amount);
+
+        var n = BillParser.TryParse("npc@nets.com.sg", "NPC",
+            "A total of $5.20 is deducted from card number ending 8618 incurred for Bus/MRT rides.");
+        Assert.NotNull(n);
+        Assert.Equal("Transport", n!.Value.Profile.Category);
+        Assert.Equal("SGD", n.Value.Profile.Currency);
+        Assert.Equal(5.20m, n.Value.Amount);
+    }
+
+    [Fact]
     public void Unrecognized_subject_returns_null()
     {
         var r = BillParser.TryParse("support@pickme.lk", "PickMe | Promo of the week", TripBody);
