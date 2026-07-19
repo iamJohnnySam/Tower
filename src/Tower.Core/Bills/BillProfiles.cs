@@ -79,6 +79,17 @@ public static class BillProfiles
             "Transport",
             [Rx(@"A total of\s*(?:S\$|SGD|\$)\s*([\d,]+\.\d{2})")],
             "SGD"),
+        new BillProfile("PickMe Membership", "pickme.lk",
+            Rx(@"^Membership Renewal Receipt"),
+            "Membership",
+            [Rx(@"Paid Amount\s*LKR\s*([\d,]+\.\d{2})"),
+             Rx(@"Total\s*LKR\s*([\d,]+\.\d{2})")],
+            "LKR"),
+        new BillProfile("Keells Order", "keells.com",
+            Rx(@"^Keells Order Confirmation"),   // online home-delivery order (not the in-store E-Bill)
+            "Groceries",
+            [Rx(@"Total Amount\s*\(Rs\.?\)\s*([\d,]+\.\d{2})")],
+            "LKR"),
     ];
 }
 

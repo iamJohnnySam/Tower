@@ -171,6 +171,26 @@ public class BillParserTests
     }
 
     [Fact]
+    public void PickMe_membership_maps_to_membership()
+    {
+        var body = "PickMe PASS. 1 Month LKR 549.00 Start date 13 December 2025 Total LKR 549.00 Paid Amount LKR 549.00";
+        var r = BillParser.TryParse("support@pickme.lk", "Membership Renewal Receipt", body);
+        Assert.NotNull(r);
+        Assert.Equal("Membership", r!.Value.Profile.Category);
+        Assert.Equal(549.00m, r.Value.Amount);
+    }
+
+    [Fact]
+    public void Keells_order_confirmation_uses_total_amount_rs_and_maps_to_groceries()
+    {
+        var body = "Gross Amount (Rs.) 5,134.50 Total Discount (Rs.) 95.00 Transport Amount (Rs.) 150.00 Total Amount (Rs.) 5,189.50";
+        var r = BillParser.TryParse("web.jms@keells.com", "Keells Order Confirmation | 12-09-2021 | Borella | ITO1096190", body);
+        Assert.NotNull(r);
+        Assert.Equal("Groceries", r!.Value.Profile.Category);
+        Assert.Equal(5189.50m, r.Value.Amount);
+    }
+
+    [Fact]
     public void Unrecognized_subject_returns_null()
     {
         var r = BillParser.TryParse("support@pickme.lk", "PickMe | Promo of the week", TripBody);
