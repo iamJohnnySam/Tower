@@ -119,31 +119,22 @@ public class BillParserTests
     }
 
     [Fact]
-    public void Dialog_fixed_uses_amount_before_due_date_and_ignores_mobile()
+    public void Dialog_bills_are_pdf_profiles_reading_total_charges_for_bill_period()
     {
-        var body = "e-bill statement for the month of August 2024. 114103678 Rs. 3,053.77 Pay on or before 04.09.2024";
-        var r = BillParser.TryParse("ebill@dialog.lk", "Dialog Fixed_Solutions E-Bill for the month of Aug-2024 - 70073153", body);
-        Assert.NotNull(r);
-        Assert.Equal("Home Broadband", r!.Value.Profile.Category);
-        Assert.Equal(3053.77m, r.Value.Amount);
+        // The email body only holds the account balance; the real charge comes from the PDF.
+        var pdfText = "BILL PERIOD 15/12/2024 - 14/01/2025 Total Charges for Bill Period 4,469.70 Total Amount Payable -59.09";
 
-        // The "Dialog Mobile E-Bill" body would match the Mobile profile, not Fixed.
-        var asFixed = BillParser.TryParse("ebill@dialog.lk", "Dialog Mobile E-Bill for the month of Apr-2025 - 28577056", body);
-        Assert.Equal("Dialog Mobile", asFixed!.Value.Profile.Name);
-    }
+        var fixedP = BillParser.Match("ebill@dialog.lk", "Dialog Fixed_Solutions E-Bill for the month of Jan-2025 - 70073153");
+        Assert.Equal("Dialog Fixed", fixedP!.Name);
+        Assert.True(fixedP.FromPdf);
+        Assert.Equal("Home Broadband", fixedP.Category);
+        Assert.Equal(4469.70m, BillParser.ExtractAmount(fixedP, pdfText)!.Value.Amount);
 
-    [Fact]
-    public void Dialog_mobile_maps_to_phone_and_skips_credit_months()
-    {
-        var due = "769014481 Rs. 1,229.71 Pay on or before 05.05.2025";
-        var r = BillParser.TryParse("ebill@dialog.lk", "Dialog Mobile E-Bill for the month of Apr-2025 - 28577056", due);
-        Assert.NotNull(r);
-        Assert.Equal("Phone", r!.Value.Profile.Category);
-        Assert.Equal(1229.71m, r.Value.Amount);
-
-        // A credit-balance month (negative) is skipped, not imported as an expense.
-        var credit = "769014481 Rs. -867.36 Pay on or before 05.05.2025";
-        Assert.Null(BillParser.TryParse("ebill@dialog.lk", "Dialog Mobile E-Bill for the month of Apr-2025 - 28577056", credit));
+        var mobileP = BillParser.Match("ebill@dialog.lk", "Dialog Mobile E-Bill for the month of Apr-2025 - 28577056");
+        Assert.Equal("Dialog Mobile", mobileP!.Name);
+        Assert.True(mobileP.FromPdf);
+        Assert.Equal("Phone", mobileP.Category);
+        Assert.Equal(4469.70m, BillParser.ExtractAmount(mobileP, pdfText)!.Value.Amount);
     }
 
     [Fact]

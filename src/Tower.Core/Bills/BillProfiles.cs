@@ -54,17 +54,20 @@ public static class BillProfiles
             // orders come in USD ("US $9.15") or LKR — detect per-email via the (?<cur>) group
             [Rx(@"Order total\s*(?<cur>US\s*\$|USD|LKR|Rs\.?)?\s*([\d,]+\.\d{2})")],
             "LKR"),
+        // Dialog e-bills: the real charge is in the attached PDF, not the email body (the body only
+        // shows the account balance). Read "Total Charges for Bill Period" from the PDF, attach the PDF.
         new BillProfile("Dialog Fixed", "dialog.lk",
             Rx(@"Dialog Fixed_Solutions E-Bill"),   // NOT the "Dialog Mobile E-Bill" from the same sender
             "Home Broadband",
-            // amount payable sits before the due date; -? lets a credit-balance month parse negative → skipped
-            [Rx(@"(?:Rs\.?|LKR)\s*(-?[\d,]+\.\d{2})\s*Pay on or before")],
-            "LKR"),
+            [Rx(@"Total Charges for Bill Period\s*(?:Rs\.?|LKR)?\s*([\d,]+\.\d{2})")],
+            "LKR",
+            FromPdf: true),
         new BillProfile("Dialog Mobile", "dialog.lk",
             Rx(@"Dialog Mobile E-Bill"),
             "Phone",
-            [Rx(@"(?:Rs\.?|LKR)\s*(-?[\d,]+\.\d{2})\s*Pay on or before")],   // credit months (negative) are skipped
-            "LKR"),
+            [Rx(@"Total Charges for Bill Period\s*(?:Rs\.?|LKR)?\s*([\d,]+\.\d{2})")],
+            "LKR",
+            FromPdf: true),
         // ── Foreign-currency receipts: stored in their own currency; FinanceTracker converts to base (LKR) via FX ──
         new BillProfile("Anthropic", "anthropic.com",
             Rx(@"^Your receipt from Anthropic"),
