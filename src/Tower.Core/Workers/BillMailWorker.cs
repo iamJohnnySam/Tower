@@ -10,6 +10,15 @@ namespace Tower.Core.Workers;
 
 public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
 {
+    private readonly SemaphoreSlim _runLock = new(1, 1);
+
+    // Live status of the current sweep (this is a singleton, so the /bills page reads these directly).
+    public bool IsRunning { get; private set; }
+    public DateTime? RunStartedAt { get; private set; }
+    public int RunTotal { get; private set; }      // messages in the Bills label this sweep
+    public int RunScanned { get; private set; }    // processed so far
+    public int RunImported { get; private set; }   // new bills added so far
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
@@ -29,6 +38,15 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
     }
 
     public async Task<int> RunOnceAsync(CancellationToken ct = default)
+    {
+        // One sweep at a time; a concurrent trigger (manual button while the timer runs) is a no-op.
+        if (!await _runLock.WaitAsync(0, ct)) return 0;
+        IsRunning = true; RunStartedAt = DateTime.UtcNow; RunTotal = RunScanned = RunImported = 0;
+        try { return await RunCoreAsync(ct); }
+        finally { IsRunning = false; RunStartedAt = null; _runLock.Release(); }
+    }
+
+    private async Task<int> RunCoreAsync(CancellationToken ct)
     {
         using var scope = scopes.CreateScope();
         var settings = scope.ServiceProvider.GetRequiredService<SettingsService>();
@@ -53,9 +71,11 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
         var ids = await reader.ListMessageIdsAsync(labelId, null, ct);
         int imported = 0;
         string? lastError = null;
+        RunTotal = ids.Count;
 
         foreach (var id in ids)
         {
+            RunScanned++;
             try
             {
                 if (known.Contains(id)) { await reader.TrashMessageAsync(id, ct); continue; }
@@ -82,6 +102,7 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
                 });
                 db.SaveChanges();
                 imported++;
+                RunImported = imported;
 
                 // Best-effort: attach the raw .eml, then delete (trash) the email.
                 var raw = await reader.GetRawMessageAsync(id, ct);

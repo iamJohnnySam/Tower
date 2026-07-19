@@ -9,12 +9,30 @@
 @inject GmailTokenService Tokens
 @inject SettingsService SettingsSvc
 @inject TowerDbContext Db
+@implements IDisposable
 
 <PageTitle>Tower — Bill Importer</PageTitle>
 
 <div class="gmail-page">
 
     <h1 class="page-title">Bill Importer</h1>
+
+    @if (BillMail.IsRunning)
+    {
+        <div style="background:#0b7285;color:#fff;padding:10px 14px;border-radius:6px;
+                    margin-bottom:14px;display:flex;gap:10px;align-items:center;">
+            <span style="font-size:1.1em;">⏳</span>
+            <span>
+                <strong>Importing…</strong>
+                scanned @BillMail.RunScanned@(BillMail.RunTotal > 0 ? $" / {BillMail.RunTotal}" : ""),
+                @BillMail.RunImported added
+                @if (BillMail.RunStartedAt is { } t)
+                {
+                    <span style="opacity:.8;"> — started @t.ToLocalTime().ToString("HH:mm:ss")</span>
+                }
+            </span>
+        </div>
+    }
 
     @if (!Tokens.IsConnected)
     {
@@ -59,8 +77,8 @@
             <div class="config-row">
                 <label class="config-label"></label>
                 <div class="config-control">
-                    <button class="btn btn-primary btn-sm" disabled="@(_importing || !Tokens.IsConnected)" @onclick="ImportNow">
-                        @(_importing ? "Importing…" : "Import bills now")
+                    <button class="btn btn-primary btn-sm" disabled="@(BillMail.IsRunning || !Tokens.IsConnected)" @onclick="ImportNow">
+                        @(BillMail.IsRunning ? "Importing…" : "Import bills now")
                     </button>
                 </div>
             </div>
@@ -107,29 +125,39 @@
 
 @code {
     private int _interval = 6;
-    private bool _intervalSaved, _importing;
+    private bool _intervalSaved;
     private string? _lastRun, _lastError, _labelName;
     private int _lastCount;
     private Dictionary<string, (int, decimal)> _stats = new();
+    private System.Threading.Timer? _timer;
 
     protected override void OnInitialized()
     {
+        // _interval seeds the editable field once; the timer must not clobber it while the user types.
         if (int.TryParse(SettingsSvc.Get("bills.interval_hours"), out var bi) && bi > 0) _interval = bi;
+        LoadStatus();
+        // While the page is open, refresh live sweep progress + settled counts every 2s.
+        _timer = new System.Threading.Timer(_ =>
+        {
+            try { _ = InvokeAsync(() => { LoadStatus(); StateHasChanged(); }); }
+            catch { /* circuit gone */ }
+        }, null, 2000, 2000);
+    }
+
+    private void LoadStatus()
+    {
         _labelName = SettingsSvc.Get("bills.label_name") ?? "Bills";
         _lastRun = SettingsSvc.Get("bills.mail.last_run");
         _lastError = SettingsSvc.Get("bills.mail.last_error");
         int.TryParse(SettingsSvc.Get("bills.mail.last_count"), out _lastCount);
-        LoadStats();
-    }
-
-    // decimal is stored as TEXT in SQLite, so aggregate client-side (row count is small).
-    private void LoadStats() =>
+        // decimal is stored as TEXT in SQLite, so aggregate client-side (row count is small).
         _stats = Db.ImportedBills
             .Where(b => b.TransactionId != null)
             .Select(b => new { b.Profile, b.Amount })
             .AsEnumerable()
             .GroupBy(r => r.Profile)
             .ToDictionary(g => g.Key, g => (g.Count(), g.Sum(x => x.Amount)));
+    }
 
     private void SaveInterval()
     {
@@ -138,16 +166,12 @@
         _intervalSaved = true;
     }
 
-    private async Task ImportNow()
+    // Fire-and-forget: the worker serializes concurrent runs, and progress shows in the banner above.
+    private void ImportNow()
     {
-        _importing = true;
-        try
-        {
-            _lastCount = await BillMail.RunOnceAsync();
-            _lastRun = SettingsSvc.Get("bills.mail.last_run");
-            _lastError = SettingsSvc.Get("bills.mail.last_error");
-            LoadStats();
-        }
-        finally { _importing = false; }
+        if (!BillMail.IsRunning)
+            _ = Task.Run(() => BillMail.RunOnceAsync());
     }
+
+    public void Dispose() => _timer?.Dispose();
 }
