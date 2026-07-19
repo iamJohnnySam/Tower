@@ -82,6 +82,23 @@ public class BillParserTests
     }
 
     [Fact]
+    public void Daraz_older_placed_templates_parse()
+    {
+        // "…has been placed!" (2024): grand total is "Total Payment (VAT Incl)"; note the "Total:" subtotal must be ignored.
+        var body2024 = "Total: Rs 1104 Delivery Fee: Rs 450 Total Discount: Rs 22 Total Payment (VAT Incl): Rs 1532";
+        var r1 = BillParser.TryParse("noreply@support.daraz.lk", "Your order has been placed!", body2024);
+        Assert.NotNull(r1);
+        Assert.Equal(1532m, r1!.Value.Amount);
+
+        // "…is placed!" (2022): plain "Total Rs 1723" (price + delivery), no decimals.
+        var body2022 = "Price Rs 1439 Discount Rs (0) Delivery fee Rs 284 Total Rs 1723 Shipping Option STANDARD";
+        var r2 = BillParser.TryParse("noreply@support.daraz.lk", "Hey John Samarasinghe, your order is placed!", body2022);
+        Assert.NotNull(r2);
+        Assert.Equal("Online Shopping", r2!.Value.Profile.Category);
+        Assert.Equal(1723m, r2.Value.Amount);
+    }
+
+    [Fact]
     public void Unrecognized_subject_returns_null()
     {
         var r = BillParser.TryParse("support@pickme.lk", "PickMe | Promo of the week", TripBody);

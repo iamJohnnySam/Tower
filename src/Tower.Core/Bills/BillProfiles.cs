@@ -35,9 +35,12 @@ public static class BillProfiles
             [Rx(@"Total Net Amount\s*(?:Rs\.?|LKR)?\s*([\d,]+\.\d{2})")],   // net of discounts = amount charged
             "LKR"),
         new BillProfile("Daraz Order", "daraz.lk",
-            Rx(@"your Order .* is confirmed"),   // "Yay, your Order <id> is confirmed!"
+            Rx(@"your Order.*(confirmed|placed)"),   // "…is confirmed!", "…has been placed!", "…is placed!"
             "Online Shopping",
-            [Rx(@"Total \(inclusive of tax.*?(?:Rs\.?|LKR)\s*([\d,]+\.\d{2})")],   // grand total incl. shipping + fees
+            // amounts here may lack decimals (e.g. "Rs 1532"), so the .00 is optional
+            [Rx(@"Total \(inclusive of tax.*?(?:Rs\.?|LKR)\s*([\d,]+(?:\.\d{2})?)"),   // "…is confirmed!" template
+             Rx(@"Total Payment \(VAT Incl.*?(?:Rs\.?|LKR)\s*([\d,]+(?:\.\d{2})?)"),   // "…has been placed!" template
+             Rx(@"\bTotal\s+(?:Rs\.?|LKR)\s*([\d,]+(?:\.\d{2})?)")],                    // oldest "…is placed!" template ("Total Rs 1723")
             "LKR"),
     ];
 }
