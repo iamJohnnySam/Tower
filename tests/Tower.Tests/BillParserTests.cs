@@ -277,6 +277,27 @@ public class BillParserTests
     }
 
     [Fact]
+    public void Amazon_and_payhere_and_dragon_and_aliexpress_confirmation_parse()
+    {
+        var az = BillParser.TryParse("auto-confirm@amazon.com", "Your Amazon.com order of \"Amazon eGift Card\"", "Order Total: USD 10.00");
+        Assert.Equal("Online Shopping", az!.Value.Profile.Category);
+        Assert.Equal("USD", az.Value.Currency); Assert.Equal(10.00m, az.Value.Amount);
+
+        var vi = BillParser.TryParse("receipts@mail.payhere.lk", "Viana Cosmetics Payment Receipt #320044586599", "Subtotal LKR 8,900.00 Total LKR 8,900.00");
+        Assert.Equal("Health and Wellness", vi!.Value.Profile.Category); Assert.Equal(8900.00m, vi.Value.Amount);
+
+        var cd = BillParser.TryParse("orders@chinesedragoncafe.com", "Order #21004 confirmed", "Subtotal Rs 6,560.00 Total Rs 6,560.00");
+        Assert.Equal("Food", cd!.Value.Profile.Category); Assert.Equal(6560.00m, cd.Value.Amount);
+
+        var pc = BillParser.TryParse("receipts@mail.payhere.lk", "CHINESE DRAGON CAFE (PVT) LTD Payment Receipt #32004444", "Subtotal LKR 6,560.00 Total LKR 6,560.00");
+        Assert.Equal("Food", pc!.Value.Profile.Category); Assert.Equal("PayHere Chinese Dragon", pc.Value.Profile.Name);
+
+        var ax = BillParser.TryParse("transaction@notice.aliexpress.com", "Order 8172809454035896: order confirmation", "Order total US $1.42 details");
+        Assert.Equal("Online Shopping", ax!.Value.Profile.Category);
+        Assert.Equal("USD", ax.Value.Currency); Assert.Equal(1.42m, ax.Value.Amount);
+    }
+
+    [Fact]
     public void Unrecognized_subject_returns_null()
     {
         var r = BillParser.TryParse("support@pickme.lk", "PickMe | Promo of the week", TripBody);

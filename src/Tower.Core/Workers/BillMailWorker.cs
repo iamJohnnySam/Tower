@@ -68,6 +68,13 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
 
         var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
         var known = db.ImportedBills.Select(x => x.GmailMessageId).ToHashSet();
+        // For cross-source dedup: one purchase can arrive twice (merchant + PayHere gateway).
+        var seen = db.ImportedBills
+            .Where(b => b.TransactionId != null && b.BillDate != null)
+            .Select(b => new { b.Category, b.Amount, b.BillDate })
+            .AsEnumerable()
+            .Select(b => DedupKey(b.Category, b.Amount, b.BillDate!.Value))
+            .ToHashSet();
 
         var ids = await reader.ListMessageIdsAsync(labelId, null, ct);
         int imported = 0;
@@ -100,10 +107,27 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
                 var extracted = BillParser.ExtractAmount(profile, amountText);
                 if (extracted == null) continue;                 // recognised sender but no parseable amount — leave in place
                 var (amount, currency) = extracted.Value;
+                var billDate = msg.Value.Date;
+
+                // Cross-source dedup: same amount + category + day already imported (e.g. the PayHere
+                // receipt already landed for this order) → record + trash this one, don't double-count.
+                var dupKey = DedupKey(profile.Category, amount, billDate);
+                if (seen.Contains(dupKey))
+                {
+                    db.ImportedBills.Add(new ImportedBill
+                    {
+                        GmailMessageId = id, Profile = profile.Name, Category = profile.Category,
+                        Amount = amount, Currency = currency, BillDate = billDate,
+                        TransactionId = null, ImportedAt = DateTime.UtcNow, Error = "duplicate (same amount/date already imported)"
+                    });
+                    db.SaveChanges();
+                    await reader.TrashMessageAsync(id, ct);
+                    continue;
+                }
 
                 // Post the expense (negative). On failure leave the email untouched to retry next sweep.
                 var txId = await ft.PostTransactionAsync(-amount, profile.Category,
-                    $"{profile.Name} — {msg.Value.Subject}", msg.Value.Date, currency, ct);
+                    $"{profile.Name} — {msg.Value.Subject}", billDate, currency, ct);
                 if (txId == null) { lastError = $"POST transaction failed for {id}"; continue; }
 
                 // ponytail: dedup barrier is this local row; a crash in the gap between the remote
@@ -111,10 +135,11 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
                 db.ImportedBills.Add(new ImportedBill
                 {
                     GmailMessageId = id, Profile = profile.Name, Category = profile.Category,
-                    Amount = amount, Currency = currency, TransactionId = txId,
+                    Amount = amount, Currency = currency, BillDate = billDate, TransactionId = txId,
                     ImportedAt = DateTime.UtcNow
                 });
                 db.SaveChanges();
+                seen.Add(dupKey);
                 imported++;
                 RunImported = imported;
 
@@ -137,6 +162,11 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
         settings.Set("bills.mail.last_error", lastError);
         return imported;
     }
+
+    // ponytail: same amount + category + day = same purchase (merchant vs PayHere). Coarse, but the
+    // window the user cares about is one order; genuine same-day/same-amount/same-category buys are rare.
+    private static string DedupKey(string category, decimal amount, DateTime date) =>
+        $"{category}|{amount}|{date:yyyy-MM-dd}";
 
     // ponytail: shell out to the system `pdftotext` (poppler-utils, installed) instead of a .NET PDF lib.
     private static async Task<string> PdfToTextAsync(byte[] pdf, CancellationToken ct)

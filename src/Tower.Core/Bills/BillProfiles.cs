@@ -49,7 +49,7 @@ public static class BillProfiles
             [Rx(@"Total Amount\s*(?:Rs\.?|LKR)?\s*([\d,]+\.\d{2})")],   // grand total (after Sub Total)
             "LKR"),
         new BillProfile("AliExpress Order", "aliexpress.com",
-            Rx(@"Order .* order confirmed"),
+            Rx(@"Order .* order confirm(ed|ation)"),   // newer "…confirmed" + older 2023 "…confirmation"
             "Online Shopping",
             // orders come in USD ("US $9.15") or LKR — detect per-email via the (?<cur>) group
             [Rx(@"Order total\s*(?<cur>US\s*\$|USD|LKR|Rs\.?)?\s*([\d,]+\.\d{2})")],
@@ -144,6 +144,27 @@ public static class BillProfiles
             [Rx(@"TOTAL CHARGES\s*:?\s*([\d,]+\.\d{2})\s*LKR")],   // read from the attached PDF, not the email body
             "LKR",
             FromPdf: true),
+        new BillProfile("Amazon", "amazon.com",
+            Rx(@"^Your Amazon\.com order"),
+            "Online Shopping",
+            [Rx(@"Order Total\s*:?\s*(?<cur>USD|US\s*\$|\$)?\s*([\d,]+\.\d{2})")],
+            "USD"),
+        new BillProfile("PayHere Viana", "receipts@mail.payhere.lk",
+            Rx(@"^Viana Cosmetics Payment Receipt"),
+            "Health and Wellness",
+            [Rx(@"\bTotal\s+LKR\s*([\d,]+\.\d{2})")],
+            "LKR"),
+        // Chinese Dragon: the order arrives from both the merchant and PayHere — dedup (below) keeps one
+        new BillProfile("Chinese Dragon", "chinesedragoncafe.com",
+            Rx(@"Order .* confirmed"),
+            "Food",
+            [Rx(@"\bTotal\s+Rs\.?\s*([\d,]+\.\d{2})")],
+            "LKR"),
+        new BillProfile("PayHere Chinese Dragon", "receipts@mail.payhere.lk",
+            Rx(@"^CHINESE DRAGON CAFE"),
+            "Food",
+            [Rx(@"\bTotal\s+LKR\s*([\d,]+\.\d{2})")],
+            "LKR"),
     ];
 }
 

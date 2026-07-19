@@ -200,11 +200,14 @@ using (var scope = app.Services.CreateScope())
             Category TEXT NOT NULL,
             Amount TEXT NOT NULL,
             Currency TEXT NOT NULL,
+            BillDate TEXT,
             TransactionId INTEGER,
             ImportedAt TEXT NOT NULL,
             Error TEXT
         );
         CREATE UNIQUE INDEX IF NOT EXISTS IX_ImportedBills_GmailMessageId ON ImportedBills (GmailMessageId);");
+    // EnsureCreated/CREATE-IF-NOT-EXISTS won't add a column to an existing table — add it (harmless if it already exists).
+    try { db.Database.ExecuteSqlRaw("ALTER TABLE ImportedBills ADD COLUMN BillDate TEXT"); } catch { /* column exists */ }
 
     db.Database.ExecuteSqlRaw(@"
         CREATE TABLE IF NOT EXISTS Todos (
