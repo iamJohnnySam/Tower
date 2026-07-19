@@ -90,6 +90,17 @@ public static class BillProfiles
             "Groceries",
             [Rx(@"Total Amount\s*\(Rs\.?\)\s*([\d,]+\.\d{2})")],
             "LKR"),
+        new BillProfile("Google Play", "googleplay-noreply@google.com",
+            Rx(@"^Your Google Play Order Receipt"),
+            "Apps & Subscriptions",
+            // total shown in LKR via the Sinhala rupee mark (රු.); skip any non-digit currency token
+            [Rx(@"Total\s*:\s*[^\d]*([\d,]+\.\d{2})")],
+            "LKR"),
+        new BillProfile("Dominos", "dominos",
+            Rx(@"^Order Successful"),
+            "Food",
+            [Rx(@"Grand Total\s*:?\s*Rs\.?\s*([\d,]+\.\d{2})")],
+            "LKR"),
     ];
 }
 

@@ -191,6 +191,27 @@ public class BillParserTests
     }
 
     [Fact]
+    public void GooglePlay_parses_lkr_total_with_sinhala_mark()
+    {
+        var body = "Item Price 100 GB (Google One) Subscription Total : රු. 5,750.00/year (Includes VAT)";
+        var r = BillParser.TryParse("googleplay-noreply@google.com", "Your Google Play Order Receipt from Nov 17, 2025", body);
+        Assert.NotNull(r);
+        Assert.Equal("Apps & Subscriptions", r!.Value.Profile.Category);
+        Assert.Equal("LKR", r.Value.Profile.Currency);
+        Assert.Equal(5750.00m, r.Value.Amount);
+    }
+
+    [Fact]
+    public void Dominos_uses_grand_total_and_maps_to_food()
+    {
+        var body = "Sub Total : Rs.6,870.19 Taxes & Charges : Rs.1,201.28 Grand Total : Rs.7,224.00";
+        var r = BillParser.TryParse("do-not-reply@dominos.co.in", "Order Successful", body);
+        Assert.NotNull(r);
+        Assert.Equal("Food", r!.Value.Profile.Category);
+        Assert.Equal(7224.00m, r.Value.Amount);
+    }
+
+    [Fact]
     public void Unrecognized_subject_returns_null()
     {
         var r = BillParser.TryParse("support@pickme.lk", "PickMe | Promo of the week", TripBody);
