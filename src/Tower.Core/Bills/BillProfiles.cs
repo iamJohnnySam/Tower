@@ -23,8 +23,10 @@ public static class BillProfiles
         new BillProfile("PickMe Trip", "pickme.lk",
             Rx(@"^PickMe \| Email Receipt for Trip"),
             "Transportation",
-            [Rx(@"Paid Amount\s*LKR\s*([\d,]+\.\d{2})"),        // current template: includes tip
-             Rx(@"Total Trip Fare\s*LKR\s*([\d,]+\.\d{2})")],   // older template has no "Paid Amount"
+            [Rx(@"Paid Amount\s*LKR\s*([\d,]+\.\d{2})"),           // current template: includes tip
+             Rx(@"Total Trip Fare\s*LKR\s*([\d,]+\.\d{2})"),       // ~2021 template
+             Rx(@"Fare Amount\s*(?:Rs\.?|LKR)\s*([\d,]+\.\d{2})"), // ~2018 template
+             Rx(@"Total Fare\s*(?:Rs\.?|LKR)\s*([\d,]+\.\d{2})")], // ~2015-16 template ("TOTAL FARE Rs.")
             "LKR"),
         new BillProfile("PickMe Delivery", "pickme.lk",
             Rx(@"^PickMe \| Delivery Email Receipt"),

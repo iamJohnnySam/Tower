@@ -60,6 +60,21 @@ public class BillParserTests
 
     // Older PickMe trip template: no "Paid Amount"; falls back to "Total trip fare".
     [Fact]
+    public void Pre2021_trip_templates_parse()
+    {
+        // ~2018: "Fare Amount LKR 140.13"
+        var t2018 = BillParser.TryParse("support@pickme.lk", "PickMe | Email Receipt for Trip ID 127061606",
+            "Driver ... Fare Amount LKR 140.13 TOTAL DISTANCE 3.2 km");
+        Assert.Equal(140.13m, t2018!.Value.Amount);
+        Assert.Equal("Transportation", t2018.Value.Profile.Category);
+
+        // ~2016: "TOTAL FARE Rs. 152.63" / "Paid by Cash Rs. 152.63"
+        var t2016 = BillParser.TryParse("support@pickme.lk", "PickMe | Email Receipt for Trip ID 53073",
+            "TOTAL FARE Rs. 152.63 Paid by Cash Rs. 152.63 DRIVER RATING");
+        Assert.Equal(152.63m, t2016!.Value.Amount);
+    }
+
+    [Fact]
     public void Old_trip_falls_back_to_total_trip_fare()
     {
         var body = "Trip ID - 327372273 Total LKR 145.88 Total trip fare LKR 145.88 PAID BY **** LKR 145.88";
