@@ -11,7 +11,8 @@ public record BillProfile(
     Regex[] AmountRegexes,   // tried in order; first match wins — put the preferred field first
     string Currency,
     bool FromPdf = false,    // when true: amount comes from the attached PDF (via pdftotext), and the PDF is attached instead of the .eml
-    bool Preferred = false); // processed first, so it wins same-order dedup (e.g. PayHere gateway over the merchant email)
+    bool Preferred = false,  // processed first, so it wins same-order dedup (e.g. PayHere gateway over the merchant email)
+    bool AllowZero = false); // import even a 0.00 total (e.g. free Google Play items) instead of skipping
 
 public static class BillProfiles
 {
@@ -103,7 +104,8 @@ public static class BillProfiles
             "Apps & Subscriptions",
             // total shown in LKR via the Sinhala rupee mark (රු.); skip any non-digit currency token
             [Rx(@"Total\s*:\s*[^\d]*([\d,]+\.\d{2})")],
-            "LKR"),
+            "LKR",
+            AllowZero: true),   // free items (0.00) are still recorded
         new BillProfile("Dominos", "dominos",
             Rx(@"^Order Successful"),
             "Food",
@@ -189,17 +191,19 @@ public static class BillParser
     public static (decimal Amount, string Currency)? ExtractAmount(BillProfile profile, string text)
     {
         text = Normalize(text);
+        (decimal Amount, string Currency)? zero = null;   // AllowZero fallback if no positive total is found
         foreach (var rx in profile.AmountRegexes)
             foreach (Match m in rx.Matches(text))
                 if (decimal.TryParse(m.Groups[1].Value.Replace(",", ""),
-                        NumberStyles.Number, CultureInfo.InvariantCulture, out var amount) && amount > 0)
+                        NumberStyles.Number, CultureInfo.InvariantCulture, out var amount) && amount >= 0)
                 {
                     var cur = m.Groups["cur"];
                     var currency = cur.Success && !string.IsNullOrWhiteSpace(cur.Value)
                         ? MapCurrency(cur.Value) : profile.Currency;
-                    return (amount, currency);   // first positive match wins (skips 0.00 sub-totals / credits)
+                    if (amount > 0) return (amount, currency);         // prefer a positive total (skips 0.00 sub-totals / credits)
+                    if (profile.AllowZero) zero ??= (0m, currency);    // remember a 0.00 total for free items
                 }
-        return null;
+        return zero;
     }
 
     /// <summary>Convenience: match + extract from an email body (non-PDF profiles).</summary>

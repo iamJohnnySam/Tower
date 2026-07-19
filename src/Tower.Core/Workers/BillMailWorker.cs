@@ -120,7 +120,7 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
                 // Cross-source dedup: same amount + category + day already imported (e.g. the PayHere
                 // receipt already landed for this order) → record + trash this one, don't double-count.
                 var dupKey = DedupKey(profile.Category, amount, billDate);
-                if (seen.Contains(dupKey))
+                if (amount > 0 && seen.Contains(dupKey))   // 0.00 items (free) are never dedup'd — many can share a day
                 {
                     db.ImportedBills.Add(new ImportedBill
                     {
@@ -147,7 +147,7 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
                     ImportedAt = DateTime.UtcNow
                 });
                 db.SaveChanges();
-                seen.Add(dupKey);
+                if (amount > 0) seen.Add(dupKey);
                 imported++;
                 RunImported = imported;
 

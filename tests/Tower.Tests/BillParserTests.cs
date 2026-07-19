@@ -313,6 +313,25 @@ public class BillParserTests
     }
 
     [Fact]
+    public void GooglePlay_imports_free_zero_items_but_paid_items_still_prefer_positive_total()
+    {
+        // Free item: 0.00 is recorded, not skipped.
+        var free = BillParser.TryParse("googleplay-noreply@google.com", "Your Google Play Order Receipt from Jan 1, 2026",
+            "Some Free App Total : රු. 0.00");
+        Assert.NotNull(free);
+        Assert.Equal(0m, free!.Value.Amount);
+
+        // Paid item with a 0.00 line before the real total → still takes the positive one.
+        var paid = BillParser.TryParse("googleplay-noreply@google.com", "Your Google Play Order Receipt from Jan 2, 2026",
+            "Tax Total : රු. 0.00 Subscription Total : රු. 5,750.00");
+        Assert.Equal(5750.00m, paid!.Value.Amount);
+
+        // A non-AllowZero profile with only a 0.00 total still returns null.
+        var az = BillParser.TryParse("transaction@notice.aliexpress.com", "Order 1: order confirmed", "Order total US $0.00");
+        Assert.Null(az);
+    }
+
+    [Fact]
     public void Unrecognized_subject_returns_null()
     {
         var r = BillParser.TryParse("support@pickme.lk", "PickMe | Promo of the week", TripBody);
