@@ -109,6 +109,40 @@ public class GmailReader(HttpClient http, GmailTokenService tokens)
     // just this sentinel — treat it as empty so extraction falls through to the real HTML body.
     private const string NoTextPlaceholder = "This email has no text content";
 
+    // Download the first PDF attachment (filename + bytes), or null if there is none.
+    public async Task<(string FileName, byte[] Bytes)?> GetPdfAttachmentAsync(string id, CancellationToken ct = default)
+    {
+        using var req = await AuthGet($"{Api}/messages/{id}?format=full", ct);
+        using var resp = await http.SendAsync(req, ct);
+        if (!resp.IsSuccessStatusCode) return null;
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+        var found = FindPdfPart(doc.RootElement.GetProperty("payload"));
+        if (found is null) return null;
+        var (fileName, attId) = found.Value;
+
+        using var areq = await AuthGet($"{Api}/messages/{id}/attachments/{attId}", ct);
+        using var aresp = await http.SendAsync(areq, ct);
+        if (!aresp.IsSuccessStatusCode) return null;
+        using var adoc = JsonDocument.Parse(await aresp.Content.ReadAsStringAsync(ct));
+        if (!adoc.RootElement.TryGetProperty("data", out var d)) return null;
+        var b64 = d.GetString();
+        if (string.IsNullOrEmpty(b64)) return null;
+        var bytes = Convert.FromBase64String(b64.Replace('-', '+').Replace('_', '/').PadRight((b64.Length + 3) / 4 * 4, '='));
+        return (fileName, bytes);
+    }
+
+    private static (string FileName, string AttachmentId)? FindPdfPart(JsonElement part)
+    {
+        var fn = part.TryGetProperty("filename", out var f) ? f.GetString() : null;
+        if (!string.IsNullOrEmpty(fn) && fn!.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) &&
+            part.TryGetProperty("body", out var b) && b.TryGetProperty("attachmentId", out var a))
+            return (fn, a.GetString()!);
+        if (part.TryGetProperty("parts", out var parts))
+            foreach (var child in parts.EnumerateArray())
+                if (FindPdfPart(child) is { } r) return r;
+        return null;
+    }
+
     // Recursively find the first text/plain part; fall back to any body data.
     private static string ExtractText(JsonElement part)
     {

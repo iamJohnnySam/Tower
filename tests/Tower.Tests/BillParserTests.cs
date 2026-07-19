@@ -269,6 +269,23 @@ public class BillParserTests
     }
 
     [Fact]
+    public void Doc990_is_pdf_profile_and_reads_total_charges_from_pdf_text()
+    {
+        var profile = BillParser.Match("no-reply@doc.lk", "Doc990 BOOKING RECEIPT");
+        Assert.NotNull(profile);
+        Assert.True(profile!.FromPdf);
+        Assert.Equal("e-Channeling", profile.Category);
+
+        // The email body has no amount (it's an image) — extraction runs on the PDF text instead.
+        var pdfText = "HOSPITAL CHARGES : 1500.00 LKR DOCTOR CHARGES : 2000.00 LKR " +
+                      "BOOKING CHARGES : 381.65 LKR TOTAL CHARGES : 3881.65 LKR (67.35 LKR Discounted)";
+        var e = BillParser.ExtractAmount(profile, pdfText);
+        Assert.NotNull(e);
+        Assert.Equal(3881.65m, e!.Value.Amount);
+        Assert.Equal("LKR", e.Value.Currency);
+    }
+
+    [Fact]
     public void Unrecognized_subject_returns_null()
     {
         var r = BillParser.TryParse("support@pickme.lk", "PickMe | Promo of the week", TripBody);

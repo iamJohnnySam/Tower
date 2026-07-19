@@ -9,7 +9,8 @@ public record BillProfile(
     Regex SubjectRegex,
     string Category,
     Regex[] AmountRegexes,   // tried in order; first match wins — put the preferred field first
-    string Currency);
+    string Currency,
+    bool FromPdf = false);   // when true: amount comes from the attached PDF (via pdftotext), and the PDF is attached instead of the .eml
 
 public static class BillProfiles
 {
@@ -134,22 +135,29 @@ public static class BillProfiles
             "eChanneling",
             [Rx(@"Total Fee\s*:?\s*([\d,]+\.\d{2})\s*LKR")],   // "Total Fee : 114.00 LKR"
             "LKR"),
+        new BillProfile("Doc990", "no-reply@doc.lk",
+            Rx(@"BOOKING RECEIPT"),
+            "e-Channeling",
+            [Rx(@"TOTAL CHARGES\s*:?\s*([\d,]+\.\d{2})\s*LKR")],   // read from the attached PDF, not the email body
+            "LKR",
+            FromPdf: true),
     ];
 }
 
 public static class BillParser
 {
-    /// <summary>Matches an email to a profile and extracts the positive paid amount + currency, or null.
-    /// Amount is capture group 1; an optional named group <c>cur</c> overrides the profile currency
-    /// per-email (for multi-currency senders like AliExpress).</summary>
-    public static (BillProfile Profile, decimal Amount, string Currency)? TryParse(string from, string subject, string body)
-    {
-        var profile = BillProfiles.All.FirstOrDefault(p =>
+    /// <summary>Finds the profile whose sender + subject match this email, or null.</summary>
+    public static BillProfile? Match(string from, string subject) =>
+        BillProfiles.All.FirstOrDefault(p =>
             from.Contains(p.FromContains, StringComparison.OrdinalIgnoreCase) &&
             p.SubjectRegex.IsMatch(subject));
-        if (profile is null) return null;
 
-        var text = Normalize(body);
+    /// <summary>Extracts the positive paid amount + currency from <paramref name="text"/> (email body or
+    /// PDF text) using the profile's patterns. Amount is capture group 1; an optional named group
+    /// <c>cur</c> overrides the profile currency per-email (for multi-currency senders like AliExpress).</summary>
+    public static (decimal Amount, string Currency)? ExtractAmount(BillProfile profile, string text)
+    {
+        text = Normalize(text);
         foreach (var rx in profile.AmountRegexes)
             foreach (Match m in rx.Matches(text))
                 if (decimal.TryParse(m.Groups[1].Value.Replace(",", ""),
@@ -158,9 +166,17 @@ public static class BillParser
                     var cur = m.Groups["cur"];
                     var currency = cur.Success && !string.IsNullOrWhiteSpace(cur.Value)
                         ? MapCurrency(cur.Value) : profile.Currency;
-                    return (profile, amount, currency);   // first positive match wins (skips 0.00 sub-totals / credits)
+                    return (amount, currency);   // first positive match wins (skips 0.00 sub-totals / credits)
                 }
         return null;
+    }
+
+    /// <summary>Convenience: match + extract from an email body (non-PDF profiles).</summary>
+    public static (BillProfile Profile, decimal Amount, string Currency)? TryParse(string from, string subject, string body)
+    {
+        var profile = Match(from, subject);
+        if (profile is null) return null;
+        return ExtractAmount(profile, body) is { } e ? (profile, e.Amount, e.Currency) : null;
     }
 
     private static string MapCurrency(string token)

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Tower.Core.Bills;
@@ -83,9 +84,22 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
                 var msg = await reader.GetMessageAsync(id, ct);
                 if (msg == null) continue;
 
-                var parsed = BillParser.TryParse(msg.Value.From, msg.Value.Subject, msg.Value.Body);
-                if (parsed == null) continue;                    // not a known bill — leave in place
-                var (profile, amount, currency) = parsed.Value;
+                var profile = BillParser.Match(msg.Value.From, msg.Value.Subject);
+                if (profile == null) continue;                   // not a known bill — leave in place
+
+                // PDF-based profiles (e.g. Doc990): the amount lives in the attached PDF, which we also archive.
+                byte[]? pdf = null; string? pdfName = null; var amountText = msg.Value.Body;
+                if (profile.FromPdf)
+                {
+                    var att = await reader.GetPdfAttachmentAsync(id, ct);
+                    if (att == null) { lastError = $"No PDF attachment for {id}"; continue; }
+                    (pdfName, pdf) = (att.Value.FileName, att.Value.Bytes);
+                    amountText = await PdfToTextAsync(pdf, ct);
+                }
+
+                var extracted = BillParser.ExtractAmount(profile, amountText);
+                if (extracted == null) continue;                 // recognised sender but no parseable amount — leave in place
+                var (amount, currency) = extracted.Value;
 
                 // Post the expense (negative). On failure leave the email untouched to retry next sweep.
                 var txId = await ft.PostTransactionAsync(-amount, profile.Category,
@@ -104,10 +118,15 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
                 imported++;
                 RunImported = imported;
 
-                // Best-effort: attach the raw .eml, then delete (trash) the email.
-                var raw = await reader.GetRawMessageAsync(id, ct);
-                if (raw != null)
-                    await ft.PostAttachmentAsync(txId.Value, raw, $"{profile.Name}-{id}.eml", ct);
+                // Best-effort: attach the PDF (PDF profiles) or the raw .eml, then delete (trash) the email.
+                if (pdf != null)
+                    await ft.PostAttachmentAsync(txId.Value, pdf, pdfName ?? $"{profile.Name}-{id}.pdf", "application/pdf", ct);
+                else
+                {
+                    var raw = await reader.GetRawMessageAsync(id, ct);
+                    if (raw != null)
+                        await ft.PostAttachmentAsync(txId.Value, raw, $"{profile.Name}-{id}.eml", "message/rfc822", ct);
+                }
                 await reader.TrashMessageAsync(id, ct);
             }
             catch (Exception ex) { lastError = ex.Message; }
@@ -117,5 +136,26 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
         settings.Set("bills.mail.last_count", imported.ToString());
         settings.Set("bills.mail.last_error", lastError);
         return imported;
+    }
+
+    // ponytail: shell out to the system `pdftotext` (poppler-utils, installed) instead of a .NET PDF lib.
+    private static async Task<string> PdfToTextAsync(byte[] pdf, CancellationToken ct)
+    {
+        var tmp = Path.GetTempFileName();
+        try
+        {
+            await File.WriteAllBytesAsync(tmp, pdf, ct);
+            using var p = Process.Start(new ProcessStartInfo("pdftotext", $"-layout \"{tmp}\" -")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            })!;
+            var text = await p.StandardOutput.ReadToEndAsync(ct);
+            await p.WaitForExitAsync(ct);
+            return text;
+        }
+        catch (Exception ex) { await Console.Error.WriteLineAsync($"[BillMailWorker] pdftotext: {ex.Message}"); return ""; }
+        finally { try { File.Delete(tmp); } catch { /* best-effort */ } }
     }
 }

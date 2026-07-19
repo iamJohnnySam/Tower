@@ -41,14 +41,14 @@ public class FinanceTrackerClient(HttpClient http, IServiceScopeFactory scopes)
     }
 
     public async Task<bool> PostAttachmentAsync(int transactionId, byte[] content, string fileName,
-        CancellationToken ct = default)
+        string contentType = "message/rfc822", CancellationToken ct = default)
     {
         var (baseUrl, apiKey) = Config();
         if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(apiKey)) return false;
 
         using var form = new MultipartFormDataContent();
         var file = new ByteArrayContent(content);
-        file.Headers.ContentType = new MediaTypeHeaderValue("message/rfc822");
+        file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
         form.Add(file, "file", fileName);
 
         using var req = new HttpRequestMessage(HttpMethod.Post,
