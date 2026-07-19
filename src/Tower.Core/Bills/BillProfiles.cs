@@ -50,7 +50,8 @@ public static class BillProfiles
         new BillProfile("AliExpress Order", "aliexpress.com",
             Rx(@"Order .* order confirmed"),
             "Online Shopping",
-            [Rx(@"Order total\s*(?:LKR|Rs\.?|USD|\$)?\s*([\d,]+\.\d{2})")],
+            // orders come in USD (US$) or LKR — detect per-email via the (?<cur>) group
+            [Rx(@"Order total\s*(?<cur>US\$|USD|LKR|Rs\.?)?\s*([\d,]+\.\d{2})")],
             "LKR"),
         new BillProfile("Dialog Fixed", "dialog.lk",
             Rx(@"Dialog Fixed_Solutions E-Bill"),   // NOT the "Dialog Mobile E-Bill" from the same sender
@@ -138,8 +139,10 @@ public static class BillProfiles
 
 public static class BillParser
 {
-    /// <summary>Matches an email to a profile and extracts the positive paid amount, or null.</summary>
-    public static (BillProfile Profile, decimal Amount)? TryParse(string from, string subject, string body)
+    /// <summary>Matches an email to a profile and extracts the positive paid amount + currency, or null.
+    /// Amount is capture group 1; an optional named group <c>cur</c> overrides the profile currency
+    /// per-email (for multi-currency senders like AliExpress).</summary>
+    public static (BillProfile Profile, decimal Amount, string Currency)? TryParse(string from, string subject, string body)
     {
         var profile = BillProfiles.All.FirstOrDefault(p =>
             from.Contains(p.FromContains, StringComparison.OrdinalIgnoreCase) &&
@@ -151,8 +154,21 @@ public static class BillParser
             foreach (Match m in rx.Matches(text))
                 if (decimal.TryParse(m.Groups[1].Value.Replace(",", ""),
                         NumberStyles.Number, CultureInfo.InvariantCulture, out var amount) && amount > 0)
-                    return (profile, amount);   // first positive match wins (skips 0.00 sub-totals / credits)
+                {
+                    var cur = m.Groups["cur"];
+                    var currency = cur.Success && !string.IsNullOrWhiteSpace(cur.Value)
+                        ? MapCurrency(cur.Value) : profile.Currency;
+                    return (profile, amount, currency);   // first positive match wins (skips 0.00 sub-totals / credits)
+                }
         return null;
+    }
+
+    private static string MapCurrency(string token)
+    {
+        var t = token.ToUpperInvariant();
+        if (t.Contains("US")) return "USD";
+        if (t.StartsWith("S$") || t.Contains("SGD")) return "SGD";
+        return "LKR";
     }
 
     // GmailReader yields tag-stripped HTML that still contains entities like &nbsp;. Decode the

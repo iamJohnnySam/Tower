@@ -85,11 +85,11 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
 
                 var parsed = BillParser.TryParse(msg.Value.From, msg.Value.Subject, msg.Value.Body);
                 if (parsed == null) continue;                    // not a known bill — leave in place
-                var (profile, amount) = parsed.Value;
+                var (profile, amount, currency) = parsed.Value;
 
                 // Post the expense (negative). On failure leave the email untouched to retry next sweep.
                 var txId = await ft.PostTransactionAsync(-amount, profile.Category,
-                    $"{profile.Name} — {msg.Value.Subject}", msg.Value.Date, profile.Currency, ct);
+                    $"{profile.Name} — {msg.Value.Subject}", msg.Value.Date, currency, ct);
                 if (txId == null) { lastError = $"POST transaction failed for {id}"; continue; }
 
                 // ponytail: dedup barrier is this local row; a crash in the gap between the remote
@@ -97,7 +97,7 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
                 db.ImportedBills.Add(new ImportedBill
                 {
                     GmailMessageId = id, Profile = profile.Name, Category = profile.Category,
-                    Amount = amount, Currency = profile.Currency, TransactionId = txId,
+                    Amount = amount, Currency = currency, TransactionId = txId,
                     ImportedAt = DateTime.UtcNow
                 });
                 db.SaveChanges();
