@@ -248,7 +248,7 @@ public class BillParserTests
 
         var e = BillParser.TryParse("receipt@echannelling.com", "Welcome to eChanneling - eRewards",
             "CHANNELLING DONE Total Fee : 114.00 LKR Breakdown Doctor Fee: 0.00 /= Booking Fee:114.00 /=");
-        Assert.Equal("eChanneling", e!.Value.Profile.Category); Assert.Equal(114.00m, e.Value.Amount);
+        Assert.Equal("e-Channeling", e!.Value.Profile.Category); Assert.Equal(114.00m, e.Value.Amount);
 
         var m = BillParser.TryParse("support@pickme.lk", "Membership Payment Invoice", "PickMe PASS Total LKR 549.00 Paid Amount LKR 549.00");
         Assert.Equal("Membership", m!.Value.Profile.Category); Assert.Equal(549.00m, m.Value.Amount);

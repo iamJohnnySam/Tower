@@ -132,7 +132,7 @@ public static class BillProfiles
             "LKR"),
         new BillProfile("eChannelling", "echannelling.com",
             Rx(@"eChanneling"),
-            "eChanneling",
+            "e-Channeling",
             [Rx(@"Total Fee\s*:?\s*([\d,]+\.\d{2})\s*LKR")],   // "Total Fee : 114.00 LKR"
             "LKR"),
         new BillProfile("Doc990", "no-reply@doc.lk",
