@@ -127,9 +127,23 @@ public class BillParserTests
         Assert.Equal("Home Broadband", r!.Value.Profile.Category);
         Assert.Equal(3053.77m, r.Value.Amount);
 
-        // The "Dialog Mobile E-Bill" from the same sender must NOT match this profile.
-        var mobile = BillParser.TryParse("ebill@dialog.lk", "Dialog Mobile E-Bill for the month of Apr-2025 - 28577056", body);
-        Assert.Null(mobile);
+        // The "Dialog Mobile E-Bill" body would match the Mobile profile, not Fixed.
+        var asFixed = BillParser.TryParse("ebill@dialog.lk", "Dialog Mobile E-Bill for the month of Apr-2025 - 28577056", body);
+        Assert.Equal("Dialog Mobile", asFixed!.Value.Profile.Name);
+    }
+
+    [Fact]
+    public void Dialog_mobile_maps_to_phone_and_skips_credit_months()
+    {
+        var due = "769014481 Rs. 1,229.71 Pay on or before 05.05.2025";
+        var r = BillParser.TryParse("ebill@dialog.lk", "Dialog Mobile E-Bill for the month of Apr-2025 - 28577056", due);
+        Assert.NotNull(r);
+        Assert.Equal("Phone", r!.Value.Profile.Category);
+        Assert.Equal(1229.71m, r.Value.Amount);
+
+        // A credit-balance month (negative) is skipped, not imported as an expense.
+        var credit = "769014481 Rs. -867.36 Pay on or before 05.05.2025";
+        Assert.Null(BillParser.TryParse("ebill@dialog.lk", "Dialog Mobile E-Bill for the month of Apr-2025 - 28577056", credit));
     }
 
     [Fact]

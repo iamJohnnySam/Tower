@@ -55,7 +55,13 @@ public static class BillProfiles
         new BillProfile("Dialog Fixed", "dialog.lk",
             Rx(@"Dialog Fixed_Solutions E-Bill"),   // NOT the "Dialog Mobile E-Bill" from the same sender
             "Home Broadband",
-            [Rx(@"(?:Rs\.?|LKR)\s*([\d,]+\.\d{2})\s*Pay on or before")],   // amount payable sits before the due date
+            // amount payable sits before the due date; -? lets a credit-balance month parse negative → skipped
+            [Rx(@"(?:Rs\.?|LKR)\s*(-?[\d,]+\.\d{2})\s*Pay on or before")],
+            "LKR"),
+        new BillProfile("Dialog Mobile", "dialog.lk",
+            Rx(@"Dialog Mobile E-Bill"),
+            "Phone",
+            [Rx(@"(?:Rs\.?|LKR)\s*(-?[\d,]+\.\d{2})\s*Pay on or before")],   // credit months (negative) are skipped
             "LKR"),
     ];
 }
