@@ -201,6 +201,16 @@ public class StatementProfilesTests
         Assert.Equal("629,717.42", p.BalanceRegex!.Match(body).Groups[1].Value);
     }
 
+    // Only body-value profiles keep the mail: everything else already stores its own document.
+    [Fact]
+    public void Only_body_value_profiles_save_the_eml()
+    {
+        Assert.All(StatementProfiles.All.Where(p => p.SaveEml), p => Assert.NotNull(p.BalanceRegex));
+        Assert.True(StatementProfiles.Match("estatement@info.nationstrust.com",
+            "Advanced Notice on Fixed Deposit Renewal - Account No 3002xxxx70827")!.SaveEml);
+        Assert.False(StatementProfiles.Match("bocmail1@boc.lk", BocSubject)!.SaveEml);
+    }
+
     [Fact]
     public void Match_finds_the_softlogic_statement()
     {

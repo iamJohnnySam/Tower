@@ -12,7 +12,8 @@ public record StatementProfile(
     Regex? AttachmentNameRegex = null,  // which attachment, when the mail carries several
     Regex? AccountNumberRegex = null,   // group 1, matched over subject + filename + body
     Regex? BodyDateRegex = null,        // group 1 over the body; overrides the month-end rule
-    string? BodyDateFormat = null)      // format for BodyDateRegex, e.g. "dd-MMM-yyyy"
+    string? BodyDateFormat = null,      // format for BodyDateRegex, e.g. "dd-MMM-yyyy"
+    bool SaveEml = false)               // body-value mail has no document — keep the email itself
 {
     /// <summary>The date this email's figure is actually true for. Most statements get the
     /// month-end rule; documents that state their own effective date say so and win.</summary>
@@ -123,7 +124,8 @@ public static class StatementProfiles
             // "any non-digits", not whitespace. Matching on \s* silently found nothing.
             BalanceRegex: Rx(@"Deposit Amount:?[^\d]{0,40}?([\d,]+\.\d{2})"),
             BodyDateRegex: Rx(@"Date Account opened:?[^\d]{0,40}?(\d{2}-\w{3}-\d{4})"),
-            BodyDateFormat: "dd-MMM-yyyy"),
+            BodyDateFormat: "dd-MMM-yyyy",
+            SaveEml: true),
     ];
 
     // CAL client code is the same across funds; FinanceTracker holds them as "ILS0310 (FIOF)" etc.

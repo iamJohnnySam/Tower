@@ -116,9 +116,17 @@ public class StatementMailWorker(IServiceScopeFactory scopes) : BackgroundServic
                         System.Globalization.NumberStyles.Any,
                         System.Globalization.CultureInfo.InvariantCulture, out var bal))
                 {
-                    if (await ft.PostBalanceAsync(accountNumber, date, bal, null, ct) == null)
+                    var balanceId = await ft.PostBalanceAsync(accountNumber, date, bal, null, ct);
+                    if (balanceId == null)
                     { lastError = $"POST balance failed for {id}"; continue; }   // leave the email, retry next sweep
                     row.Balance = bal;
+
+                    // The figure came out of the mail, so the mail is the only evidence there is.
+                    // A failure here must not block the import — the balance is already recorded,
+                    // and re-running the sweep would just re-post it.
+                    if (profile.SaveEml && await reader.GetRawMessageAsync(id, ct) is { } eml &&
+                        !await ft.PostBalanceAttachmentAsync(balanceId.Value, eml, $"{id}.eml", ct: ct))
+                        lastError = $"Balance saved but .eml attach failed for {id}";
                 }
                 else
                 {

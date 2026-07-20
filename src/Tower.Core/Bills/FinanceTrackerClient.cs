@@ -40,8 +40,18 @@ public class FinanceTrackerClient(HttpClient http, IServiceScopeFactory scopes)
         return doc.TryGetProperty("transactionId", out var id) ? id.GetInt32() : null;
     }
 
-    public async Task<bool> PostAttachmentAsync(int transactionId, byte[] content, string fileName,
-        string contentType = "message/rfc822", CancellationToken ct = default)
+    public Task<bool> PostAttachmentAsync(int transactionId, byte[] content, string fileName,
+        string contentType = "message/rfc822", CancellationToken ct = default) =>
+        PostAttachmentAsync($"transactions/{transactionId}", content, fileName, contentType, ct);
+
+    /// <summary>Files the source email against a balance — for statements whose figure is in the
+    /// mail body, so there is no document to keep otherwise.</summary>
+    public Task<bool> PostBalanceAttachmentAsync(int balanceId, byte[] content, string fileName,
+        string contentType = "message/rfc822", CancellationToken ct = default) =>
+        PostAttachmentAsync($"balances/{balanceId}", content, fileName, contentType, ct);
+
+    private async Task<bool> PostAttachmentAsync(string entityPath, byte[] content, string fileName,
+        string contentType, CancellationToken ct)
     {
         var (baseUrl, apiKey) = Config();
         if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(apiKey)) return false;
@@ -52,7 +62,7 @@ public class FinanceTrackerClient(HttpClient http, IServiceScopeFactory scopes)
         form.Add(file, "file", fileName);
 
         using var req = new HttpRequestMessage(HttpMethod.Post,
-            $"{baseUrl.TrimEnd('/')}/api/external/transactions/{transactionId}/attachment");
+            $"{baseUrl.TrimEnd('/')}/api/external/{entityPath}/attachment");
         req.Headers.Add("X-Api-Key", apiKey);
         req.Content = form;
         using var resp = await http.SendAsync(req, ct);
