@@ -153,12 +153,37 @@ public class StatementProfilesTests
         Assert.True(p.AttachmentNameRegex!.IsMatch("Consolidated_eStatement_2026JUN_82,670.html"));
     }
 
-    // The same sender also mails FriMi statements, WHT certificates and FD renewals.
-    [Theory]
-    [InlineData("Statement for 30-JUN-2026 on FriMi Id 2222050890")]
-    [InlineData("WHT Certificate of 01-May-2026 to 31-May-2026")]
-    public void Match_ignores_other_ntb_mail(string subject) =>
-        Assert.Null(StatementProfiles.Match("estatement@info.nationstrust.com", subject));
+    [Fact]
+    public void Match_ignores_ntb_wht_certificates() =>
+        Assert.Null(StatementProfiles.Match("estatement@info.nationstrust.com",
+            "WHT Certificate of 01-May-2026 to 31-May-2026"));
+
+    // FriMi restates an account the consolidated statement already covers; it gets its own profile
+    // rather than being ignored, and lands on the same row so nothing is duplicated.
+    [Fact]
+    public void Match_finds_the_frimi_statement()
+    {
+        var p = StatementProfiles.Match("estatement@info.nationstrust.com",
+            "Statement for 30-JUN-2026 on FriMi Id 2222050890");
+        Assert.NotNull(p);
+        Assert.Equal("205000150623", p!.AccountNumber);
+    }
+
+    [Fact]
+    public void Match_finds_the_boc_fd_renewal_notice()
+    {
+        var p = StatementProfiles.Match("bocmail1@boc.lk", "Fixed Deposit Renewal Notice");
+        Assert.NotNull(p);
+        Assert.Equal("BOC FD renewal", p!.Name);
+    }
+
+    // The savings profile must not swallow the renewal notice, nor vice versa.
+    [Fact]
+    public void Boc_savings_and_fd_renewal_do_not_collide()
+    {
+        Assert.Equal("BOC 86177812", StatementProfiles.Match("bocmail1@boc.lk", BocSubject)!.Name);
+        Assert.Null(StatementProfiles.Match("bocmail1@boc.lk", "Smart Fixed Deposit Opening Confirmation"));
+    }
 
     // The figure is the deposit for the term that is ending, so it belongs on the day that term
     // opened — a year before the email, and nowhere near month-end.

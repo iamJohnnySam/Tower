@@ -95,6 +95,18 @@ public static class StatementProfiles
         // On renewal day the deposit is already worth the larger, renewed figure.
         ..NtbFdRenewal("50812", "300270050812"),
         ..NtbFdRenewal("70827", "300270070827"),
+
+        // FriMi restates one account the consolidated statement already covers. Both write the
+        // same (account, date) row, so the later one simply overwrites — no duplicate is created.
+        new StatementProfile("NTB FriMi 205000150623", "estatement@info.nationstrust.com",
+            Rx(@"^Statement for .* on FriMi Id 2222050890\b"),
+            "205000150623"),
+
+        // BOC names the FD inside the PDF and nowhere else, so this is filed against BOC FD1 as an
+        // anchor and FinanceTracker's account-from-document matching routes it to the real FD.
+        new StatementProfile("BOC FD renewal", "bocmail1@boc.lk",
+            Rx(@"^Fixed Deposit Renewal Notice\b"),
+            "86177962"),
     ];
 
     private static StatementProfile[] NtbFdRenewal(string masked, string accountNumber) =>
