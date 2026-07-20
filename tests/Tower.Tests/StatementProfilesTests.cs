@@ -144,6 +144,42 @@ public class StatementProfilesTests
             .Match("bocmail1@boc.lk", BocSubject)!.ResolveAccountNumber(BocSubject, null, ""));
 
     [Fact]
+    public void Match_finds_the_ntb_consolidated_statement()
+    {
+        var p = StatementProfiles.Match("estatement@info.nationstrust.com",
+            "Your Nations Trust Bank Inner Circle June 2026 statement here");
+        Assert.NotNull(p);
+        Assert.Equal("27212033390", p!.AccountNumber);
+        Assert.True(p.AttachmentNameRegex!.IsMatch("Consolidated_eStatement_2026JUN_82,670.html"));
+    }
+
+    // The same sender also mails FriMi statements, WHT certificates and FD renewals.
+    [Theory]
+    [InlineData("Statement for 30-JUN-2026 on FriMi Id 2222050890")]
+    [InlineData("WHT Certificate of 01-May-2026 to 31-May-2026")]
+    public void Match_ignores_other_ntb_mail(string subject) =>
+        Assert.Null(StatementProfiles.Match("estatement@info.nationstrust.com", subject));
+
+    // The figure is the deposit for the term that is ending, so it belongs on the day that term
+    // opened — a year before the email, and nowhere near month-end.
+    [Fact]
+    public void Ntb_fd_renewal_dates_the_balance_to_the_day_the_term_opened()
+    {
+        var p = StatementProfiles.Match("estatement@info.nationstrust.com",
+            "Advanced Notice on Fixed Deposit Renewal - Account No 3002xxxx50812");
+        Assert.NotNull(p);
+        const string body = "will be renewed on 28-Jun-2026 , details of which are given below. " +
+                            "Date Account opened: 28-Jun-2025 Deposit Amount: 672,163.85 Deposit Currency : LKR";
+        Assert.Equal(new DateTime(2025, 6, 28), p!.ResolveDate(body, new DateTime(2026, 6, 21)));
+        Assert.Equal("672,163.85", p.BalanceRegex!.Match(body).Groups[1].Value);
+    }
+
+    [Fact]
+    public void ResolveDate_falls_back_to_month_end_without_a_body_date() =>
+        Assert.Equal(new DateTime(2026, 6, 30), StatementProfiles
+            .Match("bocmail1@boc.lk", BocSubject)!.ResolveDate("", new DateTime(2026, 7, 3)));
+
+    [Fact]
     public void Match_ignores_a_bills_sender() =>
         Assert.Null(StatementProfiles.Match("support@pickme.lk", "PickMe | Email Receipt for Trip ID 1458530325"));
 }

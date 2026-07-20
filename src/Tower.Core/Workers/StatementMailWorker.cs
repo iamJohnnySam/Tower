@@ -90,7 +90,7 @@ public class StatementMailWorker(IServiceScopeFactory scopes) : BackgroundServic
                 var profile = StatementProfiles.Match(msg.Value.From, msg.Value.Subject);
                 if (profile == null) continue;                   // not a known statement — leave in place
 
-                var date = StatementProfiles.MonthEnd(msg.Value.Date);
+                var date = profile.ResolveDate(msg.Value.Body, msg.Value.Date);
 
                 // The attachment is fetched before the account is resolved because senders that
                 // reuse one template for many accounts (ComBank FD renewals) put the number in

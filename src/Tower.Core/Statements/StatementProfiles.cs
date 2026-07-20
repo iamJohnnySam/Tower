@@ -11,8 +11,21 @@ public record StatementProfile(
     Regex? BalanceRegex = null,         // non-null → balance is in the email body; null → send the document
     Regex? AttachmentNameRegex = null,  // which attachment, when the mail carries several
     Regex? AccountNumberRegex = null,   // group 1, matched over subject + filename + body
-    bool SaveEml = false)               // no attachment worth keeping — file the raw .eml instead
+    Regex? BodyDateRegex = null,        // group 1 over the body; overrides the month-end rule
+    string? BodyDateFormat = null)      // format for BodyDateRegex, e.g. "dd-MMM-yyyy"
 {
+    /// <summary>The date this email's figure is actually true for. Most statements get the
+    /// month-end rule; documents that state their own effective date say so and win.</summary>
+    public DateTime ResolveDate(string body, DateTime emailDate)
+    {
+        if (BodyDateRegex?.Match(body) is { Success: true } m &&
+            DateTime.TryParseExact(m.Groups[1].Value, BodyDateFormat,
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var parsed))
+            return parsed.Date;
+        return StatementProfiles.MonthEnd(emailDate);
+    }
+
     /// <summary>The account this email is for: fixed, or dug out of the mail when the sender
     /// uses one template for many accounts (ComBank sends every FD renewal the same way).</summary>
     public string? ResolveAccountNumber(string subject, string? fileName, string body)
@@ -68,6 +81,30 @@ public static class StatementProfiles
             Rx(@"^(e-FD Renewal Acknowledgement|AUTOMATIC FD E-RENEWAL NOTICE EMAIL)"),
             "",
             AccountNumberRegex: Rx(@"RenewalNotice_(\d{6,})")),
+
+        // One HTML file holding every NTB product. Filed against NTB Savings purely so it has an
+        // account to carry the password and profile — FinanceTracker fans the contents out to all
+        // ten accounts it names.
+        new StatementProfile("NTB consolidated", "estatement@info.nationstrust.com",
+            Rx(@"^Your Nations Trust Bank Inner Circle .* statement here"),
+            "27212033390",
+            AttachmentNameRegex: Rx(@"\.html?$")),
+
+        // The renewal notice quotes the deposit as it stood for the term that is ENDING, so its
+        // effective date is the day the term opened — not the renewal date, and not month-end.
+        // On renewal day the deposit is already worth the larger, renewed figure.
+        ..NtbFdRenewal("50812", "300270050812"),
+        ..NtbFdRenewal("70827", "300270070827"),
+    ];
+
+    private static StatementProfile[] NtbFdRenewal(string masked, string accountNumber) =>
+    [
+        new StatementProfile($"NTB FD renewal {accountNumber}", "estatement@info.nationstrust.com",
+            Rx($@"^Advanced Notice on Fixed Deposit Renewal - Account No 3002xxxx{masked}\b"),
+            accountNumber,
+            BalanceRegex: Rx(@"Deposit Amount:?\s*([\d,]+\.\d{2})"),
+            BodyDateRegex: Rx(@"Date Account opened:?\s*(\d{2}-\w{3}-\d{4})"),
+            BodyDateFormat: "dd-MMM-yyyy"),
     ];
 
     // CAL client code is the same across funds; FinanceTracker holds them as "ILS0310 (FIOF)" etc.
