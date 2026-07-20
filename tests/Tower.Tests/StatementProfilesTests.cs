@@ -84,7 +84,11 @@ public class StatementProfilesTests
     public void Match_ignores_other_sc_mail(string from, string subject) =>
         Assert.Null(StatementProfiles.Match(from, subject));
 
+    // Verbatim subject variants seen in the mailbox: doubled "CAL CAL" prefix and a double space
+    // before the dash. Both were being skipped.
     [Theory]
+    [InlineData("CAL CAL Fixed Income Opportunities Fund  - Investment Statement", "ILS0310 (FIOF)")]
+    [InlineData("CAL Fixed Income Opportunities Fund  - Investment Statement - Mr. J.N.G Sam", "ILS0310 (FIOF)")]
     [InlineData("CAL Fixed Income Opportunities Fund - Investment Statement - Mr. J.N.G Samarasinghe", "ILS0310 (FIOF)")]
     [InlineData("Capital Alliance Investment Grade Fund - Investment Statement - Mr. J.N.G Samarasinghe", "ILS0310 (IGF)")]
     [InlineData("Capital Alliance Quantitative Equity Fund - Investment Statement - Mr. J.N.G Samarasinghe", "ILS0310 (QEF)")]
@@ -160,14 +164,38 @@ public class StatementProfilesTests
 
     // FriMi restates an account the consolidated statement already covers; it gets its own profile
     // rather than being ignored, and lands on the same row so nothing is duplicated.
-    [Fact]
-    public void Match_finds_the_frimi_statement()
+    // Older FriMi mail masks the id; both forms are the same account.
+    [Theory]
+    [InlineData("Statement for 30-JUN-2026 on FriMi Id 2222050890")]
+    [InlineData("Statement for 28-FEB-2018 on FriMi Id 222205XXXX")]
+    public void Match_finds_the_frimi_statement(string subject)
     {
-        var p = StatementProfiles.Match("estatement@info.nationstrust.com",
-            "Statement for 30-JUN-2026 on FriMi Id 2222050890");
+        var p = StatementProfiles.Match("estatement@info.nationstrust.com", subject);
         Assert.NotNull(p);
         Assert.Equal("205000150623", p!.AccountNumber);
     }
+
+    // Every FD that mails a renewal notice needs its own profile — the body masks the number too,
+    // so it cannot be recovered from the mail.
+    [Theory]
+    [InlineData("21676", "300270021676")]
+    [InlineData("25766", "300270025766")]
+    [InlineData("55640", "300270055640")]
+    public void Match_finds_every_ntb_fd_renewal(string masked, string account)
+    {
+        var p = StatementProfiles.Match("estatement@info.nationstrust.com",
+            $"Advanced Notice on Fixed Deposit Renewal - Account No 3002xxxx{masked}");
+        Assert.NotNull(p);
+        Assert.Equal(account, p!.AccountNumber);
+    }
+
+    // CAL also mails unit creation/redemption confirmations and trustee notices — not statements.
+    [Theory]
+    [InlineData("Creation of units - CAL Fixed Income Opportunities Fund  - Mr.J.N.GSamarasinghe")]
+    [InlineData("Redemption of units - Capital Alliance Quantitative Equity Fund - Mr.J.N.GS")]
+    [InlineData("Important Update: Change in Trustee and Custodian Services of CAL Unit Trusts")]
+    public void Match_ignores_cal_non_statements(string subject) =>
+        Assert.Null(StatementProfiles.Match("cali@cal.lk", subject));
 
     [Fact]
     public void Match_finds_the_boc_fd_renewal_notice()

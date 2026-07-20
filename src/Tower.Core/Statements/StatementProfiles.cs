@@ -94,13 +94,17 @@ public static class StatementProfiles
         // The renewal notice quotes the deposit as it stood for the term that is ENDING, so its
         // effective date is the day the term opened — not the renewal date, and not month-end.
         // On renewal day the deposit is already worth the larger, renewed figure.
+        ..NtbFdRenewal("21676", "300270021676"),
+        ..NtbFdRenewal("25766", "300270025766"),
         ..NtbFdRenewal("50812", "300270050812"),
+        ..NtbFdRenewal("55640", "300270055640"),
         ..NtbFdRenewal("70827", "300270070827"),
 
         // FriMi restates one account the consolidated statement already covers. Both write the
         // same (account, date) row, so the later one simply overwrites — no duplicate is created.
+        // Older mail masks the FriMi id as 222205XXXX, so the tail must not be pinned.
         new StatementProfile("NTB FriMi 205000150623", "estatement@info.nationstrust.com",
-            Rx(@"^Statement for .* on FriMi Id 2222050890\b"),
+            Rx(@"^Statement for .* on FriMi Id 222205\w+"),
             "205000150623"),
 
         // BOC names the FD inside the PDF and nowhere else, so this is filed against BOC FD1 as an
@@ -129,13 +133,20 @@ public static class StatementProfiles
     ];
 
     // CAL client code is the same across funds; FinanceTracker holds them as "ILS0310 (FIOF)" etc.
+    // Their subject spacing is not stable — "CAL CAL Fixed Income…" and a double space before the
+    // dash both occur — so every gap is \s+ and the duplicated prefix is optional. An exact-space
+    // pattern silently skipped 24 real statements.
     private static StatementProfile[] CalFund(string code, string fundName) =>
     [
         new StatementProfile($"CAL {code}", "cali@cal.lk",
-            Rx($@"^{Regex.Escape(fundName)} - Investment Statement\b"),
+            Rx($@"^(?:CAL\s+)?{Loose(fundName)}\s*-\s*Investment Statement\b"),
             $"ILS0310 ({code})",
             AttachmentNameRegex: Rx(@"^CustomerStatment")),
     ];
+
+    /// <summary>Escapes a literal phrase but lets any run of whitespace match any other.</summary>
+    private static string Loose(string phrase) =>
+        string.Join(@"\s+", phrase.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(Regex.Escape));
 
     /// <summary>Finds the profile whose sender + subject match this email, or null.</summary>
     public static StatementProfile? Match(string from, string subject) =>
