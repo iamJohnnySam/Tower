@@ -50,6 +50,22 @@ public class StatementProfilesTests
     public void Match_ignores_other_boc_mail(string subject) =>
         Assert.Null(StatementProfiles.Match("bocmail1@boc.lk", subject));
 
+    // Both senders Sampath has used, and the gateway's subject prefixes, must all match.
+    [Theory]
+    [InlineData("accounts_statements@sampath.lk", "Your Account Details 1218 XXXX XX85")]
+    [InlineData("Sampath Bank <mgr@oper.sampath.lk>", "[MESSAGE ENCRYPTED]Your Account Details 1218 XXXX XX85")]
+    [InlineData("mgr@oper.sampath.lk", "[WARNING: UNSCANNABLE EXTRACTION FAILED]Your Account Details 1218 XXXX XX85")]
+    public void Match_finds_the_sampath_profile(string from, string subject)
+    {
+        var p = StatementProfiles.Match(from, subject);
+        Assert.NotNull(p);
+        Assert.Equal("121852965685", p!.AccountNumber);
+    }
+
+    [Fact]
+    public void Match_ignores_another_sampath_account() =>
+        Assert.Null(StatementProfiles.Match("accounts_statements@sampath.lk", "Your Account Details 1218 XXXX XX21"));
+
     [Fact]
     public void Match_ignores_a_bills_sender() =>
         Assert.Null(StatementProfiles.Match("support@pickme.lk", "PickMe | Email Receipt for Trip ID 1458530325"));
