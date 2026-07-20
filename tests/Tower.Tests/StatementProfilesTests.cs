@@ -84,6 +84,65 @@ public class StatementProfilesTests
     public void Match_ignores_other_sc_mail(string from, string subject) =>
         Assert.Null(StatementProfiles.Match(from, subject));
 
+    [Theory]
+    [InlineData("CAL Fixed Income Opportunities Fund - Investment Statement - Mr. J.N.G Samarasinghe", "ILS0310 (FIOF)")]
+    [InlineData("Capital Alliance Investment Grade Fund - Investment Statement - Mr. J.N.G Samarasinghe", "ILS0310 (IGF)")]
+    [InlineData("Capital Alliance Quantitative Equity Fund - Investment Statement - Mr. J.N.G Samarasinghe", "ILS0310 (QEF)")]
+    public void Match_finds_each_cal_fund(string subject, string account)
+    {
+        var p = StatementProfiles.Match("cali@cal.lk", subject);
+        Assert.NotNull(p);
+        Assert.Equal(account, p!.AccountNumber);
+    }
+
+    // The statement and the fund fact sheet are both PDFs; only one is the statement.
+    [Fact]
+    public void Cal_selects_the_statement_attachment_not_the_fact_sheet()
+    {
+        var rx = StatementProfiles.Match("cali@cal.lk",
+            "CAL Fixed Income Opportunities Fund - Investment Statement - Mr. J.N.G Samarasinghe")!
+            .AttachmentNameRegex;
+        Assert.NotNull(rx);
+        Assert.True(rx!.IsMatch("CustomerStatmentNEW_CDGTF_01-06-2026_30-06-2026_ILS0310.pdf"));
+        Assert.False(rx.IsMatch("FundFactSheetJune26.pdf"));
+    }
+
+    [Fact]
+    public void Match_ignores_cal_marketing_mail() =>
+        Assert.Null(StatementProfiles.Match("cali@cal.lk",
+            "Reminder: Update Your Collection Account Details for CAL Unit Trust Transfers"));
+
+    [Theory]
+    [InlineData("estatement@combank.net", "Commercial Bank e-Statement - 31 October 2025")]
+    [InlineData("e-statement@combank.net", "Commercial Bank - Interactive e-Statement - 30 June 2026")]
+    public void Match_finds_commercial_bank_statements(string from, string subject)
+    {
+        var p = StatementProfiles.Match(from, subject);
+        Assert.NotNull(p);
+        Assert.Equal("8660032754", p!.AccountNumber);
+    }
+
+    // One template for every FD — the number has to come off the attachment filename.
+    [Theory]
+    [InlineData("e-FD Renewal Acknowledgement", "eFD_RenewalNotice_3022819858.pdf", "3022819858")]
+    [InlineData("AUTOMATIC FD E-RENEWAL NOTICE EMAIL", "eFD_RenewalNotice_3006859269.pdf", "3006859269")]
+    public void Combank_fd_renewal_reads_the_account_from_the_filename(string subject, string file, string expected)
+    {
+        var p = StatementProfiles.Match("Commercial_bk@combank.net", subject);
+        Assert.NotNull(p);
+        Assert.Equal(expected, p!.ResolveAccountNumber(subject, file, ""));
+    }
+
+    [Fact]
+    public void Combank_fd_renewal_ignores_transfer_notifications() =>
+        Assert.Null(StatementProfiles.Match("Commercial_bk@combank.net", "New Fund transfer notification"));
+
+    // A fixed-account profile must not care that ResolveAccountNumber got no filename.
+    [Fact]
+    public void ResolveAccountNumber_falls_back_to_the_fixed_account() =>
+        Assert.Equal("86177812", StatementProfiles
+            .Match("bocmail1@boc.lk", BocSubject)!.ResolveAccountNumber(BocSubject, null, ""));
+
     [Fact]
     public void Match_ignores_a_bills_sender() =>
         Assert.Null(StatementProfiles.Match("support@pickme.lk", "PickMe | Email Receipt for Trip ID 1458530325"));

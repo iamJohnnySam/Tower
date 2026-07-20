@@ -6,8 +6,22 @@ public record StatementProfile(
     string Name,
     string FromContains,
     Regex SubjectRegex,
-    string AccountNumber,        // resolved to a FinancialAccount by FinanceTracker
-    Regex? BalanceRegex = null); // non-null → balance is in the email body; null → send the PDF
+    string AccountNumber,               // resolved to a FinancialAccount by FinanceTracker;
+                                        // "" when AccountNumberRegex supplies it instead
+    Regex? BalanceRegex = null,         // non-null → balance is in the email body; null → send the document
+    Regex? AttachmentNameRegex = null,  // which attachment, when the mail carries several
+    Regex? AccountNumberRegex = null,   // group 1, matched over subject + filename + body
+    bool SaveEml = false)               // no attachment worth keeping — file the raw .eml instead
+{
+    /// <summary>The account this email is for: fixed, or dug out of the mail when the sender
+    /// uses one template for many accounts (ComBank sends every FD renewal the same way).</summary>
+    public string? ResolveAccountNumber(string subject, string? fileName, string body)
+    {
+        if (AccountNumberRegex is null) return string.IsNullOrEmpty(AccountNumber) ? null : AccountNumber;
+        var m = AccountNumberRegex.Match($"{subject}\n{fileName}\n{body}");
+        return m.Success ? m.Groups[1].Value : null;
+    }
+}
 
 public static class StatementProfiles
 {
@@ -36,6 +50,33 @@ public static class StatementProfiles
             // RM correspondence) — hence the anchored subject and the exact sender.
             Rx(@"^Your Standard Chartered Account statement for 18X+01\b"),
             "18502880001"),
+
+        // CAL mails each fund separately but attaches the statement AND a fund fact sheet, so the
+        // attachment has to be chosen by name — "first PDF wins" is only accidentally right.
+        ..CalFund("FIOF", "CAL Fixed Income Opportunities Fund"),
+        ..CalFund("IGF",  "Capital Alliance Investment Grade Fund"),
+        ..CalFund("QEF",  "Capital Alliance Quantitative Equity Fund"),
+
+        // Two senders and two subject formats over the years, same account throughout.
+        new StatementProfile("Commercial Bank 8660032754", "combank.net",
+            Rx(@"^Commercial Bank (- Interactive )?e-Statement - \d"),
+            "8660032754"),
+
+        // One template for every FD, so the account number comes off the attachment filename
+        // (eFD_RenewalNotice_3022819858.pdf). Both subjects have been used.
+        new StatementProfile("Commercial Bank e-FD renewal", "Commercial_bk@combank.net",
+            Rx(@"^(e-FD Renewal Acknowledgement|AUTOMATIC FD E-RENEWAL NOTICE EMAIL)"),
+            "",
+            AccountNumberRegex: Rx(@"RenewalNotice_(\d{6,})")),
+    ];
+
+    // CAL client code is the same across funds; FinanceTracker holds them as "ILS0310 (FIOF)" etc.
+    private static StatementProfile[] CalFund(string code, string fundName) =>
+    [
+        new StatementProfile($"CAL {code}", "cali@cal.lk",
+            Rx($@"^{Regex.Escape(fundName)} - Investment Statement\b"),
+            $"ILS0310 ({code})",
+            AttachmentNameRegex: Rx(@"^CustomerStatment")),
     ];
 
     /// <summary>Finds the profile whose sender + subject match this email, or null.</summary>

@@ -91,9 +91,21 @@ public class StatementMailWorker(IServiceScopeFactory scopes) : BackgroundServic
                 if (profile == null) continue;                   // not a known statement — leave in place
 
                 var date = StatementProfiles.MonthEnd(msg.Value.Date);
+
+                // The attachment is fetched before the account is resolved because senders that
+                // reuse one template for many accounts (ComBank FD renewals) put the number in
+                // the filename and nowhere else machine-readable.
+                var att = profile.BalanceRegex != null ? null
+                    : await reader.GetPdfAttachmentAsync(id, profile.AttachmentNameRegex, ct);
+
+                var accountNumber = profile.ResolveAccountNumber(
+                    msg.Value.Subject, att?.FileName, msg.Value.Body);
+                if (accountNumber == null)
+                { lastError = $"Could not resolve an account number for {id}"; continue; }
+
                 var row = new ImportedStatement
                 {
-                    GmailMessageId = id, Profile = profile.Name, AccountNumber = profile.AccountNumber,
+                    GmailMessageId = id, Profile = profile.Name, AccountNumber = accountNumber,
                     StatementDate = date, ImportedAt = DateTime.UtcNow
                 };
 
@@ -104,16 +116,15 @@ public class StatementMailWorker(IServiceScopeFactory scopes) : BackgroundServic
                         System.Globalization.NumberStyles.Any,
                         System.Globalization.CultureInfo.InvariantCulture, out var bal))
                 {
-                    if (await ft.PostBalanceAsync(profile.AccountNumber, date, bal, null, ct) == null)
+                    if (await ft.PostBalanceAsync(accountNumber, date, bal, null, ct) == null)
                     { lastError = $"POST balance failed for {id}"; continue; }   // leave the email, retry next sweep
                     row.Balance = bal;
                 }
                 else
                 {
-                    // PDF path: hand the bytes over untouched — the file may be password-locked.
-                    var att = await reader.GetPdfAttachmentAsync(id, ct);
-                    if (att == null) { lastError = $"No PDF attachment for {id}"; continue; }
-                    var status = await ft.PostStatementAsync(profile.AccountNumber, date, id,
+                    // Document path: hand the bytes over untouched — the file may be locked.
+                    if (att == null) { lastError = $"No document attachment for {id}"; continue; }
+                    var status = await ft.PostStatementAsync(accountNumber, date, id,
                         att.Value.Bytes, att.Value.FileName, ct);
                     if (status == null) { lastError = $"POST statement failed for {id}"; continue; }
                     row.SentPdf = true;

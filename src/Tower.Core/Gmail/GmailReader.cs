@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Tower.Core.Gmail;
 
@@ -112,14 +113,17 @@ public class GmailReader(HttpClient http, GmailTokenService tokens)
     // just this sentinel — treat it as empty so extraction falls through to the real HTML body.
     private const string NoTextPlaceholder = "This email has no text content";
 
-    // Download the first PDF attachment (filename + bytes), or null if there is none.
-    public async Task<(string FileName, byte[] Bytes)?> GetPdfAttachmentAsync(string id, CancellationToken ct = default)
+    // Download a document attachment (filename + bytes), or null if there is none.
+    // nameMatch picks a specific one when the mail carries several — CAL ships the statement
+    // alongside a fund fact sheet, and "first .pdf wins" is only accidentally right there.
+    public async Task<(string FileName, byte[] Bytes)?> GetPdfAttachmentAsync(
+        string id, Regex? nameMatch = null, CancellationToken ct = default)
     {
         using var req = await AuthGet($"{Api}/messages/{id}?format=full", ct);
         using var resp = await http.SendAsync(req, ct);
         if (!resp.IsSuccessStatusCode) return null;
         using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
-        var found = FindPdfPart(doc.RootElement.GetProperty("payload"));
+        var found = FindPdfPart(doc.RootElement.GetProperty("payload"), nameMatch);
         if (found is null) return null;
         var (fileName, attId) = found.Value;
 
@@ -134,15 +138,21 @@ public class GmailReader(HttpClient http, GmailTokenService tokens)
         return (fileName, bytes);
     }
 
-    private static (string FileName, string AttachmentId)? FindPdfPart(JsonElement part)
+    // Senders label these application/octet-stream as often as application/pdf, so the extension
+    // is the only reliable signal.
+    private static readonly string[] DocExtensions = [".pdf", ".html", ".htm"];
+
+    private static (string FileName, string AttachmentId)? FindPdfPart(JsonElement part, Regex? nameMatch)
     {
         var fn = part.TryGetProperty("filename", out var f) ? f.GetString() : null;
-        if (!string.IsNullOrEmpty(fn) && fn!.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) &&
-            part.TryGetProperty("body", out var b) && b.TryGetProperty("attachmentId", out var a))
-            return (fn, a.GetString()!);
+        var wanted = !string.IsNullOrEmpty(fn) && (nameMatch is null
+            ? DocExtensions.Any(e => fn!.EndsWith(e, StringComparison.OrdinalIgnoreCase))
+            : nameMatch.IsMatch(fn!));
+        if (wanted && part.TryGetProperty("body", out var b) && b.TryGetProperty("attachmentId", out var a))
+            return (fn!, a.GetString()!);
         if (part.TryGetProperty("parts", out var parts))
             foreach (var child in parts.EnumerateArray())
-                if (FindPdfPart(child) is { } r) return r;
+                if (FindPdfPart(child, nameMatch) is { } r) return r;
         return null;
     }
 

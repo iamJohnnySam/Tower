@@ -106,7 +106,7 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
                 byte[]? pdf = null; string? pdfName = null; var amountText = msg.Value.Body;
                 if (profile.FromPdf)
                 {
-                    var att = await reader.GetPdfAttachmentAsync(id, ct);
+                    var att = await reader.GetPdfAttachmentAsync(id, null, ct);
                     if (att == null) { lastError = $"No PDF attachment for {id}"; continue; }
                     (pdfName, pdf) = (att.Value.FileName, att.Value.Bytes);
                     amountText = await PdfToTextAsync(pdf, ct);
