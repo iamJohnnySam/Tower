@@ -58,4 +58,49 @@ public class FinanceTrackerClient(HttpClient http, IServiceScopeFactory scopes)
         using var resp = await http.SendAsync(req, ct);
         return resp.IsSuccessStatusCode;
     }
+
+    private record BalanceReq(string AccountNumber, DateTime Date, decimal BalanceAmount, string? Currency);
+
+    /// <summary>Upserts a bank balance for (account, date). Returns the balance id, null on failure.</summary>
+    public async Task<int?> PostBalanceAsync(string accountNumber, DateTime date, decimal balance,
+        string? currency, CancellationToken ct = default)
+    {
+        var (baseUrl, apiKey) = Config();
+        if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(apiKey)) return null;
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl.TrimEnd('/')}/api/external/balances");
+        req.Headers.Add("X-Api-Key", apiKey);
+        req.Content = JsonContent.Create(new BalanceReq(accountNumber, date, balance, currency));
+        using var resp = await http.SendAsync(req, ct);
+        if (!resp.IsSuccessStatusCode) return null;
+
+        var doc = await resp.Content.ReadFromJsonAsync<JsonElement>(ct);
+        return doc.TryGetProperty("balanceId", out var id) ? id.GetInt32() : null;
+    }
+
+    /// <summary>Hands a (possibly password-locked) statement PDF to FinanceTracker. Returns the
+    /// pending status name (e.g. "NeedsPassword"), null on failure.</summary>
+    public async Task<string?> PostStatementAsync(string accountNumber, DateTime statementDate, string sourceRef,
+        byte[] pdf, string fileName, CancellationToken ct = default)
+    {
+        var (baseUrl, apiKey) = Config();
+        if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(apiKey)) return null;
+
+        using var form = new MultipartFormDataContent();
+        var file = new ByteArrayContent(pdf);
+        file.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
+        form.Add(file, "file", fileName);
+        form.Add(new StringContent(accountNumber), "accountNumber");
+        form.Add(new StringContent(statementDate.ToString("yyyy-MM-dd")), "statementDate");
+        form.Add(new StringContent(sourceRef), "sourceRef");
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl.TrimEnd('/')}/api/external/statements");
+        req.Headers.Add("X-Api-Key", apiKey);
+        req.Content = form;
+        using var resp = await http.SendAsync(req, ct);
+        if (!resp.IsSuccessStatusCode) return null;
+
+        var doc = await resp.Content.ReadFromJsonAsync<JsonElement>(ct);
+        return doc.TryGetProperty("status", out var s) ? s.GetString() : null;
+    }
 }

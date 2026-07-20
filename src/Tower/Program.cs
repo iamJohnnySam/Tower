@@ -161,6 +161,10 @@ builder.Services.AddHttpClient<Tower.Core.Bills.FinanceTrackerClient>();
 builder.Services.AddSingleton<Tower.Core.Workers.BillMailWorker>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Tower.Core.Workers.BillMailWorker>());
 
+// ── Statement mail importer (Gmail "Statements" label → FinanceTracker balances) ─
+builder.Services.AddSingleton<Tower.Core.Workers.StatementMailWorker>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<Tower.Core.Workers.StatementMailWorker>());
+
 // ── Blazor ───────────────────────────────────────────────────────────────────
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -208,6 +212,20 @@ using (var scope = app.Services.CreateScope())
         CREATE UNIQUE INDEX IF NOT EXISTS IX_ImportedBills_GmailMessageId ON ImportedBills (GmailMessageId);");
     // EnsureCreated/CREATE-IF-NOT-EXISTS won't add a column to an existing table — add it (harmless if it already exists).
     try { db.Database.ExecuteSqlRaw("ALTER TABLE ImportedBills ADD COLUMN BillDate TEXT"); } catch { /* column exists */ }
+
+    db.Database.ExecuteSqlRaw(@"
+        CREATE TABLE IF NOT EXISTS ImportedStatements (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            GmailMessageId TEXT NOT NULL,
+            Profile TEXT NOT NULL,
+            AccountNumber TEXT NOT NULL,
+            StatementDate TEXT NOT NULL,
+            Balance TEXT,
+            SentPdf INTEGER NOT NULL DEFAULT 0,
+            Error TEXT,
+            ImportedAt TEXT NOT NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS IX_ImportedStatements_GmailMessageId ON ImportedStatements (GmailMessageId);");
 
     db.Database.ExecuteSqlRaw(@"
         CREATE TABLE IF NOT EXISTS Todos (

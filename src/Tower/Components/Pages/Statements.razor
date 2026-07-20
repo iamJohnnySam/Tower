@@ -1,0 +1,193 @@
+@page "/statements"
+@rendermode InteractiveServer
+@using Tower.Core.Data
+@using Tower.Core.Gmail
+@using Tower.Core.Settings
+@using Tower.Core.Statements
+@using Tower.Core.Workers
+@inject StatementMailWorker StatementMail
+@inject GmailTokenService Tokens
+@inject SettingsService SettingsSvc
+@inject TowerDbContext Db
+@implements IDisposable
+
+<PageTitle>Tower — Statement Importer</PageTitle>
+
+<div class="gmail-page">
+
+    <h1 class="page-title">Statement Importer</h1>
+
+    @if (StatementMail.IsRunning)
+    {
+        <div style="background:#0b7285;color:#fff;padding:10px 14px;border-radius:6px;
+                    margin-bottom:14px;display:flex;gap:10px;align-items:center;">
+            <span style="font-size:1.1em;">⏳</span>
+            <span>
+                <strong>Importing…</strong>
+                scanned @StatementMail.RunScanned@(StatementMail.RunTotal > 0 ? $" / {StatementMail.RunTotal}" : ""),
+                @StatementMail.RunImported sent
+                @if (StatementMail.RunStartedAt is { } t)
+                {
+                    <span style="opacity:.8;"> — started @t.ToLocalTime().ToString("HH:mm:ss")</span>
+                }
+            </span>
+        </div>
+    }
+
+    @if (!Tokens.IsConnected)
+    {
+        <section class="atom-section-block">
+            <div class="config-hint" style="padding:8px 0;color:#b00020;">
+                &#9888; Gmail isn't connected — imports are paused. <a href="/gmail">Connect Gmail</a>.
+            </div>
+        </section>
+    }
+
+    @* ── Schedule & run ─────────────────────────────────────────────────────── *@
+    <section class="atom-section-block">
+        <div class="atom-block-title">Schedule &amp; Run</div>
+        <div class="config-form">
+            <div class="config-row">
+                <label class="config-label">Run every</label>
+                <div class="config-control">
+                    <input type="number" min="1" class="config-input" style="width:80px" @bind="_interval" /> hours
+                    <button class="btn-secondary btn-sm" @onclick="SaveInterval">Save</button>
+                    @if (_intervalSaved)
+                    {
+                        <span class="save-confirm">Saved — applies from next cycle.</span>
+                    }
+                </div>
+            </div>
+            <div class="config-row">
+                <label class="config-label">Statements label</label>
+                <div class="config-control">@_labelName</div>
+            </div>
+            <div class="config-row">
+                <label class="config-label">Last run</label>
+                <div class="config-control">@(_lastRun ?? "never")</div>
+            </div>
+            <div class="config-row">
+                <label class="config-label">Sent (last run)</label>
+                <div class="config-control">@_lastCount</div>
+            </div>
+            <div class="config-row">
+                <label class="config-label">Error</label>
+                <div class="config-control">@(_lastError ?? "none")</div>
+            </div>
+            <div class="config-row">
+                <label class="config-label"></label>
+                <div class="config-control">
+                    <button class="btn btn-primary btn-sm" disabled="@(StatementMail.IsRunning || !Tokens.IsConnected)" @onclick="ImportNow">
+                        @(StatementMail.IsRunning ? "Importing…" : "Import statements now")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    @* ── Loaded profiles ────────────────────────────────────────────────────── *@
+    <section class="atom-section-block">
+        <div class="atom-block-title">Loaded Profiles (@StatementProfiles.All.Count)</div>
+        <p class="config-hint">
+            Emails in the Statements label are matched against these rules — first match wins;
+            unmatched emails are left untouched. Tower never opens the PDF (it may be locked):
+            the bytes go straight to FinanceTracker, which unlocks and parses them.
+        </p>
+        <table class="atom-table">
+            <thead>
+                <tr><th>Name</th><th>From contains</th><th>Subject match</th><th>Account</th><th>Source</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var p in StatementProfiles.All)
+                {
+                    <tr>
+                        <td>@p.Name</td>
+                        <td class="mono">@p.FromContains</td>
+                        <td class="mono text-muted">@p.SubjectRegex</td>
+                        <td class="mono">@p.AccountNumber</td>
+                        <td>@(p.BalanceRegex == null ? "PDF" : "Body")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <p class="config-hint">
+            Profiles are defined in code (<code>Tower.Core/Statements/StatementProfiles.cs</code>).
+            Unlocking and balance parsing live in FinanceTracker's <code>/statements</code> page.
+        </p>
+    </section>
+
+    @* ── Recent imports ─────────────────────────────────────────────────────── *@
+    <section class="atom-section-block">
+        <div class="atom-block-title">Recent Imports</div>
+        <table class="atom-table">
+            <thead>
+                <tr><th>Imported</th><th>Profile</th><th>Account</th><th>Statement date</th><th>Sent</th><th>Note</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var r in _recent)
+                {
+                    <tr>
+                        <td>@r.ImportedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                        <td>@r.Profile</td>
+                        <td class="mono">@r.AccountNumber</td>
+                        <td>@r.StatementDate.ToString("yyyy-MM-dd")</td>
+                        <td>@(r.SentPdf ? "PDF" : r.Balance?.ToString("N2") ?? "—")</td>
+                        <td class="text-muted">@(r.Error ?? "")</td>
+                    </tr>
+                }
+                @if (_recent.Count == 0)
+                {
+                    <tr><td colspan="6" class="text-muted">Nothing imported yet.</td></tr>
+                }
+            </tbody>
+        </table>
+    </section>
+
+</div>
+
+@code {
+    private int _interval = 6;
+    private bool _intervalSaved;
+    private string? _lastRun, _lastError, _labelName;
+    private int _lastCount;
+    private List<Tower.Core.Models.ImportedStatement> _recent = new();
+    private System.Threading.Timer? _timer;
+
+    protected override void OnInitialized()
+    {
+        // _interval seeds the editable field once; the timer must not clobber it while the user types.
+        if (int.TryParse(SettingsSvc.Get("statements.interval_hours"), out var si) && si > 0) _interval = si;
+        LoadStatus();
+        // While the page is open, refresh live sweep progress + settled counts every 2s.
+        _timer = new System.Threading.Timer(_ =>
+        {
+            try { _ = InvokeAsync(() => { LoadStatus(); StateHasChanged(); }); }
+            catch { /* circuit gone */ }
+        }, null, 2000, 2000);
+    }
+
+    private void LoadStatus()
+    {
+        _labelName = SettingsSvc.Get("statements.label_name") ?? "Statements";
+        _lastRun = SettingsSvc.Get("statements.mail.last_run");
+        _lastError = SettingsSvc.Get("statements.mail.last_error");
+        int.TryParse(SettingsSvc.Get("statements.mail.last_count"), out _lastCount);
+        _recent = Db.ImportedStatements.OrderByDescending(s => s.Id).Take(20).ToList();
+    }
+
+    private void SaveInterval()
+    {
+        if (_interval < 1) _interval = 1;
+        SettingsSvc.Set("statements.interval_hours", _interval.ToString());
+        _intervalSaved = true;
+    }
+
+    // Fire-and-forget: the worker serializes concurrent runs, and progress shows in the banner above.
+    private void ImportNow()
+    {
+        if (!StatementMail.IsRunning)
+            _ = Task.Run(() => StatementMail.RunOnceAsync());
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

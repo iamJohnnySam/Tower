@@ -13,3 +13,16 @@ public class ImportedBill
     public DateTime ImportedAt { get; set; }
     public string? Error { get; set; }
 }
+
+public class ImportedStatement
+{
+    public int Id { get; set; }
+    public string GmailMessageId { get; set; } = "";
+    public string Profile { get; set; } = "";
+    public string AccountNumber { get; set; } = "";
+    public DateTime StatementDate { get; set; }
+    public decimal? Balance { get; set; }   // set only on the direct-value (email body) path
+    public bool SentPdf { get; set; }
+    public string? Error { get; set; }
+    public DateTime ImportedAt { get; set; }
+}

@@ -63,3 +63,34 @@ the master password. Only `Project`/`Label`/`Notes` are plaintext.
   — if a row exists, the vault is encrypted; do not write plaintext into `Secrets.Value`.
 
 When you set up a new project that has credentials, store them here so John can view them.
+
+## Bill & statement mail importers (/bills, /statements pages)
+
+Two Gmail-label sweepers that feed **FinanceTracker** over its REST API
+(`FinanceTrackerClient`; base URL + API key from the `Settings` table, since a background worker
+can't unlock the encrypted vault).
+
+| | Bills | Statements |
+|---|---|---|
+| Label | `Bills` | `Statements` |
+| Profiles | `Tower.Core/Bills/BillProfiles.cs` | `Tower.Core/Statements/StatementProfiles.cs` |
+| Worker | `BillMailWorker` | `StatementMailWorker` |
+| Dedup table | `ImportedBills` | `ImportedStatements` (unique `GmailMessageId`) |
+| Posts to | `/api/external/transactions` | `/api/external/balances` or `/statements` |
+
+Both are code-defined profiles (sender + subject regex) — adding a source is a few lines in the one
+file, then redeploy. Settings keys are `bills.*` / `statements.*` (`label_name`, `interval_hours`,
+`mail.last_run`/`.last_count`/`.last_error`).
+
+**Statements specifics** (spec: `docs/superpowers/specs/2026-07-20-statement-ingestion-design.md`):
+
+- Tower **never opens a statement PDF** — it may be password-locked. The bytes go straight to
+  FinanceTracker, which owns unlocking, parsing and applying the balance.
+- `StatementProfiles.MonthEnd()` maps the email date to the month the statement covers:
+  **day <= 14 → previous month, else current month**. It converts to local time first — Gmail's
+  `internalDate` is UTC and the +0530 shift can move the day across a month boundary.
+- Subject regexes must be anchored tightly. `bocmail1@boc.lk` sends statements for four different
+  accounts (masked as `XXXXXXXX12`/`62`/`74`/`40`) plus FD renewal notices, so the BOC profile ends
+  `X+12\b`.
+- **Email deletion:** trashed only after FinanceTracker returns 2xx. Every failure path (FT down,
+  404 unknown account, no PDF, exception) leaves the message in the label to retry next sweep.
