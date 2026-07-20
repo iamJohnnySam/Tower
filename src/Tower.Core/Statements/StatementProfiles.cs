@@ -28,6 +28,14 @@ public static class StatementProfiles
             // is sometimes prefixed "[MESSAGE ENCRYPTED]" by the mail gateway — so no ^ anchor.
             Rx(@"Your Account Details 1218 X+ XX85\b"),
             "121852965685"),
+
+        new StatementProfile("Standard Chartered 18502880001", "ElectronicServices.CB@sc.com",
+            // "Your Standard Chartered Account statement for 18XXXXXXX01 as of 30/06/2026".
+            // The same address also sends "Welcome to Standard Chartered eStatement", and the
+            // Statements label carries plenty of other sc.com mail (iBanking transfer notices,
+            // RM correspondence) — hence the anchored subject and the exact sender.
+            Rx(@"^Your Standard Chartered Account statement for 18X+01\b"),
+            "18502880001"),
     ];
 
     /// <summary>Finds the profile whose sender + subject match this email, or null.</summary>

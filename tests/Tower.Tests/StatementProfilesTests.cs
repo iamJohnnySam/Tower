@@ -67,6 +67,24 @@ public class StatementProfilesTests
         Assert.Null(StatementProfiles.Match("accounts_statements@sampath.lk", "Your Account Details 1218 XXXX XX21"));
 
     [Fact]
+    public void Match_finds_the_standard_chartered_profile()
+    {
+        var p = StatementProfiles.Match("ElectronicServices.CB@sc.com",
+            "Your Standard Chartered Account statement for 18XXXXXXX01 as of 30/06/2026");
+        Assert.NotNull(p);
+        Assert.Equal("18502880001", p!.AccountNumber);
+    }
+
+    // The Statements label is full of other sc.com mail that must not be treated as a statement.
+    [Theory]
+    [InlineData("ElectronicServices.CB@sc.com", "Welcome to Standard Chartered eStatement")]
+    [InlineData("iBanking.SRILANKA@sc.com", "Standard Chartered Bank - Online Banking - Local Funds Transfer - Successful")]
+    [InlineData("Srilanka.PriorityBanking@sc.com", "Notice to our valued clients")]
+    [InlineData("ElectronicServices.CB@sc.com", "Your Standard Chartered Account statement for 18XXXXXXX99 as of 30/06/2026")]
+    public void Match_ignores_other_sc_mail(string from, string subject) =>
+        Assert.Null(StatementProfiles.Match(from, subject));
+
+    [Fact]
     public void Match_ignores_a_bills_sender() =>
         Assert.Null(StatementProfiles.Match("support@pickme.lk", "PickMe | Email Receipt for Trip ID 1458530325"));
 }
