@@ -158,6 +158,26 @@ public class StatementProfilesTests
     }
 
     [Fact]
+    public void Match_finds_the_ntb_individual_statement()
+    {
+        var p = StatementProfiles.Match("estatement@info.nationstrust.com",
+            "Nations Trust Bank Account Statement for 10-Jun-2022 on Account No 02721203xxxx");
+        Assert.NotNull(p);
+        Assert.Equal("27212033390", p!.AccountNumber);
+        Assert.Equal("NTB individual statement", p.Name);
+    }
+
+    // The consolidated and individual NTB statements share a sender — each must match only its own.
+    [Fact]
+    public void Ntb_consolidated_and_individual_do_not_collide()
+    {
+        Assert.Equal("NTB consolidated", StatementProfiles.Match("estatement@info.nationstrust.com",
+            "Your Nations Trust Bank Inner Circle June 2026 statement here")!.Name);
+        Assert.Equal("NTB individual statement", StatementProfiles.Match("estatement@info.nationstrust.com",
+            "Nations Trust Bank Account Statement for 10-Jun-2022 on Account No 02721203xxxx")!.Name);
+    }
+
+    [Fact]
     public void Match_ignores_ntb_wht_certificates() =>
         Assert.Null(StatementProfiles.Match("estatement@info.nationstrust.com",
             "WHT Certificate of 01-May-2026 to 31-May-2026"));

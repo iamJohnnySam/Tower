@@ -91,6 +91,13 @@ public static class StatementProfiles
             "27212033390",
             AttachmentNameRegex: Rx(@"\.html?$")),
 
+        // The old single-account PDF format (pre-consolidated, 2022). Same savings account as the
+        // consolidated statement, so it shares that account's profile — FinanceTracker's regex has
+        // a branch for this layout too.
+        new StatementProfile("NTB individual statement", "estatement@info.nationstrust.com",
+            Rx(@"^Nations Trust Bank Account Statement for .* on Account No\b"),
+            "27212033390"),
+
         // The renewal notice quotes the deposit as it stood for the term that is ENDING, so its
         // effective date is the day the term opened — not the renewal date, and not month-end.
         // On renewal day the deposit is already worth the larger, renewed figure.
