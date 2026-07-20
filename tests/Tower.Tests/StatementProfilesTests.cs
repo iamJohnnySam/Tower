@@ -193,10 +193,21 @@ public class StatementProfilesTests
         var p = StatementProfiles.Match("estatement@info.nationstrust.com",
             "Advanced Notice on Fixed Deposit Renewal - Account No 3002xxxx50812");
         Assert.NotNull(p);
-        const string body = "will be renewed on 28-Jun-2026 , details of which are given below. " +
-                            "Date Account opened: 28-Jun-2025 Deposit Amount: 672,163.85 Deposit Currency : LKR";
+        // Verbatim from the mail: HTML only, and "&nbsp;" between the label and the number.
+        const string body =
+            "Date Account opened:&nbsp;28-Jun-2025<br>\r\n\t<br>\r\n\t" +
+            "Deposit Amount:&nbsp;629,717.42<br>\r\n\t<br>\r\n\tDeposit Currency :&nbsp;LKR</span>";
         Assert.Equal(new DateTime(2025, 6, 28), p!.ResolveDate(body, new DateTime(2026, 6, 21)));
-        Assert.Equal("672,163.85", p.BalanceRegex!.Match(body).Groups[1].Value);
+        Assert.Equal("629,717.42", p.BalanceRegex!.Match(body).Groups[1].Value);
+    }
+
+    [Fact]
+    public void Match_finds_the_softlogic_statement()
+    {
+        var p = StatementProfiles.Match("invest@softlogicinvest.lk",
+            "Client eStatement - Softlogic Asset Management Private Limited");
+        Assert.NotNull(p);
+        Assert.Equal("Money Market", p!.AccountNumber);
     }
 
     [Fact]

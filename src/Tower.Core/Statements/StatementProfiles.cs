@@ -107,6 +107,11 @@ public static class StatementProfiles
         new StatementProfile("BOC FD renewal", "bocmail1@boc.lk",
             Rx(@"^Fixed Deposit Renewal Notice\b"),
             "86177962"),
+
+        // FinanceTracker holds this one as "Money Market" rather than a number.
+        new StatementProfile("Softlogic Money Market", "invest@softlogicinvest.lk",
+            Rx(@"^Client eStatement - Softlogic Asset Management"),
+            "Money Market"),
     ];
 
     private static StatementProfile[] NtbFdRenewal(string masked, string accountNumber) =>
@@ -114,8 +119,10 @@ public static class StatementProfiles
         new StatementProfile($"NTB FD renewal {accountNumber}", "estatement@info.nationstrust.com",
             Rx($@"^Advanced Notice on Fixed Deposit Renewal - Account No 3002xxxx{masked}\b"),
             accountNumber,
-            BalanceRegex: Rx(@"Deposit Amount:?\s*([\d,]+\.\d{2})"),
-            BodyDateRegex: Rx(@"Date Account opened:?\s*(\d{2}-\w{3}-\d{4})"),
+            // These arrive as HTML only, with "&nbsp;" between label and value — so the gap is
+            // "any non-digits", not whitespace. Matching on \s* silently found nothing.
+            BalanceRegex: Rx(@"Deposit Amount:?[^\d]{0,40}?([\d,]+\.\d{2})"),
+            BodyDateRegex: Rx(@"Date Account opened:?[^\d]{0,40}?(\d{2}-\w{3}-\d{4})"),
             BodyDateFormat: "dd-MMM-yyyy"),
     ];
 
