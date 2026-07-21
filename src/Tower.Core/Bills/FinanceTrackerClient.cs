@@ -10,7 +10,7 @@ namespace Tower.Core.Bills;
 /// Settings table (plaintext) — a background worker can't unlock the encrypted secrets vault.</summary>
 public class FinanceTrackerClient(HttpClient http, IServiceScopeFactory scopes)
 {
-    private record TxReq(decimal Value, string Category, string? Description, DateTime? Date, string? Currency);
+    private record TxReq(decimal Value, string Category, string? Description, DateTime? Date, string? Currency, string? Member = null);
 
     private (string? BaseUrl, string? ApiKey) Config()
     {
@@ -25,14 +25,14 @@ public class FinanceTrackerClient(HttpClient http, IServiceScopeFactory scopes)
     }
 
     public async Task<int?> PostTransactionAsync(decimal value, string category, string? description,
-        DateTime date, string currency, CancellationToken ct = default)
+        DateTime date, string currency, string? member = null, CancellationToken ct = default)
     {
         var (baseUrl, apiKey) = Config();
         if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(apiKey)) return null;
 
         using var req = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl.TrimEnd('/')}/api/external/transactions");
         req.Headers.Add("X-Api-Key", apiKey);
-        req.Content = JsonContent.Create(new TxReq(value, category, description, date, currency));
+        req.Content = JsonContent.Create(new TxReq(value, category, description, date, currency, member));
         using var resp = await http.SendAsync(req, ct);
         if (!resp.IsSuccessStatusCode) return null;
 

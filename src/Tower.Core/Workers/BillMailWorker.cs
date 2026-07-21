@@ -77,6 +77,18 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
             .ToHashSet();
 
         var ids = await reader.ListMessageIdsAsync(labelId, null, ct);
+
+        // SC account-movement notifications land in the Statements label with the rest of John's
+        // bank mail, not in Bills. Pull just that one sender from there so the transfers are handled
+        // without asking the user to re-file them; statement PDFs in that label match no profile here
+        // and are left for the statement worker.
+        var transfersLabel = settings.Get("bills.transfers_label");
+        if (string.IsNullOrWhiteSpace(transfersLabel)) transfersLabel = "Statements";
+        var transfersLabelId = labels.FirstOrDefault(l => l.Name.Equals(transfersLabel, StringComparison.OrdinalIgnoreCase)).Id;
+        if (!string.IsNullOrEmpty(transfersLabelId) && transfersLabelId != labelId)
+            foreach (var tid in await reader.ListMessageIdsAsync(transfersLabelId, null, ct, fromContains: "iBanking.SRILANKA@sc.com"))
+                if (!ids.Contains(tid)) ids.Add(tid);
+
         // Process 'preferred' senders (the PayHere gateway) first, so they win same-order dedup over merchant emails.
         var preferredIds = new HashSet<string>();
         foreach (var sender in BillProfiles.All.Where(p => p.Preferred).Select(p => p.FromContains).Distinct())
@@ -98,6 +110,15 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
 
                 var msg = await reader.GetMessageAsync(id, ct);
                 if (msg == null) continue;
+
+                // SC account-movement notifications route by beneficiary across household members —
+                // a different shape from bills, handled here before the plain bill path.
+                if (TransferProfiles.Match(msg.Value.From, msg.Value.Subject) is { } transfer)
+                {
+                    if (await HandleTransferAsync(reader, ft, db, transfer, id, msg.Value, ct)) imported++;
+                    RunImported = imported;
+                    continue;
+                }
 
                 var profile = BillParser.Match(msg.Value.From, msg.Value.Subject);
                 if (profile == null) continue;                   // not a known bill — leave in place
@@ -135,7 +156,7 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
 
                 // Post the expense (negative). On failure leave the email untouched to retry next sweep.
                 var txId = await ft.PostTransactionAsync(-amount, profile.Category,
-                    $"{profile.Name} — {msg.Value.Subject}", billDate, currency, ct);
+                    $"{profile.Name} — {msg.Value.Subject}", billDate, currency, ct: ct);
                 if (txId == null) { lastError = $"POST transaction failed for {id}"; continue; }
 
                 // ponytail: dedup barrier is this local row; a crash in the gap between the remote
@@ -169,6 +190,42 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
         settings.Set("bills.mail.last_count", imported.ToString());
         settings.Set("bills.mail.last_error", lastError);
         return imported;
+    }
+
+    // An SC account-notification email → 0-2 routed transactions, then trash. Returns true if
+    // anything was posted. A me→me transfer or a standing-order setup posts nothing but is still
+    // trashed. On a POST failure the email is left in place to retry (nothing is recorded/trashed).
+    private static async Task<bool> HandleTransferAsync(GmailReader reader, FinanceTrackerClient ft,
+        TowerDbContext db, TransferProfile transfer, string id,
+        (string From, string Subject, string Body, DateTime Date) msg, CancellationToken ct)
+    {
+        var date = TransferProfiles.DateOf(msg.Body, msg.Date);
+        var posts = TransferProfiles.Plan(transfer, msg.Body);
+
+        int? firstTxId = null;
+        foreach (var post in posts)
+        {
+            var txId = await ft.PostTransactionAsync(post.Value, post.Category, post.Description,
+                date, "LKR", post.Member, ct);
+            if (txId == null) return false;   // leave the whole email to retry — no partial record
+            firstTxId ??= txId;
+
+            var raw = await reader.GetRawMessageAsync(id, ct);
+            if (raw != null)
+                await ft.PostAttachmentAsync(txId.Value, raw, $"{transfer.Name}-{id}.eml", "message/rfc822", ct);
+        }
+
+        db.ImportedBills.Add(new ImportedBill
+        {
+            GmailMessageId = id, Profile = transfer.Name, Category = posts.Count > 0 ? posts[0].Category : "—",
+            Amount = posts.Count > 0 ? Math.Abs(posts[0].Value) : 0m, Currency = "LKR", BillDate = date,
+            TransactionId = firstTxId, ImportedAt = DateTime.UtcNow,
+            Error = posts.Count == 0 ? "own transfer / standing order — nothing recorded" : null
+        });
+        db.SaveChanges();
+
+        await reader.TrashMessageAsync(id, ct);   // recorded (or intentionally not) → email redundant
+        return posts.Count > 0;
     }
 
     // ponytail: same amount + category + day = same purchase (merchant vs PayHere). Coarse, but the
