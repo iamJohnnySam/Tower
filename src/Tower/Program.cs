@@ -115,6 +115,7 @@ builder.Services.AddHostedService<BlogKeyRotationWorker>();
 builder.Services.AddHttpClient<TelegramApi>();
 builder.Services.AddScoped<SubscriberService>();
 builder.Services.AddSingleton<TelegramHub>();
+builder.Services.AddSingleton<Tower.Core.Telegram.FinanceTrackerBotLog>();
 builder.Services.AddHostedService<TelegramPollWorker>();
 
 // ── Secrets (password manager) ───────────────────────────────────────────────

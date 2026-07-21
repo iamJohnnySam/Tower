@@ -7,6 +7,7 @@
 @inject SubscriberService Subscribers
 @inject SettingsService SettingsSvc
 @inject TelegramHub Hub
+@inject Tower.Core.Telegram.FinanceTrackerBotLog FtLog
 @implements IAsyncDisposable
 
 <PageTitle>Tower — Communication</PageTitle>
@@ -17,6 +18,16 @@
 
     @{ var comms = Live.Comms; }
 
+    @* ── Bot tabs: switch between the Tower bot and the FinanceTracker bot ─────── *@
+    <div class="comms-tabs">
+        <button class="@(_tab == "tower" ? "btn btn-primary btn-sm" : "btn-secondary btn-sm")"
+                @onclick='() => SwitchTab("tower")'>Tower Bot</button>
+        <button class="@(_tab == "ft" ? "btn btn-primary btn-sm" : "btn-secondary btn-sm")"
+                @onclick='() => SwitchTab("ft")'>FinanceTracker Bot</button>
+    </div>
+
+    @if (_tab == "tower")
+    {
     <div class="atom-cards-grid">
 
         @* ── 1. Bot Status Card ───────────────────────────────────────────────── *@
@@ -278,11 +289,86 @@
         </div>
 
     </div>
+    }
+
+    @if (_tab == "ft")
+    {
+    <div class="atom-cards-grid">
+        <div class="atom-card comms-card-wide">
+            <div class="atom-card-title">FinanceTracker Bot — Interaction Log</div>
+            <div class="text-muted" style="font-size:0.78rem; margin-bottom:0.5rem">
+                Read live from FinanceTracker's own audit log. Rows without a user are unauthorized
+                chats that were turned away.
+            </div>
+
+            @if (_ftError != null)
+            {
+                <div class="val-red" style="font-size:0.82rem">@_ftError</div>
+            }
+            else if (_ftEntries.Count == 0)
+            {
+                <div class="text-muted" style="font-size:0.82rem">No interactions logged yet.</div>
+            }
+            else
+            {
+                <table class="atom-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Access</th>
+                            <th>Sender</th>
+                            <th>Chat ID</th>
+                            <th>Kind</th>
+                            <th>Message</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var e in _ftEntries)
+                        {
+                            var text = (e.Summary ?? "");
+                            var shown = text.Length > 80 ? text[..80] + "…" : text;
+                            <tr>
+                                <td class="comms-mono">@e.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm:ss")</td>
+                                <td class="@(e.Authorized ? "val-green" : "val-red") comms-dir-cell">
+                                    @(e.Authorized ? "✓ linked" : "⛔ blocked")
+                                </td>
+                                <td>@(e.Sender ?? "—")</td>
+                                <td class="comms-mono">@e.ChatId</td>
+                                <td>@e.Kind</td>
+                                <td class="comms-text-cell" title="@text">@shown</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+    }
 </div>
 
 @code {
     private System.Threading.Timer? _timer;
     private bool _disposed;
+
+    // ── Bot tab state ─────────────────────────────────────────────────────────
+
+    private string _tab = "tower";
+    private List<Tower.Core.Telegram.FtBotLogEntry> _ftEntries = [];
+    private string? _ftError;
+
+    private void SwitchTab(string tab)
+    {
+        _tab = tab;
+        if (tab == "ft") LoadFtLog();
+        StateHasChanged();
+    }
+
+    private void LoadFtLog()
+    {
+        var (entries, error) = FtLog.Read(200);
+        _ftEntries = entries;
+        _ftError = error;
+    }
 
     // ── Toggle state ──────────────────────────────────────────────────────────
 
@@ -314,6 +400,7 @@
         {
             if (_disposed) return;
             RefreshSubscribers();
+            if (_tab == "ft") LoadFtLog();
             await InvokeAsync(StateHasChanged);
         }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
     }

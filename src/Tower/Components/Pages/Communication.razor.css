@@ -156,3 +156,10 @@
     max-width: 400px;
     word-break: break-word;
 }
+
+/* Bot log tabs */
+.comms-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
