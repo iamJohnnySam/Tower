@@ -71,8 +71,10 @@ public static class TransferProfiles
     private static readonly Regex Reference = Rx(@"Transfer Reference\s+(.+?)\s+Purpose Code");
     private static readonly Regex TransferDate = Rx(@"Transfer Date\(DD/MM/YYYY\)\s*(\d{2}/\d{2}/\d{4})");
 
-    // References carry whatever John typed at the bank — often tabs/newlines. Collapse to one line.
-    private static string Clean(string s) => Regex.Replace(s, @"\s+", " ").Trim();
+    // References carry whatever John typed at the bank — often tabs/newlines, and the tag-stripped
+    // HTML still holds &nbsp;/&amp;. Decode those, then collapse to one line.
+    private static string Clean(string s) =>
+        Regex.Replace(s.Replace("&nbsp;", " ").Replace("&amp;", "&"), @"\s+", " ").Trim();
 
     private static decimal? Money(Match m) =>
         m.Success && decimal.TryParse(m.Groups[1].Value.Replace(",", ""),
