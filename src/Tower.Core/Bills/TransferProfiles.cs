@@ -71,6 +71,9 @@ public static class TransferProfiles
     private static readonly Regex Reference = Rx(@"Transfer Reference\s+(.+?)\s+Purpose Code");
     private static readonly Regex TransferDate = Rx(@"Transfer Date\(DD/MM/YYYY\)\s*(\d{2}/\d{2}/\d{4})");
 
+    // References carry whatever John typed at the bank — often tabs/newlines. Collapse to one line.
+    private static string Clean(string s) => Regex.Replace(s, @"\s+", " ").Trim();
+
     private static decimal? Money(Match m) =>
         m.Success && decimal.TryParse(m.Groups[1].Value.Replace(",", ""),
             NumberStyles.Number, CultureInfo.InvariantCulture, out var v) ? v : null;
@@ -84,7 +87,7 @@ public static class TransferProfiles
         if (profile.Kind == TransferKind.Utility)
         {
             var amount = Money(UtilityAmount.Match(body));
-            var who = UtilityBeneficiary.Match(body) is { Success: true } u ? u.Groups[1].Value.Trim() : "Utility";
+            var who = Clean(UtilityBeneficiary.Match(body) is { Success: true } u ? u.Groups[1].Value : "Utility");
             if (amount is > 0)
                 posts.Add(new TransferPost(null, -amount.Value, "Utilities", $"SC Utility — {who}"));
             return posts;
@@ -92,7 +95,7 @@ public static class TransferProfiles
 
         // Transfer + StandingOrder both carry a beneficiary; a standing order is a setup, so it
         // never books a transaction — it only needs classifying so me→me still deletes the mail.
-        var beneficiary = Beneficiary.Match(body) is { Success: true } b ? b.Groups[1].Value.Trim() : "";
+        var beneficiary = Clean(Beneficiary.Match(body) is { Success: true } b ? b.Groups[1].Value : "");
         var member = ClassifyBeneficiary(beneficiary);
 
         if (profile.Kind == TransferKind.StandingOrder || member == "John")
@@ -101,7 +104,7 @@ public static class TransferProfiles
         var debit = Money(DebitAmount.Match(body));
         if (debit is > 0)
         {
-            var reference = Reference.Match(body) is { Success: true } r ? r.Groups[1].Value.Trim() : "";
+            var reference = Clean(Reference.Match(body) is { Success: true } r ? r.Groups[1].Value : "");
             var desc = $"SC — {beneficiary}{(reference.Length > 0 ? $" ({reference})" : "")}";
             posts.Add(member is null
                 ? new TransferPost(null, -debit.Value, "Bank Transfer", desc)            // external → John's expense
