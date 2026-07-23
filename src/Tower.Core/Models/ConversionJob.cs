@@ -10,6 +10,9 @@ public enum ConversionStatus
     Rejected,         // user rejected, test file deleted
     Failed,           // ffmpeg failed
     Ignored,          // user tapped "Ignore", no further alerts
+    AwaitingReplace,  // ffmpeg done, waiting until nobody's watching to swap in
+    Replaced,         // swapped in (original kept as .bak), awaiting keep/revert
+    Reverted,         // rolled back to the original from .bak
 }
 
 public class ConversionJob
@@ -19,6 +22,7 @@ public class ConversionJob
     public string MediaName { get; set; } = "";
     public string OriginalPath { get; set; } = "";
     public string? TestPath { get; set; }
+    public string? BackupPath { get; set; }
     public ConversionStatus Status { get; set; }
     public string? TranscodeReasons { get; set; }
     public DateTime CreatedAt { get; set; }

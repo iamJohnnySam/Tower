@@ -23,7 +23,12 @@ public class JellyfinWorker(
 {
     private readonly Dictionary<string, string> _prevPlaying = new();
     private readonly HashSet<string> _alertedMedia = new();
-    private readonly HashSet<string> _alertedRepeat = new();
+    private readonly Dictionary<string, int> _struggleTicks = new();
+
+    // ponytail: struggle thresholds hardcoded like ConversionScheduler's 30%/15-tick knobs.
+    // Move to appsettings if this box needs different tuning.
+    private const double StruggleCpuPct = 85.0; // box CPU above which a live transcode is "struggling"
+    private const int StrugglePolls = 6;         // consecutive 5s polls (~30s) of struggle before auto-queue
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
@@ -81,6 +86,11 @@ public class JellyfinWorker(
                         _prevPlaying.Clear();
                         foreach (var kv in newPrev)
                             _prevPlaying[kv.Key] = kv.Value;
+
+                        // Auto-queue files whose live transcode is straining the box,
+                        // and swap in completed conversions once nobody is watching.
+                        await EvaluateStruggleAsync(sessions, state.Stats.CpuPct, ct);
+                        await conversion.TryReplaceReadyJobsAsync(sessions, ct);
                     }
                 }
                 else
@@ -130,34 +140,7 @@ public class JellyfinWorker(
 
         var mediaId = string.IsNullOrEmpty(se.MediaId) ? se.Media : se.MediaId;
 
-        // Skip if already in conversion queue (any status)
-        if (await conversion.JobExistsForMediaAsync(mediaId)) return;
-
-        // Count previous transcode plays
-        int prevTranscodes;
-        using (var scope = scopes.CreateScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
-            prevTranscodes = string.IsNullOrEmpty(se.MediaId)
-                ? db.PlayHistory.Count(p => p.MediaName == se.Media && p.PlayMethod == "Transcode")
-                : db.PlayHistory.Count(p => p.MediaId == mediaId && p.PlayMethod == "Transcode");
-        }
-
-        // Send interactive alert on 3rd+ transcode
-        if (prevTranscodes >= 2 && _alertedRepeat.Add(mediaId))
-        {
-            var reasons = string.Join(", ", se.TranscodeReasons.DefaultIfEmpty("Unknown"));
-            await conversion.SendAlertAsync(
-                mediaId:          mediaId,
-                mediaName:        string.IsNullOrEmpty(se.SeriesName) ? se.Media : se.SeriesName,
-                mediaLabel:       BuildTitle(se),
-                transcodeReasons: reasons,
-                transcodeCount:   prevTranscodes + 1,
-                ct:               ct);
-            return;
-        }
-
-        // First-play alert for HEVC 10-bit (plain text — not a conversion candidate yet)
+        // First-play heads-up for HEVC 10-bit (info only — struggle detection drives conversion)
         bool isHevc10bit = se.VideoCodec.Equals("hevc", StringComparison.OrdinalIgnoreCase)
                            && se.VideoBitDepth == 10;
         if (isHevc10bit && _alertedMedia.Add(mediaId))
@@ -165,6 +148,44 @@ public class JellyfinWorker(
             var msg = $"⚠️ HEVC 10-bit transcode\n{BuildTitle(se)}\n\nThis file requires live CPU transcoding.";
             await telegram.SendAsync(TgAudience.Admin, 0, msg, null, ct);
         }
+    }
+
+    /// <summary>
+    /// Auto-queues a file for conversion when its live transcode has kept the box
+    /// CPU pegged (>= StruggleCpuPct) for StrugglePolls consecutive polls — i.e. the
+    /// box is struggling to play it continuously. Fires once per media.
+    /// </summary>
+    private async Task EvaluateStruggleAsync(List<SessionInfo> sessions, double boxCpu, CancellationToken ct)
+    {
+        var transcoding = new HashSet<string>();
+        foreach (var se in sessions)
+        {
+            if (!se.Playing || !se.Method.Equals("Transcode", StringComparison.OrdinalIgnoreCase)) continue;
+            var mediaId = string.IsNullOrEmpty(se.MediaId) ? se.Media : se.MediaId;
+            transcoding.Add(mediaId);
+
+            // Only accumulate struggle ticks while the box is actually strained
+            if (boxCpu < StruggleCpuPct) { _struggleTicks[mediaId] = 0; continue; }
+
+            int ticks = _struggleTicks.GetValueOrDefault(mediaId) + 1;
+            _struggleTicks[mediaId] = ticks;
+            if (ticks < StrugglePolls) continue;
+
+            _struggleTicks[mediaId] = 0; // reset so we don't re-fire every poll
+            if (await conversion.JobExistsForMediaAsync(mediaId)) continue;
+
+            var reasons = string.Join(", ", se.TranscodeReasons.DefaultIfEmpty("Unknown"));
+            await conversion.QueueAutomaticAsync(
+                mediaId:          mediaId,
+                mediaName:        string.IsNullOrEmpty(se.SeriesName) ? se.Media : se.SeriesName,
+                mediaLabel:       BuildTitle(se),
+                transcodeReasons: reasons,
+                ct:               ct);
+        }
+
+        // Drop ticks for media that is no longer transcoding
+        foreach (var key in _struggleTicks.Keys.Where(k => !transcoding.Contains(k)).ToList())
+            _struggleTicks.Remove(key);
     }
 
     private static string BuildTitle(SessionInfo se) =>

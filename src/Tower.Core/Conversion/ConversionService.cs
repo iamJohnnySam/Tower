@@ -30,19 +30,17 @@ public class ConversionService(
         return await db.ConversionJobs.AnyAsync(j => j.MediaId == mediaId);
     }
 
-    // ── Alert sender (called by JellyfinWorker) ───────────────────────────────
+    // ── Auto-queue (called by JellyfinWorker when the box is struggling) ────────
 
     /// <summary>
-    /// Resolves the file path from Jellyfin, creates a Pending job, and sends
-    /// an inline keyboard alert to the admin. No-ops if a job already exists.
-    /// Falls back to plain text alert if the file path cannot be resolved.
+    /// Resolves the file path from Jellyfin, creates a job already Queued for
+    /// conversion (no approval prompt), and notifies the admin. No-ops if a job
+    /// already exists. Falls back to a plain notice if the path can't be resolved.
     /// </summary>
-    public async Task SendAlertAsync(
+    public async Task QueueAutomaticAsync(
         string mediaId, string mediaName, string mediaLabel,
-        string transcodeReasons, int transcodeCount,
-        CancellationToken ct)
+        string transcodeReasons, CancellationToken ct)
     {
-        // Resolve admin chat
         long adminChatId;
         string apiKey;
         using (var scope = scopes.CreateScope())
@@ -55,7 +53,6 @@ public class ConversionService(
             apiKey = settings.Get("jellyfin.api_key") ?? "";
         }
 
-        // Resolve file path
         string? filePath = null;
         if (!string.IsNullOrEmpty(apiKey) && !string.IsNullOrEmpty(mediaId))
         {
@@ -65,200 +62,200 @@ public class ConversionService(
 
         if (filePath is null)
         {
-            // Fallback: plain text (no conversion option)
-            var fallback = $"🔁 Repeatedly transcoded ({transcodeCount}×)\n{mediaLabel}\nReason: {transcodeReasons}\n\n(File path unresolvable — cannot offer conversion)";
+            var fallback = $"🔁 Struggling to play — {mediaLabel}\nReason: {transcodeReasons}\n\n(File path unresolvable — cannot auto-convert)";
             await telegram.SendAsync(TgAudience.Chat, adminChatId, fallback, null, ct);
             return;
         }
 
-        // Create Pending job
-        int jobId;
         using (var scope = scopes.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
-            var job = new ConversionJob
+            db.ConversionJobs.Add(new ConversionJob
             {
                 MediaId          = mediaId,
                 MediaName        = mediaName,
                 OriginalPath     = filePath,
-                Status           = ConversionStatus.Pending,
+                Status           = ConversionStatus.Queued,
                 TranscodeReasons = transcodeReasons,
                 CreatedAt        = DateTime.Now,
-            };
-            db.ConversionJobs.Add(job);
+            });
             await db.SaveChangesAsync(ct);
-            jobId = job.Id;
         }
 
-        // Send inline keyboard
-        var text = $"🔁 Repeatedly transcoded ({transcodeCount}×)\n{mediaLabel}\nReason: {transcodeReasons}\n\nWhat would you like to do?";
-        var buttons = new List<IReadOnlyList<(string, string)>>
-        {
-            new List<(string, string)>
-            {
-                ("✅ Mark for conversion", $"conv:convert:{jobId}"),
-                ("🚫 Ignore", $"conv:ignore:{jobId}"),
-            }
-        };
-
-        var result = await telegram.SendKeyboardAsync(adminChatId, text, buttons, null, ct);
-
-        // Store message_id so we can edit the message after user responds
-        if (result.Ok && result.MessageId > 0)
-        {
-            using var scope = scopes.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
-            var job = await db.ConversionJobs.FindAsync(jobId);
-            if (job is not null)
-            {
-                job.AlertMessageId = result.MessageId;
-                await db.SaveChangesAsync(ct);
-            }
-        }
+        await telegram.SendAsync(TgAudience.Chat, adminChatId,
+            $"🔁 Struggling to play — queued for conversion\n{mediaLabel}\nReason: {transcodeReasons}\n\nI'll swap the file in automatically once no one is watching it.",
+            null, ct);
     }
 
-    // ── Callback handlers (called by dispatcher) ──────────────────────────────
+    // ── Keep / Revert callbacks (after an automatic swap) ──────────────────────
 
-    public async Task HandleConvertCallbackAsync(string data, long chatId, string callbackId, CancellationToken ct)
+    public async Task HandleKeepCallbackAsync(string data, long chatId, string callbackId, CancellationToken ct)
     {
-        if (!int.TryParse(data["conv:convert:".Length..], out int jobId)) return;
+        // data = "conv:keep:{jobId}:{msgId}"
+        var parts = data["conv:keep:".Length..].Split(':');
+        if (parts.Length < 2 || !int.TryParse(parts[0], out int jobId) || !int.TryParse(parts[1], out int msgId)) return;
 
-        int? alertMsgId = null;
-        string mediaName = "";
+        string? backup = null, name = null;
         using (var scope = scopes.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
             var job = await db.ConversionJobs.FindAsync(jobId);
             if (job is null) return;
-            job.Status = ConversionStatus.Queued;
-            alertMsgId = job.AlertMessageId;
-            mediaName = job.MediaName;
+            backup = job.BackupPath;
+            name = job.MediaName;
+            job.Status = ConversionStatus.Approved;
             await db.SaveChangesAsync(ct);
         }
 
-        if (alertMsgId.HasValue)
-            await telegram.EditAsync(chatId, alertMsgId.Value, $"✅ Queued for conversion — {mediaName}", null, null, ct);
+        try { if (backup is not null && File.Exists(backup)) File.Delete(backup); } catch { /* best effort */ }
+
+        await telegram.EditAsync(chatId, msgId, $"✅ Kept — backup deleted\n{name}", null, null, ct);
         await telegram.AnswerCallbackAsync(callbackId, null, ct);
     }
 
-    public async Task HandleIgnoreCallbackAsync(string data, long chatId, string callbackId, CancellationToken ct)
+    public async Task HandleRevertCallbackAsync(string data, long chatId, string callbackId, CancellationToken ct)
     {
-        if (!int.TryParse(data["conv:ignore:".Length..], out int jobId)) return;
+        // data = "conv:revert:{jobId}:{msgId}"
+        var parts = data["conv:revert:".Length..].Split(':');
+        if (parts.Length < 2 || !int.TryParse(parts[0], out int jobId) || !int.TryParse(parts[1], out int msgId)) return;
 
-        int? alertMsgId = null;
-        string mediaName = "";
+        string? backup = null, original = null, name = null;
         using (var scope = scopes.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
             var job = await db.ConversionJobs.FindAsync(jobId);
             if (job is null) return;
-            job.Status = ConversionStatus.Ignored;
-            alertMsgId = job.AlertMessageId;
-            mediaName = job.MediaName;
-            await db.SaveChangesAsync(ct);
-        }
-
-        if (alertMsgId.HasValue)
-            await telegram.EditAsync(chatId, alertMsgId.Value, $"🚫 Ignored — {mediaName}", null, null, ct);
-        await telegram.AnswerCallbackAsync(callbackId, null, ct);
-    }
-
-    public async Task HandleApproveCallbackAsync(string data, long chatId, string callbackId, CancellationToken ct)
-    {
-        // data = "conv:approve:{jobId}:{approvalMsgId}"
-        var parts = data["conv:approve:".Length..].Split(':');
-        if (parts.Length < 2 || !int.TryParse(parts[0], out int jobId) || !int.TryParse(parts[1], out int approvalMsgId)) return;
-        await ApproveAsync(jobId, chatId, approvalMsgId, callbackId, ct);
-    }
-
-    public async Task HandleRejectCallbackAsync(string data, long chatId, string callbackId, CancellationToken ct)
-    {
-        // data = "conv:reject:{jobId}:{approvalMsgId}"
-        var parts = data["conv:reject:".Length..].Split(':');
-        if (parts.Length < 2 || !int.TryParse(parts[0], out int jobId) || !int.TryParse(parts[1], out int approvalMsgId)) return;
-        await RejectAsync(jobId, chatId, approvalMsgId, callbackId, ct);
-    }
-
-    // ── Register all four prefixes into TelegramHub ───────────────────────────
-
-    public void RegisterCallbacks(TelegramHub hub)
-    {
-        hub.RegisterCallbackHandler("conv:convert:", HandleConvertCallbackAsync);
-        hub.RegisterCallbackHandler("conv:ignore:",  HandleIgnoreCallbackAsync);
-        hub.RegisterCallbackHandler("conv:approve:", HandleApproveCallbackAsync);
-        hub.RegisterCallbackHandler("conv:reject:",  HandleRejectCallbackAsync);
-    }
-
-    // ── Approval / rejection ──────────────────────────────────────────────────
-
-    private async Task ApproveAsync(int jobId, long chatId, int approvalMsgId, string callbackId, CancellationToken ct)
-    {
-        string? testPath = null, originalPath = null, mediaName = null;
-        using (var scope = scopes.CreateScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
-            var job = await db.ConversionJobs.FindAsync(jobId);
-            if (job is null) return;
-            testPath     = job.TestPath;
-            originalPath = job.OriginalPath;
-            mediaName    = job.MediaName;
+            backup = job.BackupPath;
+            original = job.OriginalPath;
+            name = job.MediaName;
         }
 
         try
         {
-            if (testPath is not null && originalPath is not null && File.Exists(testPath))
-                File.Move(testPath, originalPath, overwrite: true);
+            if (backup is null || !File.Exists(backup))
+            {
+                await telegram.EditAsync(chatId, msgId, $"⚠️ Cannot revert — backup missing\n{name}", null, null, ct);
+                await telegram.AnswerCallbackAsync(callbackId, null, ct);
+                return;
+            }
+            File.Move(backup, original!, overwrite: true); // restores original, discards converted file
         }
         catch (Exception ex)
         {
-            // Mark Failed in DB
+            await telegram.EditAsync(chatId, msgId, $"❌ Revert failed — {name}\n{ex.Message}", null, null, ct);
+            await telegram.AnswerCallbackAsync(callbackId, null, ct);
+            return;
+        }
+
+        using (var scope = scopes.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
+            var job = await db.ConversionJobs.FindAsync(jobId);
+            if (job is not null) { job.Status = ConversionStatus.Reverted; job.CompletedAt = DateTime.Now; await db.SaveChangesAsync(ct); }
+        }
+
+        await telegram.EditAsync(chatId, msgId, $"↩️ Reverted to original\n{name}", null, null, ct);
+        await telegram.AnswerCallbackAsync(callbackId, null, ct);
+    }
+
+    public void RegisterCallbacks(TelegramHub hub)
+    {
+        hub.RegisterCallbackHandler("conv:keep:",   HandleKeepCallbackAsync);
+        hub.RegisterCallbackHandler("conv:revert:", HandleRevertCallbackAsync);
+    }
+
+    // ── Auto-replace: swap in the converted file once nobody is watching ───────
+
+    /// <summary>
+    /// For every completed conversion (AwaitingReplace), swap in the converted
+    /// file once nobody is actively playing that media. The original is kept as
+    /// a .bak; the admin gets a Keep/Revert message.
+    /// </summary>
+    public async Task TryReplaceReadyJobsAsync(IReadOnlyList<SessionInfo> sessions, CancellationToken ct)
+    {
+        var nowPlaying = sessions
+            .Where(s => s.Playing)
+            .Select(s => string.IsNullOrEmpty(s.MediaId) ? s.Media : s.MediaId)
+            .ToHashSet();
+
+        List<(int id, string original, string test, string name)> ready = new();
+        using (var scope = scopes.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
+            var jobs = await db.ConversionJobs
+                .Where(j => j.Status == ConversionStatus.AwaitingReplace)
+                .ToListAsync(ct);
+            foreach (var j in jobs)
+            {
+                if (nowPlaying.Contains(j.MediaId)) continue; // still being watched
+                if (j.TestPath is null) continue;
+                ready.Add((j.Id, j.OriginalPath, j.TestPath, j.MediaName));
+            }
+        }
+
+        foreach (var (id, original, test, name) in ready)
+            await ReplaceOriginalAsync(id, original, test, name, ct);
+    }
+
+    private async Task ReplaceOriginalAsync(int jobId, string original, string test, string mediaName, CancellationToken ct)
+    {
+        long adminChatId;
+        using (var scope = scopes.CreateScope())
+        {
+            var subs = scope.ServiceProvider.GetRequiredService<Tower.Core.Telegram.SubscriberService>();
+            adminChatId = subs.GetAdmin() ?? 0;
+        }
+
+        string backup = Path.ChangeExtension(original, ".original.bak");
+        try
+        {
+            if (!File.Exists(test)) throw new FileNotFoundException("Converted file missing", test);
+            if (File.Exists(original)) File.Move(original, backup, overwrite: true);
+            File.Move(test, original, overwrite: true);
+        }
+        catch (Exception ex)
+        {
             using (var scope = scopes.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
                 var job = await db.ConversionJobs.FindAsync(jobId);
                 if (job is not null) { job.Status = ConversionStatus.Failed; job.ErrorMessage = ex.Message; await db.SaveChangesAsync(ct); }
             }
-            await telegram.EditAsync(chatId, approvalMsgId, $"❌ Approve failed — {mediaName}\n{ex.Message}", null, null, ct);
-            await telegram.AnswerCallbackAsync(callbackId, null, ct);
+            if (adminChatId != 0)
+                await telegram.SendAsync(TgAudience.Chat, adminChatId, $"❌ Auto-replace failed — {mediaName}\n{ex.Message}", null, ct);
             return;
         }
 
-        // File move succeeded — now update DB
-        using (var scope2 = scopes.CreateScope())
-        {
-            var db = scope2.ServiceProvider.GetRequiredService<TowerDbContext>();
-            var job = await db.ConversionJobs.FindAsync(jobId);
-            if (job is not null) { job.Status = ConversionStatus.Approved; job.CompletedAt = DateTime.Now; await db.SaveChangesAsync(ct); }
-        }
-
-        await telegram.EditAsync(chatId, approvalMsgId, $"✅ Approved — original replaced\n{mediaName}", null, null, ct);
-        await telegram.AnswerCallbackAsync(callbackId, null, ct);
-    }
-
-    private async Task RejectAsync(int jobId, long chatId, int approvalMsgId, string callbackId, CancellationToken ct)
-    {
-        string? testPath = null, mediaName = null;
         using (var scope = scopes.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
             var job = await db.ConversionJobs.FindAsync(jobId);
-            if (job is null) return;
-            testPath     = job.TestPath;
-            mediaName    = job.MediaName;
-            job.Status      = ConversionStatus.Rejected;
-            job.CompletedAt = DateTime.Now;
-            await db.SaveChangesAsync(ct);
+            if (job is not null)
+            {
+                job.Status      = ConversionStatus.Replaced;
+                job.BackupPath  = backup;
+                job.CompletedAt = DateTime.Now;
+                await db.SaveChangesAsync(ct);
+            }
         }
 
-        try
+        if (adminChatId == 0) return;
+
+        // Send, then edit to embed the message id into the callbacks so Keep/Revert
+        // can edit this exact message afterwards.
+        var text = $"✅ Replaced original — {mediaName}\nThe converted file is now live (original kept as .bak). Keep it or revert?";
+        List<IReadOnlyList<(string, string)>> Buttons(int mid) => new()
         {
-            if (testPath is not null && File.Exists(testPath))
-                File.Delete(testPath);
-        }
-        catch { /* best effort */ }
+            new List<(string, string)>
+            {
+                ("✅ Keep (delete backup)", $"conv:keep:{jobId}:{mid}"),
+                ("↩️ Revert to original",   $"conv:revert:{jobId}:{mid}"),
+            }
+        };
 
-        await telegram.EditAsync(chatId, approvalMsgId, $"❌ Rejected — test file deleted\n{mediaName}", null, null, ct);
-        await telegram.AnswerCallbackAsync(callbackId, null, ct);
+        var sent = await telegram.SendKeyboardAsync(adminChatId, text, Buttons(0), null, ct);
+        if (sent.Ok && sent.MessageId > 0)
+            await telegram.EditAsync(adminChatId, sent.MessageId, text, Buttons(sent.MessageId), null, ct);
     }
 
     // ── ffmpeg execution ──────────────────────────────────────────────────────
@@ -342,7 +339,7 @@ public class ConversionService(
 
                 if (exitCode == 0)
                 {
-                    await MarkAwaitingApprovalAsync(capturedId, capturedName, ct);
+                    await MarkAwaitingReplaceAsync(capturedId, capturedName, ct);
                 }
                 else
                 {
@@ -361,7 +358,7 @@ public class ConversionService(
         }
     }
 
-    private async Task MarkAwaitingApprovalAsync(int jobId, string mediaName, CancellationToken ct)
+    private async Task MarkAwaitingReplaceAsync(int jobId, string mediaName, CancellationToken ct)
     {
         long adminChatId = 0;
         using (var scope = scopes.CreateScope())
@@ -369,8 +366,7 @@ public class ConversionService(
             var db = scope.ServiceProvider.GetRequiredService<TowerDbContext>();
             var loaded = await db.ConversionJobs.FindAsync(jobId);
             if (loaded is null) return;
-            loaded.Status      = ConversionStatus.AwaitingApproval;
-            loaded.CompletedAt = DateTime.Now;
+            loaded.Status = ConversionStatus.AwaitingReplace;
             await db.SaveChangesAsync(ct);
 
             var subs = scope.ServiceProvider.GetRequiredService<Tower.Core.Telegram.SubscriberService>();
@@ -378,29 +374,9 @@ public class ConversionService(
         }
         if (adminChatId == 0) return;
 
-        var text = $"✅ Conversion complete\n{mediaName}\nTest file ready.\n\nAdd ConversionTest/ as a Jellyfin library to verify playback, then:";
-        var sent = await telegram.SendKeyboardAsync(adminChatId, text,
-            new List<IReadOnlyList<(string, string)>>
-            {
-                new List<(string, string)>
-                {
-                    ("✅ Approve — replace original", $"conv:approve:{jobId}:0"),
-                    ("❌ Reject — delete test file",  $"conv:reject:{jobId}:0"),
-                }
-            }, null, ct);
-
-        if (sent.Ok && sent.MessageId > 0)
-        {
-            await telegram.EditAsync(adminChatId, sent.MessageId, text,
-                new List<IReadOnlyList<(string, string)>>
-                {
-                    new List<(string, string)>
-                    {
-                        ("✅ Approve — replace original", $"conv:approve:{jobId}:{sent.MessageId}"),
-                        ("❌ Reject — delete test file",  $"conv:reject:{jobId}:{sent.MessageId}"),
-                    }
-                }, null, ct);
-        }
+        await telegram.SendAsync(TgAudience.Chat, adminChatId,
+            $"✅ Conversion complete — {mediaName}\nWaiting until no one is watching it, then I'll replace the original automatically (keeping a .bak).",
+            null, ct);
     }
 
     private async Task MarkFailedAsync(int jobId, string mediaName, string error, CancellationToken ct)

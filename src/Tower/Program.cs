@@ -196,6 +196,7 @@ using (var scope = app.Services.CreateScope())
         );
         CREATE UNIQUE INDEX IF NOT EXISTS IX_ConversionJobs_MediaId ON ConversionJobs (MediaId);
     ");
+    try { db.Database.ExecuteSqlRaw("ALTER TABLE ConversionJobs ADD COLUMN BackupPath TEXT"); } catch { /* column exists */ }
 
     db.Database.ExecuteSqlRaw(@"
         CREATE TABLE IF NOT EXISTS ImportedBills (

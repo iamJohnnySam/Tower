@@ -268,7 +268,7 @@
         }
         else if (_convQueue.Count == 0)
         {
-            <div class="jf-notice jf-notice-idle">No conversion jobs yet. Jobs appear here when you mark a file for conversion via Telegram.</div>
+            <div class="jf-notice jf-notice-idle">No conversion jobs yet. Files are queued automatically when a live transcode struggles the box.</div>
         }
         else
         {
@@ -393,9 +393,12 @@
     {
         ConversionStatus.Queued           => "val-amber",
         ConversionStatus.Converting       => "val-amber",
+        ConversionStatus.AwaitingReplace  => "val-amber",
         ConversionStatus.AwaitingApproval => "jf-method-badge val-green",
+        ConversionStatus.Replaced         => "jf-method-badge val-green",
         ConversionStatus.Approved         => "val-green",
         ConversionStatus.Failed           => "val-red",
+        ConversionStatus.Reverted         => "val-grey",
         ConversionStatus.Pending          => "val-amber",
         _                                 => "val-grey",
     };
