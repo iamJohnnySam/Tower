@@ -133,8 +133,16 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
                     amountText = await PdfToTextAsync(pdf, ct);
                 }
 
+                // Recognised sender but no parseable amount — leave the email in place and say so.
+                // This is how a sender quietly changing its template shows up (Dialog renamed its
+                // "Total Charges for Bill Period" field and stopped importing for months); staying
+                // silent here makes a broken profile look like a clean sweep.
                 var extracted = BillParser.ExtractAmount(profile, amountText);
-                if (extracted == null) continue;                 // recognised sender but no parseable amount — leave in place
+                if (extracted == null)
+                {
+                    lastError = $"{profile.Name}: no amount found in \"{msg.Value.Subject}\"";
+                    continue;
+                }
                 var (amount, currency) = extracted.Value;
                 var billDate = msg.Value.Date;
                 // Most profiles have a fixed category; Dialog reads it off the connection number in the bill.
