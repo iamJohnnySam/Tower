@@ -172,6 +172,13 @@ builder.Services.AddRazorComponents()
 
 var app = builder.Build();
 
+// ── Bill profiles ────────────────────────────────────────────────────────────
+// Seeds bill-profiles.xml next to the app on first run and loads it. Edit that file and hit
+// "Reload profiles" on /bills to pick up a new sender without a rebuild; bill-profiles.default.xml
+// beside it is rewritten from the binary each start as an always-current reference.
+if (!Tower.Core.Bills.BillProfiles.Initialise(AppContext.BaseDirectory))
+    Console.Error.WriteLine($"[BillProfiles] {Tower.Core.Bills.BillProfiles.LoadError}");
+
 // ── DB init + one-time key migration ─────────────────────────────────────────
 using (var scope = app.Services.CreateScope())
 {

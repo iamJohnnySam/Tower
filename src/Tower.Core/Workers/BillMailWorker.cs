@@ -146,7 +146,7 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
                 var (amount, currency) = extracted.Value;
                 var billDate = msg.Value.Date;
                 // Most profiles have a fixed category; Dialog reads it off the connection number in the bill.
-                var category = profile.CategoryFrom?.Invoke(amountText) ?? profile.Category;
+                var category = profile.CategoryFor(amountText);
 
                 // Cross-source dedup: same amount + category + day already imported (e.g. the PayHere
                 // receipt already landed for this order) → record + trash this one, don't double-count.

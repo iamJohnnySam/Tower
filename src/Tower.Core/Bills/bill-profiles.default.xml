@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Bill importer profiles — read at startup and by the "Reload profiles" button on /bills.
+  Editing this file changes importing behaviour with no rebuild and no redeploy.
+
+  This is the LIVE file. `bill-profiles.default.xml` next to it is the version-controlled
+  copy that every deploy refreshes; this one is seeded from it once and then left alone,
+  so edits made here survive deploys. Delete this file and restart to reset to the default.
+
+  A malformed file is REJECTED as a whole and the previously loaded profiles stay in use —
+  the error appears on /bills. Profiles are matched in document order, first hit wins.
+
+  <Profile>  attributes
+    name       required  unique label; shown on /bills and stored on each imported row
+    from       required  substring matched against the From header (case-insensitive)
+    category   required  FinanceTracker category; free-form text
+    currency   required  ISO code the amount is stored in (LKR, USD, SGD, GBP, MYR)
+    fromPdf    optional  amount comes from the attached PDF via pdftotext, and the PDF is
+                         archived instead of the .eml. Falls back to the email body when the
+                         mail has no attachment.
+    preferred  optional  swept first, so it wins same-amount dedup against the merchant's own
+                         email (the PayHere gateway receipts)
+    allowZero  optional  import a 0.00 total instead of skipping it (free Play Store / Epic items)
+    refund     optional  money coming back: posted as a POSITIVE transaction, and exempt from
+                         dedup so it can't be mistaken for the purchase it reverses
+    noDedup    optional  sender bills several independent subscriptions, so identical amount on
+                         the same day is normal rather than a double-send
+
+  <Profile>  children
+    <Subject>          required, one   regex matched against the subject line
+    <Amount>           required, 1..n  regexes tried in order, first match wins. Capture group 1
+                                       is the amount. An optional named group (?<cur>...) overrides
+                                       the currency per-email for multi-currency senders.
+    <CategoryRules>    optional, one   picks the category per-bill instead of using @category:
+                                       each <Token> is tried until one matches, then its capture
+                                       group 1 is compared against the <When startsWith=""> rules.
+                                       No token or no rule matching falls back to @category.
+
+  All regexes are IgnoreCase + Singleline. The text they run against has HTML tags stripped,
+  &nbsp;/&amp; decoded and all whitespace collapsed to single spaces — so write patterns against
+  one long line, and use \s* between a label and its number.
+-->
+<BillProfiles>
+  <!-- Four generations of receipt template, newest first: current (includes tip),
+       ~2021, ~2018, ~2015-16 ("TOTAL FARE Rs."). -->
+  <Profile name="PickMe Trip" from="pickme.lk" category="Transportation" currency="LKR">
+    <Subject>^PickMe \| Email Receipt for Trip</Subject>
+    <Amount>Paid Amount\s*LKR\s*([\d,]+\.\d{2})</Amount>
+    <Amount>Total Trip Fare\s*LKR\s*([\d,]+\.\d{2})</Amount>
+    <Amount>Fare Amount\s*(?:Rs\.?|LKR)\s*([\d,]+\.\d{2})</Amount>
+    <Amount>Total Fare\s*(?:Rs\.?|LKR)\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <!-- "Paid by <method> LKR <amount>" — the payment method sits between the two. -->
+  <Profile name="PickMe Delivery" from="pickme.lk" category="Food" currency="LKR">
+    <Subject>^PickMe \| Delivery Email Receipt</Subject>
+    <Amount>Paid by.*?LKR\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <!-- Total Net Amount is net of discounts = what was actually charged.
+       Subject covers the new "Keells E-Bill | ..." and the older "Keells Bill - ...". -->
+  <Profile name="Keells E-Bill" from="keells.com" category="Grocery" currency="LKR">
+    <Subject>^Keells (E-)?Bill</Subject>
+    <Amount>Total Net Amount\s*(?:Rs\.?|LKR)?\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <!-- Amounts here may lack decimals ("Rs 1532"), so the .00 is optional.
+       One regex per template: "...is confirmed!", "...has been placed!", then the plain
+       "Total Rs 1723" / "Total: Rs. 1352" used by orders@orders.daraz.lk. -->
+  <Profile name="Daraz Order" from="daraz.lk" category="Online Shopping" currency="LKR">
+    <Subject>your Order.*(confirmed|placed)</Subject>
+    <Amount>Total \(inclusive of tax.*?(?:Rs\.?|LKR)\s*([\d,]+(?:\.\d{2})?)</Amount>
+    <Amount>Total Payment \(VAT Incl.*?(?:Rs\.?|LKR)\s*([\d,]+(?:\.\d{2})?)</Amount>
+    <Amount>\bTotal\s*:?\s*(?:Rs\.?|LKR)\s*([\d,]+(?:\.\d{2})?)</Amount>
+  </Profile>
+  <!-- Grand total, which follows the Sub Total line. -->
+  <Profile name="Pizza Hut" from="gamma.lk" category="Food" currency="LKR">
+    <Subject>^Online Order Confirmation</Subject>
+    <Amount>Total Amount\s*(?:Rs\.?|LKR)?\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <!-- Orders arrive in USD ("US $9.15") or LKR — the (?<cur>) group detects which. -->
+  <Profile name="AliExpress Order" from="aliexpress.com" category="Online Shopping" currency="LKR">
+    <Subject>Order .* order confirm(ed|ation)</Subject>
+    <Amount>Order total\s*(?&lt;cur&gt;US\s*\$|USD|LKR|Rs\.?)?\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <!-- One profile for every Dialog variant: Mobile, Fixed_Solutions and the bare
+       "E-Bill for the month ...". The subject prefix doesn't reliably say what the connection
+       is, so the number printed on the bill decides the category instead (7... mobile,
+       1... broadband). That number changes from bill to bill, hence CategoryRules.
+
+       The PDF field has been worded three ways across templates — "...for Bill Period"
+       (pre-2026), "...for Bill" and "...for the Bill Period" (2026 Quadient layout). All carry
+       the same figure: the charge for THIS period, not "Total Due", which folds in the previous
+       balance and payments and would double-count month to month.
+       The second Amount handles older "click VIEW BILL" mails that ship no PDF at all and put
+       "<number> Rs. <amount>" in the body. -->
+  <Profile name="Dialog" from="dialog.lk" category="Dialog" currency="LKR" fromPdf="true">
+    <Subject>E-Bill for the month</Subject>
+    <Amount>Total Charges for (?:the )?Bill(?: Period)?\s*(?:Rs\.?|LKR)?\s*([\d,]+\.\d{2})</Amount>
+    <Amount>\b\d{9}\s+Rs\.?\s*([\d,]+\.\d{2})</Amount>
+    <CategoryRules>
+      <Token>MOBILE NUMBER\s*:?\s*(\d+)</Token>
+      <Token>\b(\d{9})\s+Rs\.?\s*[\d,]+\.\d{2}</Token>
+      <When startsWith="7" category="Phone" />
+      <When startsWith="1" category="Home Broadband" />
+    </CategoryRules>
+  </Profile>
+  <!-- Two separate Claude subscriptions on two accounts, both $20 and usually billed
+       the same day — dedup would swallow the second one every month. No gateway twin exists
+       for this sender, so dedup buys nothing here; the Gmail message id still prevents
+       importing the same receipt twice. -->
+  <Profile name="Anthropic" from="anthropic.com" category="AI" currency="USD" noDedup="true">
+    <Subject>^Your receipt from Anthropic</Subject>
+    <Amount>Amount paid\s*(?:US\$|USD|\$)\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <Profile name="GitHub" from="github.com" category="AI" currency="USD">
+    <Subject>^\[GitHub\] Payment Receipt</Subject>
+    <Amount>\bTotal:\s*(?:US\$|USD|\$)?\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <Profile name="NETS NPC" from="nets.com.sg" category="Transport" currency="SGD">
+    <Subject>^NPC</Subject>
+    <Amount>A total of\s*(?:S\$|SGD|\$)\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <Profile name="PickMe Membership" from="pickme.lk" category="Membership" currency="LKR">
+    <Subject>^Membership (Renewal Receipt|Payment Invoice)</Subject>
+    <Amount>Paid Amount\s*LKR\s*([\d,]+\.\d{2})</Amount>
+    <Amount>Total\s*LKR\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <Profile name="Keells Order" from="keells.com" category="Groceries" currency="LKR">
+    <Subject>^Keells Order Confirmation</Subject>
+    <Amount>Total Amount\s*\(Rs\.?\)\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <!-- Total is shown in LKR via the Sinhala rupee mark (රු.), so the pattern skips any
+       non-digit currency token. Free items total 0.00 and are still recorded. -->
+  <Profile name="Google Play" from="googleplay-noreply@google.com" category="Apps &amp; Subscriptions" currency="LKR" allowZero="true">
+    <Subject>^Your Google Play Order Receipt</Subject>
+    <Amount>Total\s*:\s*[^\d]*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <!-- The merchant's own confirmation; the PayHere receipt for the same order wins dedup. -->
+  <Profile name="Dominos" from="dominos" category="Food" currency="LKR">
+    <Subject>^Order Successful</Subject>
+    <Amount>Grand Total\s*:?\s*Rs\.?\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <!-- PayHere is a gateway — the merchant is named in the subject, so each merchant gets
+       its own profile. These are swept first (preferred) so they win dedup over the merchant's
+       own confirmation email; the category must match that merchant profile or dedup misses. -->
+  <Profile name="PayHere Dominos" from="receipts@mail.payhere.lk" category="Food" currency="LKR" preferred="true">
+    <Subject>^Dominos Pizza Sri Lanka Payment Receipt</Subject>
+    <Amount>\bTotal\s+LKR\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <Profile name="PayHere Riyasewana" from="receipts@mail.payhere.lk" category="Ads" currency="LKR" preferred="true">
+    <Subject>^Riyasewana Lanka Private Limited Payment Receipt</Subject>
+    <Amount>\bTotal\s+LKR\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <Profile name="PayablePayments" from="payablepayments.lk" category="Home" currency="LKR">
+    <Subject>^Invoice for your Order</Subject>
+    <Amount>TOTAL AMOUNT\s*:?\s*(?:Rs\.?|LKR)?\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <!-- Plain-text total first, then an HTML fallback that skips "Sub Total $0.00". -->
+  <Profile name="Namecheap" from="namecheap.com" category="Website" currency="USD">
+    <Subject>^Namecheap Order Summary</Subject>
+    <Amount>Final Cost\s*:?\s*(?:US\$|USD|\$)?\s*([\d,]+\.\d{2})</Amount>
+    <Amount>\bTOTAL\s*:?\s*(?:US\$|USD|\$)?\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <Profile name="Kandos" from="kandos.lk" category="Groceries" currency="LKR">
+    <Subject>Order Confirmation</Subject>
+    <Amount>Paid Amount\s*Rs\.?\s*([\d,]+\.\d{2})</Amount>
+    <Amount>Total Amount\s*Rs\.?\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <!-- "Total Fee : 114.00 LKR" — currency trails the number here. -->
+  <Profile name="eChannelling" from="echannelling.com" category="e-Channeling" currency="LKR">
+    <Subject>eChanneling</Subject>
+    <Amount>Total Fee\s*:?\s*([\d,]+\.\d{2})\s*LKR</Amount>
+  </Profile>
+  <!-- Amount is in the attached PDF, not the email body. -->
+  <Profile name="Doc990" from="no-reply@doc.lk" category="e-Channeling" currency="LKR" fromPdf="true">
+    <Subject>BOOKING RECEIPT</Subject>
+    <Amount>TOTAL CHARGES\s*:?\s*([\d,]+\.\d{2})\s*LKR</Amount>
+  </Profile>
+  <Profile name="Amazon" from="amazon.com" category="Online Shopping" currency="USD">
+    <Subject>^Your Amazon\.com order</Subject>
+    <Amount>Order Total\s*:?\s*(?&lt;cur&gt;USD|US\s*\$|\$)?\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <Profile name="PayHere Viana" from="receipts@mail.payhere.lk" category="Health and Wellness" currency="LKR" preferred="true">
+    <Subject>^Viana Cosmetics Payment Receipt</Subject>
+    <Amount>\bTotal\s+LKR\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <!-- This order arrives twice — from the merchant and from PayHere. Dedup keeps one. -->
+  <Profile name="Chinese Dragon" from="chinesedragoncafe.com" category="Food" currency="LKR">
+    <Subject>Order .* confirmed</Subject>
+    <Amount>\bTotal\s+Rs\.?\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <Profile name="PayHere Chinese Dragon" from="receipts@mail.payhere.lk" category="Food" currency="LKR" preferred="true">
+    <Subject>^CHINESE DRAGON CAFE</Subject>
+    <Amount>\bTotal\s+LKR\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <Profile name="Lassana" from="lassanaflora.com" category="Gifts" currency="LKR">
+    <Subject>^Lassana\.com - Order Confirmation</Subject>
+    <Amount>Grand Total\s*LKR\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <Profile name="Anim8" from="anim8.lk" category="Home" currency="LKR">
+    <Subject>^Receipt for Online Payment</Subject>
+    <Amount>Rs\.?\s*([\d,]+\.\d{2})\s*for order reference</Amount>
+  </Profile>
+  <Profile name="Feelo" from="73659515154@t.shopifyemail.com" category="Food" currency="LKR">
+    <Subject>Order .* confirmed</Subject>
+    <Amount>\bTotal\s*([\d,]+\.\d{2})\s*LKR</Amount>
+  </Profile>
+  <!-- adidas orders are fulfilled by Global-e, which is also the sender of the refunds below. -->
+  <Profile name="Adidas (Global-e)" from="global-e.com" category="Clothing" currency="LKR">
+    <Subject>Order confirmed - adidas</Subject>
+    <Amount>\bTotal\s*(?:SL\s*)?Rs\.?\s*([\d,]+(?:\.\d{2})?)</Amount>
+  </Profile>
+  <Profile name="GlowBnB" from="glowbnb.com" category="Health and Wellness" currency="LKR">
+    <Subject>order has been received</Subject>
+    <Amount>\bTotal\s*:?\s*Rs\.?\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <!-- "Total: රු 7,540.00" — Sinhala rupee mark, so skip non-digits before the number. -->
+  <Profile name="Phoenix" from="phoenix.lk" category="Home" currency="LKR">
+    <Subject>order has been received</Subject>
+    <Amount>\bTotal\s*:\s*[^\d]*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <!-- Multi-country: RM (Malaysia), SGD/S$ (Singapore)... detected per-ride. -->
+  <Profile name="Grab" from="grab.com" category="Transport" currency="SGD">
+    <Subject>Grab.*[Rr]eceipt</Subject>
+    <Amount>Total Paid\s*(?&lt;cur&gt;RM|S ?\$|SGD|US ?\$|USD|Rs\.?|LKR|\$)?\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <Profile name="BBC Shop" from="bbc.com" category="Online Shopping" currency="GBP">
+    <Subject>^Thank you for your BBC Shop order</Subject>
+    <Amount>Order Total\s*:?\s*£?\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <!-- Subject is "Order Placed (Auto Email)" for every order. Total is after discounts
+       and shipping: "Total [Rs .] : 11,860.00". -->
+  <Profile name="Singer" from="websales@singersl.com" category="Home" currency="LKR">
+    <Subject>^Order Placed</Subject>
+    <Amount>Total \[Rs\s*\.?\s*\]\s*:?\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <!-- Grand total, after the "Sale Discount" lines. Free weekly giveaways total $0.00
+       and are still recorded. -->
+  <Profile name="Epic Games" from="acct.epicgames.com" category="Games" currency="USD" allowZero="true">
+    <Subject>^Your Epic Games Receipt</Subject>
+    <Amount>TOTAL\s*:\s*\$?\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+  <!-- Refund of an earlier adidas order: same sender as the order confirmation, different
+       subject. Posted positive so it nets off the original expense. -->
+  <Profile name="Adidas Refund (Global-e)" from="global-e.com" category="Clothing" currency="LKR" refund="true">
+    <Subject>^Refund Notification</Subject>
+    <Amount>\bTotal\s*(?:SL\s*)?Rs\.?\s*([\d,]+(?:\.\d{2})?)</Amount>
+  </Profile>
+  <!-- Category must match the "Feelo" merchant profile above or cross-source dedup misses. -->
+  <Profile name="PayHere Feelo" from="receipts@mail.payhere.lk" category="Food" currency="LKR" preferred="true">
+    <Subject>^Feelo Payment Receipt</Subject>
+    <Amount>\bTotal\s+LKR\s*([\d,]+\.\d{2})</Amount>
+  </Profile>
+</BillProfiles>

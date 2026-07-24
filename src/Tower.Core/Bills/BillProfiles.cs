@@ -15,259 +15,90 @@ public record BillProfile(
     bool AllowZero = false,  // import even a 0.00 total (e.g. free Google Play items) instead of skipping
     bool Refund = false,     // money coming back: posted as a positive transaction, not an expense
     bool NoDedup = false,    // sender bills several independent subscriptions: identical amount + day is normal, not a duplicate
-    Func<string, string>? CategoryFrom = null);   // read the category out of the bill text; falls back to Category
+    CategoryRules? CategoryRules = null)   // pick the category out of the bill text; falls back to Category
+{
+    /// <summary>The category for one specific bill. Fixed for most senders; Dialog reads it off the
+    /// connection number printed on the bill, which changes from bill to bill.</summary>
+    public string CategoryFor(string text)
+    {
+        if (CategoryRules is not { } rules) return Category;
+        foreach (var token in rules.Tokens)
+        {
+            var m = token.Match(text);
+            if (!m.Success) continue;
+            var value = m.Groups[1].Value;
+            foreach (var (prefix, category) in rules.When)
+                if (value.StartsWith(prefix, StringComparison.Ordinal)) return category;
+            break;   // token found but no rule matched — fall through to the default
+        }
+        return Category;
+    }
+}
+
+/// <summary>Reads a token out of the bill (capture group 1 of the first Tokens pattern that hits) and
+/// maps it to a category by prefix. Dialog: 7… is a mobile line, 1… is a broadband line.</summary>
+public record CategoryRules(Regex[] Tokens, (string Prefix, string Category)[] When);
 
 public static class BillProfiles
 {
-    private static Regex Rx(string p) =>
-        new(p, RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
+    public const string DefaultFileName = "bill-profiles.default.xml";   // reference copy, rewritten from the binary each start
+    public const string LiveFileName = "bill-profiles.xml";              // the editable copy; survives deploys
 
-    public static readonly IReadOnlyList<BillProfile> All =
-    [
-        new BillProfile("PickMe Trip", "pickme.lk",
-            Rx(@"^PickMe \| Email Receipt for Trip"),
-            "Transportation",
-            [Rx(@"Paid Amount\s*LKR\s*([\d,]+\.\d{2})"),           // current template: includes tip
-             Rx(@"Total Trip Fare\s*LKR\s*([\d,]+\.\d{2})"),       // ~2021 template
-             Rx(@"Fare Amount\s*(?:Rs\.?|LKR)\s*([\d,]+\.\d{2})"), // ~2018 template
-             Rx(@"Total Fare\s*(?:Rs\.?|LKR)\s*([\d,]+\.\d{2})")], // ~2015-16 template ("TOTAL FARE Rs.")
-            "LKR"),
-        new BillProfile("PickMe Delivery", "pickme.lk",
-            Rx(@"^PickMe \| Delivery Email Receipt"),
-            "Food",
-            [Rx(@"Paid by.*?LKR\s*([\d,]+\.\d{2})")],   // "Paid by <method> LKR <amount>" — method sits between
-            "LKR"),
-        new BillProfile("Keells E-Bill", "keells.com",
-            Rx(@"^Keells (E-)?Bill"),   // new "Keells E-Bill | …" and older "Keells Bill - …"
-            "Grocery",
-            [Rx(@"Total Net Amount\s*(?:Rs\.?|LKR)?\s*([\d,]+\.\d{2})")],   // net of discounts = amount charged
-            "LKR"),
-        new BillProfile("Daraz Order", "daraz.lk",
-            Rx(@"your Order.*(confirmed|placed)"),   // "…is confirmed!", "…has been placed!", "…is placed!"
-            "Online Shopping",
-            // amounts here may lack decimals (e.g. "Rs 1532"), so the .00 is optional
-            [Rx(@"Total \(inclusive of tax.*?(?:Rs\.?|LKR)\s*([\d,]+(?:\.\d{2})?)"),   // "…is confirmed!" template
-             Rx(@"Total Payment \(VAT Incl.*?(?:Rs\.?|LKR)\s*([\d,]+(?:\.\d{2})?)"),   // "…has been placed!" template
-             Rx(@"\bTotal\s*:?\s*(?:Rs\.?|LKR)\s*([\d,]+(?:\.\d{2})?)")],                // "Total Rs 1723" (is placed) + "Total: Rs. 1352" (orders@orders.daraz.lk)
-            "LKR"),
-        new BillProfile("Pizza Hut", "gamma.lk",
-            Rx(@"^Online Order Confirmation"),
-            "Food",
-            [Rx(@"Total Amount\s*(?:Rs\.?|LKR)?\s*([\d,]+\.\d{2})")],   // grand total (after Sub Total)
-            "LKR"),
-        new BillProfile("AliExpress Order", "aliexpress.com",
-            Rx(@"Order .* order confirm(ed|ation)"),   // newer "…confirmed" + older 2023 "…confirmation"
-            "Online Shopping",
-            // orders come in USD ("US $9.15") or LKR — detect per-email via the (?<cur>) group
-            [Rx(@"Order total\s*(?<cur>US\s*\$|USD|LKR|Rs\.?)?\s*([\d,]+\.\d{2})")],
-            "LKR"),
-        // Dialog e-bills: normally the real charge is in the attached PDF, not the email body. One
-        // profile covers Mobile, Fixed_Solutions and the bare "E-Bill for the month …" variants —
-        // the subject prefix is unreliable, so the *connection number* in the bill picks the
-        // category instead (see DialogCategory). Older mails have no PDF at all and carry
-        // "<number> Rs. <amount>" in the body, which the second regex handles.
-        new BillProfile("Dialog", "dialog.lk",
-            Rx(@"E-Bill for the month"),
-            "Dialog",   // fallback only; CategoryFrom decides per bill
-            // The PDF field has been worded three ways across templates — "…for Bill Period" (pre-2026),
-            // "…for Bill" and "…for the Bill Period" (2026 Quadient layout). All carry the same figure:
-            // the charge for this period, NOT "Total Due", which folds in the previous balance and
-            // payments and would double-count month to month.
-            [Rx(@"Total Charges for (?:the )?Bill(?: Period)?\s*(?:Rs\.?|LKR)?\s*([\d,]+\.\d{2})"),
-             Rx(@"\b\d{9}\s+Rs\.?\s*([\d,]+\.\d{2})")],                                 // "click VIEW BILL" body
-            "LKR",
-            FromPdf: true,
-            CategoryFrom: DialogCategory),
-        // ── Foreign-currency receipts: stored in their own currency; FinanceTracker converts to base (LKR) via FX ──
-        // Two separate Claude subscriptions on two accounts, both $20 and usually billed the same
-        // day — cross-source dedup would swallow the second one every month. There is no gateway
-        // twin for this sender, so dedup buys nothing here anyway; GmailMessageId still guards
-        // against re-importing the same receipt.
-        new BillProfile("Anthropic", "anthropic.com",
-            Rx(@"^Your receipt from Anthropic"),
-            "AI",
-            [Rx(@"Amount paid\s*(?:US\$|USD|\$)\s*([\d,]+\.\d{2})")],
-            "USD",
-            NoDedup: true),
-        new BillProfile("GitHub", "github.com",
-            Rx(@"^\[GitHub\] Payment Receipt"),
-            "AI",
-            [Rx(@"\bTotal:\s*(?:US\$|USD|\$)?\s*([\d,]+\.\d{2})")],
-            "USD"),
-        new BillProfile("NETS NPC", "nets.com.sg",
-            Rx(@"^NPC"),
-            "Transport",
-            [Rx(@"A total of\s*(?:S\$|SGD|\$)\s*([\d,]+\.\d{2})")],
-            "SGD"),
-        new BillProfile("PickMe Membership", "pickme.lk",
-            Rx(@"^Membership (Renewal Receipt|Payment Invoice)"),
-            "Membership",
-            [Rx(@"Paid Amount\s*LKR\s*([\d,]+\.\d{2})"),
-             Rx(@"Total\s*LKR\s*([\d,]+\.\d{2})")],
-            "LKR"),
-        new BillProfile("Keells Order", "keells.com",
-            Rx(@"^Keells Order Confirmation"),   // online home-delivery order (not the in-store E-Bill)
-            "Groceries",
-            [Rx(@"Total Amount\s*\(Rs\.?\)\s*([\d,]+\.\d{2})")],
-            "LKR"),
-        new BillProfile("Google Play", "googleplay-noreply@google.com",
-            Rx(@"^Your Google Play Order Receipt"),
-            "Apps & Subscriptions",
-            // total shown in LKR via the Sinhala rupee mark (රු.); skip any non-digit currency token
-            [Rx(@"Total\s*:\s*[^\d]*([\d,]+\.\d{2})")],
-            "LKR",
-            AllowZero: true),   // free items (0.00) are still recorded
-        new BillProfile("Dominos", "dominos",
-            Rx(@"^Order Successful"),
-            "Food",
-            [Rx(@"Grand Total\s*:?\s*Rs\.?\s*([\d,]+\.\d{2})")],
-            "LKR"),
-        // PayHere is a gateway — the merchant is in the subject, so each merchant is its own profile
-        new BillProfile("PayHere Dominos", "receipts@mail.payhere.lk",
-            Rx(@"^Dominos Pizza Sri Lanka Payment Receipt"),
-            "Food",
-            [Rx(@"\bTotal\s+LKR\s*([\d,]+\.\d{2})")],
-            "LKR",
-            Preferred: true),
-        new BillProfile("PayHere Riyasewana", "receipts@mail.payhere.lk",
-            Rx(@"^Riyasewana Lanka Private Limited Payment Receipt"),
-            "Ads",
-            [Rx(@"\bTotal\s+LKR\s*([\d,]+\.\d{2})")],
-            "LKR",
-            Preferred: true),
-        new BillProfile("PayablePayments", "payablepayments.lk",
-            Rx(@"^Invoice for your Order"),
-            "Home",
-            [Rx(@"TOTAL AMOUNT\s*:?\s*(?:Rs\.?|LKR)?\s*([\d,]+\.\d{2})")],
-            "LKR"),
-        new BillProfile("Namecheap", "namecheap.com",
-            Rx(@"^Namecheap Order Summary"),
-            "Website",
-            [Rx(@"Final Cost\s*:?\s*(?:US\$|USD|\$)?\s*([\d,]+\.\d{2})"),   // plain-text total
-             Rx(@"\bTOTAL\s*:?\s*(?:US\$|USD|\$)?\s*([\d,]+\.\d{2})")],     // html fallback (skips "Sub Total $0.00")
-            "USD"),
-        new BillProfile("Kandos", "kandos.lk",
-            Rx(@"Order Confirmation"),
-            "Groceries",
-            [Rx(@"Paid Amount\s*Rs\.?\s*([\d,]+\.\d{2})"),
-             Rx(@"Total Amount\s*Rs\.?\s*([\d,]+\.\d{2})")],
-            "LKR"),
-        new BillProfile("eChannelling", "echannelling.com",
-            Rx(@"eChanneling"),
-            "e-Channeling",
-            [Rx(@"Total Fee\s*:?\s*([\d,]+\.\d{2})\s*LKR")],   // "Total Fee : 114.00 LKR"
-            "LKR"),
-        new BillProfile("Doc990", "no-reply@doc.lk",
-            Rx(@"BOOKING RECEIPT"),
-            "e-Channeling",
-            [Rx(@"TOTAL CHARGES\s*:?\s*([\d,]+\.\d{2})\s*LKR")],   // read from the attached PDF, not the email body
-            "LKR",
-            FromPdf: true),
-        new BillProfile("Amazon", "amazon.com",
-            Rx(@"^Your Amazon\.com order"),
-            "Online Shopping",
-            [Rx(@"Order Total\s*:?\s*(?<cur>USD|US\s*\$|\$)?\s*([\d,]+\.\d{2})")],
-            "USD"),
-        new BillProfile("PayHere Viana", "receipts@mail.payhere.lk",
-            Rx(@"^Viana Cosmetics Payment Receipt"),
-            "Health and Wellness",
-            [Rx(@"\bTotal\s+LKR\s*([\d,]+\.\d{2})")],
-            "LKR",
-            Preferred: true),
-        // Chinese Dragon: the order arrives from both the merchant and PayHere — dedup (below) keeps one
-        new BillProfile("Chinese Dragon", "chinesedragoncafe.com",
-            Rx(@"Order .* confirmed"),
-            "Food",
-            [Rx(@"\bTotal\s+Rs\.?\s*([\d,]+\.\d{2})")],
-            "LKR"),
-        new BillProfile("PayHere Chinese Dragon", "receipts@mail.payhere.lk",
-            Rx(@"^CHINESE DRAGON CAFE"),
-            "Food",
-            [Rx(@"\bTotal\s+LKR\s*([\d,]+\.\d{2})")],
-            "LKR",
-            Preferred: true),
-        new BillProfile("Lassana", "lassanaflora.com",
-            Rx(@"^Lassana\.com - Order Confirmation"),
-            "Gifts",
-            [Rx(@"Grand Total\s*LKR\s*([\d,]+\.\d{2})")],
-            "LKR"),
-        new BillProfile("Anim8", "anim8.lk",
-            Rx(@"^Receipt for Online Payment"),
-            "Home",
-            [Rx(@"Rs\.?\s*([\d,]+\.\d{2})\s*for order reference")],
-            "LKR"),
-        new BillProfile("Feelo", "73659515154@t.shopifyemail.com",
-            Rx(@"Order .* confirmed"),
-            "Food",
-            [Rx(@"\bTotal\s*([\d,]+\.\d{2})\s*LKR")],
-            "LKR"),
-        new BillProfile("Adidas (Global-e)", "global-e.com",
-            Rx(@"Order confirmed - adidas"),
-            "Clothing",
-            [Rx(@"\bTotal\s*(?:SL\s*)?Rs\.?\s*([\d,]+(?:\.\d{2})?)")],
-            "LKR"),
-        new BillProfile("GlowBnB", "glowbnb.com",
-            Rx(@"order has been received"),
-            "Health and Wellness",
-            [Rx(@"\bTotal\s*:?\s*Rs\.?\s*([\d,]+\.\d{2})")],
-            "LKR"),
-        new BillProfile("Phoenix", "phoenix.lk",
-            Rx(@"order has been received"),
-            "Home",
-            [Rx(@"\bTotal\s*:\s*[^\d]*([\d,]+\.\d{2})")],   // "Total: රු 7,540.00" (Sinhala rupee mark)
-            "LKR"),
-        new BillProfile("Grab", "grab.com",
-            Rx(@"Grab.*[Rr]eceipt"),
-            "Transport",
-            // multi-country: RM (Malaysia), SGD/S$ (Singapore) … detect per-ride
-            [Rx(@"Total Paid\s*(?<cur>RM|S ?\$|SGD|US ?\$|USD|Rs\.?|LKR|\$)?\s*([\d,]+\.\d{2})")],
-            "SGD"),
-        new BillProfile("BBC Shop", "bbc.com",
-            Rx(@"^Thank you for your BBC Shop order"),
-            "Online Shopping",
-            [Rx(@"Order Total\s*:?\s*£?\s*([\d,]+\.\d{2})")],
-            "GBP"),
-        new BillProfile("Singer", "websales@singersl.com",
-            Rx(@"^Order Placed"),   // "Order Placed (Auto Email)" — same subject for every order
-            "Home",
-            [Rx(@"Total \[Rs\s*\.?\s*\]\s*:?\s*([\d,]+\.\d{2})")],   // "Total [Rs .] : 11,860.00" (after discounts + shipping)
-            "LKR"),
-        new BillProfile("Epic Games", "acct.epicgames.com",
-            Rx(@"^Your Epic Games Receipt"),
-            "Games",
-            [Rx(@"TOTAL\s*:\s*\$?\s*([\d,]+\.\d{2})")],   // grand total, after the "Sale Discount" lines
-            "USD",
-            AllowZero: true),   // free weekly giveaways total $0.00 and are still recorded
-        // Refund of an earlier adidas order. Same sender as the order confirmation above, different
-        // subject; posted as a positive transaction so it nets off the original expense.
-        new BillProfile("Adidas Refund (Global-e)", "global-e.com",
-            Rx(@"^Refund Notification"),
-            "Clothing",
-            [Rx(@"\bTotal\s*(?:SL\s*)?Rs\.?\s*([\d,]+(?:\.\d{2})?)")],
-            "LKR",
-            Refund: true),
-        new BillProfile("PayHere Feelo", "receipts@mail.payhere.lk",
-            Rx(@"^Feelo Payment Receipt"),
-            "Food",   // must match the "Feelo" merchant profile above, or cross-source dedup misses
-            [Rx(@"\bTotal\s+LKR\s*([\d,]+\.\d{2})")],
-            "LKR",
-            Preferred: true),
-    ];
+    private static IReadOnlyList<BillProfile>? _all;
+    private static readonly Lock Gate = new();
 
-    /// <summary>Dialog bills all come from one sender and the subject prefix doesn't reliably say what
-    /// the connection is, so the number printed on the bill decides: 7… is a mobile line, 1… is a
-    /// broadband line. It changes from bill to bill, hence per-email rather than per-profile.</summary>
-    public static string DialogCategory(string text)
+    /// <summary>The profiles in use. Loads the default file on first touch so tests and any code
+    /// path that forgets to call <see cref="Reload"/> still work.</summary>
+    public static IReadOnlyList<BillProfile> All
     {
-        var m = Regex.Match(text, @"MOBILE NUMBER\s*:?\s*(\d+)", RegexOptions.IgnoreCase);  // PDF layout
-        if (!m.Success) m = Regex.Match(text, @"\b(\d{9})\s+Rs\.?\s*[\d,]+\.\d{2}");        // "click VIEW BILL" body
-        if (!m.Success) return "Dialog";
-        return m.Groups[1].Value[0] switch
+        get
         {
-            '7' => "Phone",
-            '1' => "Home Broadband",
-            _ => "Dialog",
-        };
+            if (_all is { } loaded) return loaded;
+            lock (Gate) return _all ??= BillProfileXml.ParseText(BillProfileXml.DefaultXml);
+        }
+    }
+
+    public static string? SourcePath { get; private set; }
+    public static DateTime? LoadedAt { get; private set; }
+    public static string? LoadError { get; private set; }
+
+    /// <summary>Re-reads <paramref name="path"/>. On failure the previously loaded profiles stay in
+    /// use and the error is kept for /bills to show — a typo in the file must not silently disable
+    /// importing, which is the whole reason this moved out of the binary.</summary>
+    public static bool Reload(string path)
+    {
+        try
+        {
+            var loaded = BillProfileXml.Load(path);
+            lock (Gate)
+            {
+                _all = loaded;
+                SourcePath = path;
+                LoadedAt = DateTime.UtcNow;
+                LoadError = null;
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LoadError = ex.Message;
+            return false;
+        }
+    }
+
+    /// <summary>Writes the shipped defaults next to the app as a always-current reference copy, seeds
+    /// the live file from it the first time, then loads the live file. Nothing here overwrites the
+    /// live file, so edits made in the deploy directory survive every deploy.</summary>
+    public static bool Initialise(string directory)
+    {
+        var live = Path.Combine(directory, LiveFileName);
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, DefaultFileName), BillProfileXml.DefaultXml);
+            if (!File.Exists(live)) File.WriteAllText(live, BillProfileXml.DefaultXml);
+        }
+        catch (Exception ex) { LoadError = $"seeding {live}: {ex.Message}"; }
+        return Reload(live);
     }
 }
 

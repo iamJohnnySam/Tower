@@ -144,7 +144,7 @@ public class BillParserTests
         var p = BillParser.Match("ebill@dialog.lk", "Dialog Fixed_Solutions E-Bill for the month of Jan-2025 - 70073153");
         Assert.True(p!.FromPdf);
         Assert.Equal(4469.70m, BillParser.ExtractAmount(p, pdfText)!.Value.Amount);
-        Assert.Equal("Home Broadband", p.CategoryFrom!(pdfText));
+        Assert.Equal("Home Broadband", p.CategoryFor(pdfText));
     }
 
     [Fact]
@@ -403,7 +403,7 @@ public class BillParserTests
     [InlineData("MOBILE NUMBER: 942112345", "Dialog")]             // anything else falls back
     [InlineData("no number here at all", "Dialog")]
     public void Dialog_category_comes_from_the_connection_number(string text, string expected) =>
-        Assert.Equal(expected, BillProfiles.DialogCategory(text));
+        Assert.Equal(expected, BillParser.Match("ebill@dialog.lk", "E-Bill for the month of Jul-2026")!.CategoryFor(text));
 
     [Fact]
     public void Dialog_one_profile_matches_every_subject_variant_and_both_amount_shapes()
@@ -430,7 +430,7 @@ public class BillParserTests
             "Total Charges for Bill 4,639.68 Total Due 2,676.85 " +
             "Total Charges for 769014481 4,639.68 Total Charges for the Bill Period 4,639.68");
         Assert.Equal(4639.68m, quadient!.Value.Amount);
-        Assert.Equal("Phone", quadient.Value.Profile.CategoryFrom!("MOBILE NUMBER : 769014481"));
+        Assert.Equal("Phone", quadient.Value.Profile.CategoryFor("MOBILE NUMBER : 769014481"));
 
         // body-only "click VIEW BILL" mail: amount sits right after the connection number
         var body = BillParser.TryParse("ebill@dialog.lk", "Dialog Fixed_Solutions E-Bill for the month of Jun-2026 - 70073153",

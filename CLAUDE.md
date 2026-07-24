@@ -78,9 +78,27 @@ can't unlock the encrypted vault).
 | Dedup table | `ImportedBills` | `ImportedStatements` (unique `GmailMessageId`) |
 | Posts to | `/api/external/transactions` | `/api/external/balances` or `/statements` |
 
-Both are code-defined profiles (sender + subject regex) — adding a source is a few lines in the one
-file, then redeploy. Settings keys are `bills.*` / `statements.*` (`label_name`, `interval_hours`,
+Statement profiles are code-defined (sender + subject regex) — adding one is a few lines, then
+redeploy. Settings keys are `bills.*` / `statements.*` (`label_name`, `interval_hours`,
 `mail.last_run`/`.last_count`/`.last_error`).
+
+**Bill profiles are NOT in code** — they live in `bill-profiles.xml` in the app directory
+(`/home/atom/Tower/`). Edit it and hit **Reload profiles** on `/bills`: no rebuild, no redeploy.
+
+- Loader/schema: `Tower.Core/Bills/BillProfileXml.cs`. The schema (every attribute and child
+  element) is documented in a comment at the top of the XML itself.
+- `Tower.Core/Bills/bill-profiles.default.xml` is the version-controlled master, **embedded in the
+  assembly**. On every start Tower rewrites `bill-profiles.default.xml` in the app directory from it
+  as a reference copy, and seeds `bill-profiles.xml` from it only if that file is absent — so live
+  edits survive deploys. To reset: delete `bill-profiles.xml` and restart.
+- Change a profile permanently (so it survives a rebuild and is in git) by editing the
+  `bill-profiles.default.xml` in the repo — but remember the live file wins in prod and won't be
+  overwritten, so also apply the change there or delete it.
+- A malformed file is rejected **whole**; the previously loaded profiles stay in use and the error
+  shows on `/bills`. Startup falls back to the embedded defaults.
+- If a matched email's amount can't be parsed, the sweep records it in `bills.mail.last_error`
+  (visible on `/bills`) instead of skipping silently — that's how a sender changing its template
+  gets noticed. Dialog once went months unimported because its PDF renamed one field.
 
 **Statements specifics** (spec: `docs/superpowers/specs/2026-07-20-statement-ingestion-design.md`):
 

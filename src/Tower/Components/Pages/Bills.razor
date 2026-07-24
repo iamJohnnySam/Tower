@@ -92,6 +92,32 @@
             Emails in the Bills label are matched against these rules in order — first match wins;
             unmatched emails are left untouched.
         </p>
+        <div class="config-row">
+            <label class="config-label">Source</label>
+            <div class="config-control">
+                <code>@(BillProfiles.SourcePath ?? "built-in defaults")</code>
+                @if (BillProfiles.LoadedAt is { } loadedAt)
+                {
+                    <span style="opacity:.7;"> — loaded @loadedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</span>
+                }
+            </div>
+        </div>
+        <div class="config-row">
+            <label class="config-label"></label>
+            <div class="config-control">
+                <button class="btn-secondary btn-sm" @onclick="ReloadProfiles">Reload profiles</button>
+                <span class="config-hint" style="margin-left:8px;">
+                    Edit <code>bill-profiles.xml</code> in the app directory, then reload — no rebuild needed.
+                </span>
+            </div>
+        </div>
+        @if (_reloadMsg is { } msg)
+        {
+            <div class="config-row">
+                <label class="config-label"></label>
+                <div class="config-control" style="color:@(BillProfiles.LoadError is null ? "#0b7285" : "#b00020");">@msg</div>
+            </div>
+        }
         <table class="atom-table">
             <thead>
                 <tr>
@@ -116,8 +142,11 @@
             </tbody>
         </table>
         <p class="config-hint">
-            Profiles are defined in code (<code>Tower.Core/Bills/BillProfiles.cs</code>) — adding a
-            bill type is a few lines there.
+            Profiles live in <code>bill-profiles.xml</code> in the app directory. Adding a bill type
+            is a few lines there followed by <em>Reload profiles</em> — no rebuild, no redeploy. The
+            schema is documented at the top of the file, and
+            <code>bill-profiles.default.xml</code> beside it is a read-only reference copy rewritten
+            on every restart. A malformed file is rejected whole, leaving the running profiles in place.
         </p>
     </section>
 
@@ -164,6 +193,19 @@
         if (_interval < 1) _interval = 1;
         SettingsSvc.Set("bills.interval_hours", _interval.ToString());
         _intervalSaved = true;
+    }
+
+    private string? _reloadMsg;
+
+    // Re-reads bill-profiles.xml. A bad file is rejected whole and the running set is kept, so the
+    // worst case here is the error message below — never a half-loaded profile set.
+    private void ReloadProfiles()
+    {
+        var path = BillProfiles.SourcePath
+            ?? Path.Combine(AppContext.BaseDirectory, BillProfiles.LiveFileName);
+        _reloadMsg = BillProfiles.Reload(path)
+            ? $"Loaded {BillProfiles.All.Count} profiles."
+            : $"Not reloaded — {BillProfiles.LoadError} (previous {BillProfiles.All.Count} still in use)";
     }
 
     // Fire-and-forget: the worker serializes concurrent runs, and progress shows in the banner above.
