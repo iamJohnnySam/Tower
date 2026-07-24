@@ -412,6 +412,15 @@ public class BillParserTests
             "MOBILE NUMBER: 769014481 Total Charges for Bill Period 1,229.71");
         Assert.Equal(1229.71m, pdf!.Value.Amount);
 
+        // 2026 Quadient template: field renamed to "Total Charges for Bill", and "Total Due"
+        // (previous balance + payments folded in) sits right after it and must not win.
+        var quadient = BillParser.TryParse("ebill@dialog.lk", "Dialog Mobile E-Bill for the month of Jul-2026-28577056",
+            "MOBILE NUMBER: 769014481 Previous Due Amount 37.17 Payments 2,000.00 " +
+            "Total Charges for Bill 4,639.68 Total Due 2,676.85 " +
+            "Total Charges for 769014481 4,639.68 Total Charges for the Bill Period 4,639.68");
+        Assert.Equal(4639.68m, quadient!.Value.Amount);
+        Assert.Equal("Phone", quadient.Value.Profile.CategoryFrom!("MOBILE NUMBER : 769014481"));
+
         // body-only "click VIEW BILL" mail: amount sits right after the connection number
         var body = BillParser.TryParse("ebill@dialog.lk", "Dialog Fixed_Solutions E-Bill for the month of Jun-2026 - 70073153",
             "Please click on 'VIEW BILL' to see your statement. 114103678 Rs. 3195.80 Pay on or before 05.07.2026");

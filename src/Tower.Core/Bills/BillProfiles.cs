@@ -68,7 +68,11 @@ public static class BillProfiles
         new BillProfile("Dialog", "dialog.lk",
             Rx(@"E-Bill for the month"),
             "Dialog",   // fallback only; CategoryFrom decides per bill
-            [Rx(@"Total Charges for Bill Period\s*(?:Rs\.?|LKR)?\s*([\d,]+\.\d{2})"),   // PDF
+            // The PDF field has been worded three ways across templates — "…for Bill Period" (pre-2026),
+            // "…for Bill" and "…for the Bill Period" (2026 Quadient layout). All carry the same figure:
+            // the charge for this period, NOT "Total Due", which folds in the previous balance and
+            // payments and would double-count month to month.
+            [Rx(@"Total Charges for (?:the )?Bill(?: Period)?\s*(?:Rs\.?|LKR)?\s*([\d,]+\.\d{2})"),
              Rx(@"\b\d{9}\s+Rs\.?\s*([\d,]+\.\d{2})")],                                 // "click VIEW BILL" body
             "LKR",
             FromPdf: true,
