@@ -114,8 +114,9 @@ public class GmailReader(HttpClient http, GmailTokenService tokens)
     // extraction falls through to the HTML body that actually carries the amount.
     private static readonly string[] NoTextPlaceholders =
     [
-        "This email has no text content",
-        "It looks like your email client might not support HTML",
+        "This email has no text content",                              // PickMe, recent receipts
+        "It looks like your email client might not support HTML",      // Epic Games
+        "To view the message, please use an HTML compatible email",    // PickMe, 2017 receipts
     ];
 
     // Download a document attachment (filename + bytes), or null if there is none.
@@ -182,8 +183,13 @@ public class GmailReader(HttpClient http, GmailTokenService tokens)
         return Clean(decoded);
     }
 
-    private static string Clean(string s) =>
-        NoTextPlaceholders.Any(p => s.TrimStart().StartsWith(p, StringComparison.OrdinalIgnoreCase)) ? "" : s;
+    /// <summary>True when a text/plain part is just a "your client can't render HTML" stub rather than
+    /// a real body. Treating one as content is silent data loss: the amount only exists in the HTML,
+    /// so the bill matches its profile and then parses to nothing.</summary>
+    public static bool IsHtmlOnlyStub(string text) =>
+        NoTextPlaceholders.Any(p => text.TrimStart().StartsWith(p, StringComparison.OrdinalIgnoreCase));
+
+    private static string Clean(string s) => IsHtmlOnlyStub(s) ? "" : s;
 
     private static string Decode(JsonElement part)
     {
