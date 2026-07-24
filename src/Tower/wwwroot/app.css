@@ -384,6 +384,28 @@ button { font: inherit; cursor: pointer; }
 .atom-table td { padding:4px 8px 4px 0; border-bottom:1px solid var(--line-faint); vertical-align:middle; }
 .atom-table tr:last-child td { border-bottom:none; }
 
+/* ── Sortable table headers ─────────────────────────────────────────────── */
+.atom-table th.sortable { cursor:pointer; user-select:none; }
+.atom-table th.sortable:hover { color: var(--text); }
+.atom-table th.sorted { color: var(--accent-fg); }
+.atom-table th .sort-caret { opacity:.75; font-size:.85em; margin-left:2px; }
+
+/* ── Bill profile rows: multi-line rule cell ────────────────────────────── */
+.profile-row td { vertical-align:top; padding-top:8px; padding-bottom:8px; }
+.profile-name { color: var(--text-strong); font-weight:500; }
+/* Regexes are the point of this table — they must be readable, not muted. */
+.rule-grid { display:grid; grid-template-columns:auto 1fr; gap:2px 8px; align-items:baseline; }
+.rule-key  { color: var(--muted); white-space:nowrap; font-size:.92em; }
+.rule-val  { color: var(--text-strong); font-family: var(--mono); word-break:break-all; }
+.rule-val.alt { color: var(--text); }   /* fallback amount patterns, still legible */
+
+.flag-row { display:flex; flex-wrap:wrap; gap:3px; margin-top:4px; }
+.flag {
+    font-size:.68rem; line-height:1; padding:2px 5px; border-radius:3px;
+    border:1px solid var(--accent-bd); background:var(--accent-bg); color:var(--accent-fg);
+    white-space:nowrap;
+}
+
 .atom-temps { display:flex; flex-direction:column; gap:0.25rem; }
 
 .atom-core-bars { display:flex; flex-wrap:wrap; gap:3px; margin-top:6px; }

@@ -121,22 +121,64 @@
         <table class="atom-table">
             <thead>
                 <tr>
-                    <th>Name</th><th>From contains</th><th>Subject match</th>
-                    <th>Amount field</th><th>Category</th><th>Currency</th><th>Imported</th>
+                    @SortHeader(Sort.Name, "Profile", null)
+                    @SortHeader(Sort.From, "From contains", null)
+                    <th>Matching rules</th>
+                    @SortHeader(Sort.Category, "Category", null)
+                    @SortHeader(Sort.Currency, "Cur", null)
+                    @SortHeader(Sort.Count, "#", "text-align:right;")
+                    @SortHeader(Sort.Value, "Value", "text-align:right;")
                 </tr>
             </thead>
             <tbody>
-                @foreach (var p in BillProfiles.All)
+                @foreach (var p in SortedProfiles())
                 {
-                    var s = _stats.TryGetValue(p.Name, out var v) ? v : (0, 0m);
-                    <tr>
-                        <td>@p.Name</td>
+                    var (count, total) = Stat(p.Name);
+                    <tr class="profile-row">
+                        <td>
+                            <div class="profile-name">@p.Name</div>
+                            @if (Flags(p) is { Count: > 0 } flags)
+                            {
+                                <div class="flag-row">
+                                    @foreach (var f in flags)
+                                    {
+                                        <span class="flag" title="@f.Help">@f.Label</span>
+                                    }
+                                </div>
+                            }
+                        </td>
                         <td class="mono">@p.FromContains</td>
-                        <td class="mono text-muted">@p.SubjectRegex</td>
-                        <td class="mono text-muted">@string.Join("  |  ", p.AmountRegexes.Select(r => r.ToString()))</td>
+                        <td>
+                            <div class="rule-grid">
+                                <span class="rule-key">subject</span>
+                                <span class="rule-val">@p.SubjectRegex</span>
+
+                                @for (var i = 0; i < p.AmountRegexes.Length; i++)
+                                {
+                                    <span class="rule-key">@(i == 0 ? "amount" : $"else {i}")</span>
+                                    <span class="rule-val @(i == 0 ? "" : "alt")">@p.AmountRegexes[i]</span>
+                                }
+
+                                @if (p.CategoryRules is { } cr)
+                                {
+                                    @foreach (var t in cr.Tokens)
+                                    {
+                                        <span class="rule-key">token</span>
+                                        <span class="rule-val alt">@t</span>
+                                    }
+                                    <span class="rule-key">routes to</span>
+                                    <span class="rule-val alt">
+                                        @string.Join("   ", cr.When.Select(w => $"{w.Prefix}… → {w.Category}"))
+                                    </span>
+                                }
+                            </div>
+                        </td>
                         <td>@p.Category</td>
                         <td>@p.Currency</td>
-                        <td>@(s.Item1 == 0 ? "—" : $"{s.Item1} · {s.Item2:N0} {p.Currency}")</td>
+                        <td class="num" style="text-align:right;">@(count == 0 ? "—" : count.ToString("N0"))</td>
+                        <td class="num" style="text-align:right; white-space:nowrap;">
+                            @(count == 0 ? "—" : $"{total:N2} {p.Currency}")
+                        </td>
                     </tr>
                 }
             </tbody>
@@ -196,6 +238,72 @@
     }
 
     private string? _reloadMsg;
+
+    private enum Sort { Name, From, Category, Currency, Count, Value }
+
+    // Busiest profiles first — that's the useful default when scanning for what is and isn't working.
+    private Sort _sort = Sort.Count;
+    private bool _desc = true;
+
+    private void SortBy(Sort col)
+    {
+        // Re-clicking a column flips it; a new column starts descending for the numbers (biggest
+        // first) and ascending for the text ones (A-Z), which is what each is usually wanted as.
+        if (_sort == col) _desc = !_desc;
+        else (_sort, _desc) = (col, col is Sort.Count or Sort.Value);
+    }
+
+    private (int Count, decimal Total) Stat(string profile) =>
+        _stats.TryGetValue(profile, out var v) ? v : (0, 0m);
+
+    private IEnumerable<BillProfile> SortedProfiles()
+    {
+        // Value sorts on the raw number across currencies — the cell always shows the unit, so a
+        // USD row sitting among LKR rows reads correctly rather than pretending to be comparable.
+        Func<BillProfile, IComparable> key = _sort switch
+        {
+            Sort.From => p => p.FromContains,
+            Sort.Category => p => p.Category,
+            Sort.Currency => p => p.Currency,
+            Sort.Count => p => Stat(p.Name).Count,
+            Sort.Value => p => Stat(p.Name).Total,
+            _ => p => p.Name,
+        };
+        var ordered = _desc
+            ? BillProfiles.All.OrderByDescending(key)
+            : BillProfiles.All.OrderBy(key);
+        return ordered.ThenBy(p => p.Name);   // stable, readable tie-break for the many 0-import rows
+    }
+
+    private RenderFragment SortHeader(Sort col, string label, string? style) => builder =>
+    {
+        builder.OpenElement(0, "th");
+        builder.AddAttribute(1, "class", $"sortable{(_sort == col ? " sorted" : "")}");
+        if (style is not null) builder.AddAttribute(2, "style", style);
+        builder.AddAttribute(3, "onclick", EventCallback.Factory.Create(this, () => SortBy(col)));
+        builder.AddContent(4, label);
+        if (_sort == col)
+        {
+            builder.OpenElement(5, "span");
+            builder.AddAttribute(6, "class", "sort-caret");
+            builder.AddContent(7, _desc ? "▼" : "▲");
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+    };
+
+    // The behaviour flags, spelled out — these change what gets imported and were invisible before.
+    private static List<(string Label, string Help)> Flags(BillProfile p)
+    {
+        var f = new List<(string, string)>();
+        if (p.FromPdf) f.Add(("PDF", "Amount is read from the attached PDF; falls back to the email body when there's no attachment"));
+        if (p.Preferred) f.Add(("preferred", "Swept first so it wins dedup against the merchant's own email"));
+        if (p.AllowZero) f.Add(("allows 0.00", "A zero total is imported instead of skipped"));
+        if (p.Refund) f.Add(("refund +", "Posted as a positive transaction and exempt from dedup"));
+        if (p.NoDedup) f.Add(("no dedup", "Parallel subscriptions: same amount on the same day is not a duplicate"));
+        if (p.CategoryRules is not null) f.Add(("routed", "Category is read from the bill text, not fixed"));
+        return f;
+    }
 
     // Re-reads bill-profiles.xml. A bad file is rejected whole and the running set is kept, so the
     // worst case here is the error message below — never a half-loaded profile set.
