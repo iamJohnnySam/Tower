@@ -124,12 +124,12 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
                 if (profile == null) continue;                   // not a known bill — leave in place
 
                 // PDF-based profiles (e.g. Doc990): the amount lives in the attached PDF, which we also archive.
+                // ponytail: no attachment (Dialog's "click VIEW BILL" mails) → fall back to the email
+                // body rather than bailing; if it holds no amount either, the skip below still catches it.
                 byte[]? pdf = null; string? pdfName = null; var amountText = msg.Value.Body;
-                if (profile.FromPdf)
+                if (profile.FromPdf && await reader.GetPdfAttachmentAsync(id, null, ct) is { } att)
                 {
-                    var att = await reader.GetPdfAttachmentAsync(id, null, ct);
-                    if (att == null) { lastError = $"No PDF attachment for {id}"; continue; }
-                    (pdfName, pdf) = (att.Value.FileName, att.Value.Bytes);
+                    (pdfName, pdf) = (att.FileName, att.Bytes);
                     amountText = await PdfToTextAsync(pdf, ct);
                 }
 
@@ -137,10 +137,12 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
                 if (extracted == null) continue;                 // recognised sender but no parseable amount — leave in place
                 var (amount, currency) = extracted.Value;
                 var billDate = msg.Value.Date;
+                // Most profiles have a fixed category; Dialog reads it off the connection number in the bill.
+                var category = profile.CategoryFrom?.Invoke(amountText) ?? profile.Category;
 
                 // Cross-source dedup: same amount + category + day already imported (e.g. the PayHere
                 // receipt already landed for this order) → record + trash this one, don't double-count.
-                var dupKey = DedupKey(profile.Category, amount, billDate);
+                var dupKey = DedupKey(category, amount, billDate);
                 // 0.00 items (free) are never dedup'd — many can share a day. Refunds are exempt too:
                 // ImportedBills doesn't record the sign, so a refund matching an expense would look
                 // like a duplicate of it. GmailMessageId still stops the same email twice.
@@ -148,7 +150,7 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
                 {
                     db.ImportedBills.Add(new ImportedBill
                     {
-                        GmailMessageId = id, Profile = profile.Name, Category = profile.Category,
+                        GmailMessageId = id, Profile = profile.Name, Category = category,
                         Amount = amount, Currency = currency, BillDate = billDate,
                         TransactionId = null, ImportedAt = DateTime.UtcNow, Error = "duplicate (same amount/date already imported)"
                     });
@@ -158,7 +160,7 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
                 }
 
                 // Post the expense (negative), or a refund (positive). On failure leave the email untouched to retry next sweep.
-                var txId = await ft.PostTransactionAsync(profile.Refund ? amount : -amount, profile.Category,
+                var txId = await ft.PostTransactionAsync(profile.Refund ? amount : -amount, category,
                     $"{profile.Name} — {msg.Value.Subject}", billDate, currency, ct: ct);
                 if (txId == null) { lastError = $"POST transaction failed for {id}"; continue; }
 
@@ -166,7 +168,7 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
                 // POST succeeding and this commit can duplicate one transaction. Acceptable.
                 db.ImportedBills.Add(new ImportedBill
                 {
-                    GmailMessageId = id, Profile = profile.Name, Category = profile.Category,
+                    GmailMessageId = id, Profile = profile.Name, Category = category,
                     Amount = amount, Currency = currency, BillDate = billDate, TransactionId = txId,
                     ImportedAt = DateTime.UtcNow
                 });

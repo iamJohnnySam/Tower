@@ -136,20 +136,15 @@ public class BillParserTests
     [Fact]
     public void Dialog_bills_are_pdf_profiles_reading_total_charges_for_bill_period()
     {
-        // The email body only holds the account balance; the real charge comes from the PDF.
-        var pdfText = "BILL PERIOD 15/12/2024 - 14/01/2025 Total Charges for Bill Period 4,469.70 Total Amount Payable -59.09";
+        // "Total Charges for Bill Period" is the charge; the "Total Amount Payable" carry-over
+        // balance next to it must never be picked up instead.
+        var pdfText = "MOBILE NUMBER: 114103678 BILL PERIOD 15/12/2024 - 14/01/2025 " +
+                      "Total Charges for Bill Period 4,469.70 Total Amount Payable -59.09";
 
-        var fixedP = BillParser.Match("ebill@dialog.lk", "Dialog Fixed_Solutions E-Bill for the month of Jan-2025 - 70073153");
-        Assert.Equal("Dialog Fixed", fixedP!.Name);
-        Assert.True(fixedP.FromPdf);
-        Assert.Equal("Home Broadband", fixedP.Category);
-        Assert.Equal(4469.70m, BillParser.ExtractAmount(fixedP, pdfText)!.Value.Amount);
-
-        var mobileP = BillParser.Match("ebill@dialog.lk", "Dialog Mobile E-Bill for the month of Apr-2025 - 28577056");
-        Assert.Equal("Dialog Mobile", mobileP!.Name);
-        Assert.True(mobileP.FromPdf);
-        Assert.Equal("Phone", mobileP.Category);
-        Assert.Equal(4469.70m, BillParser.ExtractAmount(mobileP, pdfText)!.Value.Amount);
+        var p = BillParser.Match("ebill@dialog.lk", "Dialog Fixed_Solutions E-Bill for the month of Jan-2025 - 70073153");
+        Assert.True(p!.FromPdf);
+        Assert.Equal(4469.70m, BillParser.ExtractAmount(p, pdfText)!.Value.Amount);
+        Assert.Equal("Home Broadband", p.CategoryFrom!(pdfText));
     }
 
     [Fact]
@@ -387,6 +382,40 @@ public class BillParserTests
         var o = BillParser.TryParse("do-not-reply@global-e.com", "Order confirmed - adidas by Global-e", "Total SL Rs25950");
         Assert.Equal("Adidas (Global-e)", o!.Value.Profile.Name);
         Assert.False(o.Value.Profile.Refund);
+    }
+
+    [Theory]
+    [InlineData("MOBILE NUMBER: 769014481", "Phone")]              // 7… = mobile line
+    [InlineData("MOBILE NUMBER : 114103678", "Home Broadband")]    // 1… = broadband line
+    [InlineData("769014481 Rs. 1229.71 Pay on or before", "Phone")]        // "click VIEW BILL" body, no PDF
+    [InlineData("114103678 Rs. 3195.80 Pay on or before", "Home Broadband")]
+    [InlineData("MOBILE NUMBER: 942112345", "Dialog")]             // anything else falls back
+    [InlineData("no number here at all", "Dialog")]
+    public void Dialog_category_comes_from_the_connection_number(string text, string expected) =>
+        Assert.Equal(expected, BillProfiles.DialogCategory(text));
+
+    [Fact]
+    public void Dialog_one_profile_matches_every_subject_variant_and_both_amount_shapes()
+    {
+        foreach (var subject in new[]
+        {
+            "Dialog Mobile E-Bill for the month of Jul-2026-28577056",
+            "Dialog Fixed_Solutions E-Bill for the month of Jun-2026 - 70073153",
+            "E-Bill for the month of Jan-2026",
+        })
+        {
+            var p = BillParser.Match("ebill@dialog.lk", subject);
+            Assert.Equal("Dialog", p?.Name);
+        }
+
+        var pdf = BillParser.TryParse("ebill@dialog.lk", "Dialog Mobile E-Bill for the month of Jul-2026-28577056",
+            "MOBILE NUMBER: 769014481 Total Charges for Bill Period 1,229.71");
+        Assert.Equal(1229.71m, pdf!.Value.Amount);
+
+        // body-only "click VIEW BILL" mail: amount sits right after the connection number
+        var body = BillParser.TryParse("ebill@dialog.lk", "Dialog Fixed_Solutions E-Bill for the month of Jun-2026 - 70073153",
+            "Please click on 'VIEW BILL' to see your statement. 114103678 Rs. 3195.80 Pay on or before 05.07.2026");
+        Assert.Equal(3195.80m, body!.Value.Amount);
     }
 
     private static (string,decimal)? Cat((BillProfile Profile, decimal Amount, string Currency)? r) =>

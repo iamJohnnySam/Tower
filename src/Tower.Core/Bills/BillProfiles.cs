@@ -13,7 +13,8 @@ public record BillProfile(
     bool FromPdf = false,    // when true: amount comes from the attached PDF (via pdftotext), and the PDF is attached instead of the .eml
     bool Preferred = false,  // processed first, so it wins same-order dedup (e.g. PayHere gateway over the merchant email)
     bool AllowZero = false,  // import even a 0.00 total (e.g. free Google Play items) instead of skipping
-    bool Refund = false);    // money coming back: posted as a positive transaction, not an expense
+    bool Refund = false,     // money coming back: posted as a positive transaction, not an expense
+    Func<string, string>? CategoryFrom = null);   // read the category out of the bill text; falls back to Category
 
 public static class BillProfiles
 {
@@ -59,20 +60,19 @@ public static class BillProfiles
             // orders come in USD ("US $9.15") or LKR — detect per-email via the (?<cur>) group
             [Rx(@"Order total\s*(?<cur>US\s*\$|USD|LKR|Rs\.?)?\s*([\d,]+\.\d{2})")],
             "LKR"),
-        // Dialog e-bills: the real charge is in the attached PDF, not the email body (the body only
-        // shows the account balance). Read "Total Charges for Bill Period" from the PDF, attach the PDF.
-        new BillProfile("Dialog Fixed", "dialog.lk",
-            Rx(@"Dialog Fixed_Solutions E-Bill"),   // NOT the "Dialog Mobile E-Bill" from the same sender
-            "Home Broadband",
-            [Rx(@"Total Charges for Bill Period\s*(?:Rs\.?|LKR)?\s*([\d,]+\.\d{2})")],
+        // Dialog e-bills: normally the real charge is in the attached PDF, not the email body. One
+        // profile covers Mobile, Fixed_Solutions and the bare "E-Bill for the month …" variants —
+        // the subject prefix is unreliable, so the *connection number* in the bill picks the
+        // category instead (see DialogCategory). Older mails have no PDF at all and carry
+        // "<number> Rs. <amount>" in the body, which the second regex handles.
+        new BillProfile("Dialog", "dialog.lk",
+            Rx(@"E-Bill for the month"),
+            "Dialog",   // fallback only; CategoryFrom decides per bill
+            [Rx(@"Total Charges for Bill Period\s*(?:Rs\.?|LKR)?\s*([\d,]+\.\d{2})"),   // PDF
+             Rx(@"\b\d{9}\s+Rs\.?\s*([\d,]+\.\d{2})")],                                 // "click VIEW BILL" body
             "LKR",
-            FromPdf: true),
-        new BillProfile("Dialog Mobile", "dialog.lk",
-            Rx(@"Dialog Mobile E-Bill"),
-            "Phone",
-            [Rx(@"Total Charges for Bill Period\s*(?:Rs\.?|LKR)?\s*([\d,]+\.\d{2})")],
-            "LKR",
-            FromPdf: true),
+            FromPdf: true,
+            CategoryFrom: DialogCategory),
         // ── Foreign-currency receipts: stored in their own currency; FinanceTracker converts to base (LKR) via FX ──
         new BillProfile("Anthropic", "anthropic.com",
             Rx(@"^Your receipt from Anthropic"),
@@ -242,14 +242,23 @@ public static class BillProfiles
             [Rx(@"\bTotal\s+LKR\s*([\d,]+\.\d{2})")],
             "LKR",
             Preferred: true),
-        // Generic Dialog e-bill ("E-Bill for the month …", no Fixed/Mobile prefix) — PDF, → Phone
-        new BillProfile("Dialog", "dialog.lk",
-            Rx(@"^E-Bill for the month"),
-            "Phone",
-            [Rx(@"Total Charges for Bill Period\s*(?:Rs\.?|LKR)?\s*([\d,]+\.\d{2})")],
-            "LKR",
-            FromPdf: true),
     ];
+
+    /// <summary>Dialog bills all come from one sender and the subject prefix doesn't reliably say what
+    /// the connection is, so the number printed on the bill decides: 7… is a mobile line, 1… is a
+    /// broadband line. It changes from bill to bill, hence per-email rather than per-profile.</summary>
+    public static string DialogCategory(string text)
+    {
+        var m = Regex.Match(text, @"MOBILE NUMBER\s*:?\s*(\d+)", RegexOptions.IgnoreCase);  // PDF layout
+        if (!m.Success) m = Regex.Match(text, @"\b(\d{9})\s+Rs\.?\s*[\d,]+\.\d{2}");        // "click VIEW BILL" body
+        if (!m.Success) return "Dialog";
+        return m.Groups[1].Value[0] switch
+        {
+            '7' => "Phone",
+            '1' => "Home Broadband",
+            _ => "Dialog",
+        };
+    }
 }
 
 public static class BillParser
