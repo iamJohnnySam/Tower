@@ -370,6 +370,17 @@ public class BillParserTests
     }
 
     [Fact]
+    public void Anthropic_is_exempt_from_dedup_so_parallel_subscriptions_both_import()
+    {
+        var r = BillParser.TryParse("invoice+statements@mail.anthropic.com",
+            "Your receipt from Anthropic, PBC #2950-8105-1050",
+            "Claude Pro Qty 1 $20.00 Total $20.00 Amount paid $20.00");
+        Assert.Equal(20.00m, r!.Value.Amount);
+        Assert.Equal("USD", r.Value.Currency);
+        Assert.True(r.Value.Profile.NoDedup);   // two $20 receipts on one day are two subscriptions, not a double-send
+    }
+
+    [Fact]
     public void Adidas_refund_is_flagged_and_does_not_shadow_the_order_profile()
     {
         const string body = "Products refund SLRs5550 Total SLRs5550";

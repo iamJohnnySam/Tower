@@ -14,6 +14,7 @@ public record BillProfile(
     bool Preferred = false,  // processed first, so it wins same-order dedup (e.g. PayHere gateway over the merchant email)
     bool AllowZero = false,  // import even a 0.00 total (e.g. free Google Play items) instead of skipping
     bool Refund = false,     // money coming back: posted as a positive transaction, not an expense
+    bool NoDedup = false,    // sender bills several independent subscriptions: identical amount + day is normal, not a duplicate
     Func<string, string>? CategoryFrom = null);   // read the category out of the bill text; falls back to Category
 
 public static class BillProfiles
@@ -78,11 +79,16 @@ public static class BillProfiles
             FromPdf: true,
             CategoryFrom: DialogCategory),
         // ── Foreign-currency receipts: stored in their own currency; FinanceTracker converts to base (LKR) via FX ──
+        // Two separate Claude subscriptions on two accounts, both $20 and usually billed the same
+        // day — cross-source dedup would swallow the second one every month. There is no gateway
+        // twin for this sender, so dedup buys nothing here anyway; GmailMessageId still guards
+        // against re-importing the same receipt.
         new BillProfile("Anthropic", "anthropic.com",
             Rx(@"^Your receipt from Anthropic"),
             "AI",
             [Rx(@"Amount paid\s*(?:US\$|USD|\$)\s*([\d,]+\.\d{2})")],
-            "USD"),
+            "USD",
+            NoDedup: true),
         new BillProfile("GitHub", "github.com",
             Rx(@"^\[GitHub\] Payment Receipt"),
             "AI",

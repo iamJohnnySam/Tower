@@ -145,8 +145,9 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
                 var dupKey = DedupKey(category, amount, billDate);
                 // 0.00 items (free) are never dedup'd — many can share a day. Refunds are exempt too:
                 // ImportedBills doesn't record the sign, so a refund matching an expense would look
-                // like a duplicate of it. GmailMessageId still stops the same email twice.
-                if (amount > 0 && !profile.Refund && seen.Contains(dupKey))
+                // like a duplicate of it. NoDedup senders bill parallel subscriptions that legitimately
+                // collide. GmailMessageId still stops the same email twice in every case.
+                if (amount > 0 && !profile.Refund && !profile.NoDedup && seen.Contains(dupKey))
                 {
                     db.ImportedBills.Add(new ImportedBill
                     {
