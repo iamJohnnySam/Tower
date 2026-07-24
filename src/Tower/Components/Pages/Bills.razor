@@ -222,12 +222,14 @@
         _lastError = SettingsSvc.Get("bills.mail.last_error");
         int.TryParse(SettingsSvc.Get("bills.mail.last_count"), out _lastCount);
         // decimal is stored as TEXT in SQLite, so aggregate client-side (row count is small).
+        // Value is the net effect on spending, so refunds subtract (SignedAmount) rather than
+        // inflating the total of the profile they were imported under.
         _stats = Db.ImportedBills
             .Where(b => b.TransactionId != null)
-            .Select(b => new { b.Profile, b.Amount })
+            .Select(b => new { b.Profile, b.Amount, b.Refund })
             .AsEnumerable()
             .GroupBy(r => r.Profile)
-            .ToDictionary(g => g.Key, g => (g.Count(), g.Sum(x => x.Amount)));
+            .ToDictionary(g => g.Key, g => (g.Count(), g.Sum(x => x.Refund ? -x.Amount : x.Amount)));
     }
 
     private void SaveInterval()

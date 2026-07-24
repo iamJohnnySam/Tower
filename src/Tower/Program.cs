@@ -221,6 +221,16 @@ using (var scope = app.Services.CreateScope())
         CREATE UNIQUE INDEX IF NOT EXISTS IX_ImportedBills_GmailMessageId ON ImportedBills (GmailMessageId);");
     // EnsureCreated/CREATE-IF-NOT-EXISTS won't add a column to an existing table — add it (harmless if it already exists).
     try { db.Database.ExecuteSqlRaw("ALTER TABLE ImportedBills ADD COLUMN BillDate TEXT"); } catch { /* column exists */ }
+    // Refund rows store the magnitude in Amount, so without this flag a refund would add to a
+    // spend total instead of netting off it. Backfill runs only on the sweep after the column is
+    // created — rows imported before then are matched against the refund profiles by name.
+    try
+    {
+        db.Database.ExecuteSqlRaw("ALTER TABLE ImportedBills ADD COLUMN Refund INTEGER NOT NULL DEFAULT 0");
+        foreach (var p in Tower.Core.Bills.BillProfiles.All.Where(p => p.Refund))
+            db.Database.ExecuteSqlRaw("UPDATE ImportedBills SET Refund = 1 WHERE Profile = {0}", p.Name);
+    }
+    catch { /* column exists */ }
 
     db.Database.ExecuteSqlRaw(@"
         CREATE TABLE IF NOT EXISTS ImportedStatements (

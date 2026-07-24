@@ -75,3 +75,20 @@ public class BillProfileXmlTests
         finally { File.Delete(path); }
     }
 }
+
+public class ImportedBillTests
+{
+    // The sign convention is the whole point of the Refund column: Amount stays the magnitude
+    // printed on the bill, and only SignedAmount knows which way it moves money.
+    [Fact]
+    public void Refunds_net_off_rather_than_adding_to_a_total()
+    {
+        var spend = new Tower.Core.Models.ImportedBill { Amount = 25950m };
+        var back = new Tower.Core.Models.ImportedBill { Amount = 5550m, Refund = true };
+
+        Assert.Equal(25950m, spend.SignedAmount);
+        Assert.Equal(-5550m, back.SignedAmount);
+        Assert.Equal(5550m, back.Amount);   // magnitude is preserved for display and dedup
+        Assert.Equal(20400m, spend.SignedAmount + back.SignedAmount);
+    }
+}

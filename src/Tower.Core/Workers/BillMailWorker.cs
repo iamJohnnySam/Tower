@@ -160,7 +160,7 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
                     db.ImportedBills.Add(new ImportedBill
                     {
                         GmailMessageId = id, Profile = profile.Name, Category = category,
-                        Amount = amount, Currency = currency, BillDate = billDate,
+                        Amount = amount, Currency = currency, BillDate = billDate, Refund = profile.Refund,
                         TransactionId = null, ImportedAt = DateTime.UtcNow, Error = "duplicate (same amount/date already imported)"
                     });
                     db.SaveChanges();
@@ -179,7 +179,7 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
                 {
                     GmailMessageId = id, Profile = profile.Name, Category = category,
                     Amount = amount, Currency = currency, BillDate = billDate, TransactionId = txId,
-                    ImportedAt = DateTime.UtcNow
+                    ImportedAt = DateTime.UtcNow, Refund = profile.Refund
                 });
                 db.SaveChanges();
                 if (amount > 0) seen.Add(dupKey);
