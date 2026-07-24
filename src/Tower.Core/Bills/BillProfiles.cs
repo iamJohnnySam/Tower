@@ -12,7 +12,8 @@ public record BillProfile(
     string Currency,
     bool FromPdf = false,    // when true: amount comes from the attached PDF (via pdftotext), and the PDF is attached instead of the .eml
     bool Preferred = false,  // processed first, so it wins same-order dedup (e.g. PayHere gateway over the merchant email)
-    bool AllowZero = false); // import even a 0.00 total (e.g. free Google Play items) instead of skipping
+    bool AllowZero = false,  // import even a 0.00 total (e.g. free Google Play items) instead of skipping
+    bool Refund = false);    // money coming back: posted as a positive transaction, not an expense
 
 public static class BillProfiles
 {
@@ -216,6 +217,31 @@ public static class BillProfiles
             "Online Shopping",
             [Rx(@"Order Total\s*:?\s*£?\s*([\d,]+\.\d{2})")],
             "GBP"),
+        new BillProfile("Singer", "websales@singersl.com",
+            Rx(@"^Order Placed"),   // "Order Placed (Auto Email)" — same subject for every order
+            "Home",
+            [Rx(@"Total \[Rs\s*\.?\s*\]\s*:?\s*([\d,]+\.\d{2})")],   // "Total [Rs .] : 11,860.00" (after discounts + shipping)
+            "LKR"),
+        new BillProfile("Epic Games", "acct.epicgames.com",
+            Rx(@"^Your Epic Games Receipt"),
+            "Games",
+            [Rx(@"TOTAL\s*:\s*\$?\s*([\d,]+\.\d{2})")],   // grand total, after the "Sale Discount" lines
+            "USD",
+            AllowZero: true),   // free weekly giveaways total $0.00 and are still recorded
+        // Refund of an earlier adidas order. Same sender as the order confirmation above, different
+        // subject; posted as a positive transaction so it nets off the original expense.
+        new BillProfile("Adidas Refund (Global-e)", "global-e.com",
+            Rx(@"^Refund Notification"),
+            "Clothing",
+            [Rx(@"\bTotal\s*(?:SL\s*)?Rs\.?\s*([\d,]+(?:\.\d{2})?)")],
+            "LKR",
+            Refund: true),
+        new BillProfile("PayHere Feelo", "receipts@mail.payhere.lk",
+            Rx(@"^Feelo Payment Receipt"),
+            "Food",   // must match the "Feelo" merchant profile above, or cross-source dedup misses
+            [Rx(@"\bTotal\s+LKR\s*([\d,]+\.\d{2})")],
+            "LKR",
+            Preferred: true),
         // Generic Dialog e-bill ("E-Bill for the month …", no Fixed/Mobile prefix) — PDF, → Phone
         new BillProfile("Dialog", "dialog.lk",
             Rx(@"^E-Bill for the month"),

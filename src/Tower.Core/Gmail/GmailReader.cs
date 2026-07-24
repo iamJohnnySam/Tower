@@ -109,9 +109,14 @@ public class GmailReader(HttpClient http, GmailTokenService tokens)
             .PadRight((b64.Length + 3) / 4 * 4, '='));
     }
 
-    // Some senders (e.g. older PickMe receipts) ship an HTML-only email whose text/plain part is
-    // just this sentinel — treat it as empty so extraction falls through to the real HTML body.
-    private const string NoTextPlaceholder = "This email has no text content";
+    // Some senders (older PickMe receipts, Epic Games) ship an effectively HTML-only email whose
+    // text/plain part is just a "open this in a real client" stub — treat those as empty so
+    // extraction falls through to the HTML body that actually carries the amount.
+    private static readonly string[] NoTextPlaceholders =
+    [
+        "This email has no text content",
+        "It looks like your email client might not support HTML",
+    ];
 
     // Download a document attachment (filename + bytes), or null if there is none.
     // nameMatch picks a specific one when the mail carries several — CAL ships the statement
@@ -177,7 +182,8 @@ public class GmailReader(HttpClient http, GmailTokenService tokens)
         return Clean(decoded);
     }
 
-    private static string Clean(string s) => s.Trim() == NoTextPlaceholder ? "" : s;
+    private static string Clean(string s) =>
+        NoTextPlaceholders.Any(p => s.TrimStart().StartsWith(p, StringComparison.OrdinalIgnoreCase)) ? "" : s;
 
     private static string Decode(JsonElement part)
     {

@@ -356,6 +356,39 @@ public class BillParserTests
         Assert.Equal(1352m, d!.Value.Amount); Assert.Equal("Online Shopping", d.Value.Profile.Category);
     }
 
+    [Fact]
+    public void Singer_epic_and_payhere_feelo_parse()
+    {
+        // Singer: "Total [Rs .] :" label, discounts + shipping already applied
+        var s = BillParser.TryParse("websales@singersl.com", "Order Placed (Auto Email)",
+            "13,950 - Bank Discount - 1,395 Shipping : 700 Total [Rs .] : 11,860.00");
+        Assert.Equal(11860.00m, s!.Value.Amount); Assert.Equal("Home", s.Value.Profile.Category);
+
+        // Epic: a fully-discounted giveaway totals $0.00 and must still import (AllowZero)
+        var e = BillParser.TryParse("help@acct.epicgames.com", "Your Epic Games Receipt",
+            "Price: $59.99 USD Sale Discount - $59.99 USD TOTAL: $0.00 USD");
+        Assert.Equal(0m, e!.Value.Amount); Assert.Equal("USD", e.Value.Currency); Assert.Equal("Games", e.Value.Profile.Category);
+
+        var f = BillParser.TryParse("receipts@mail.payhere.lk", "Feelo Payment Receipt #320041656361",
+            "Subtotal LKR 999.00 Total LKR 999.00 Payment LKR 999.00");
+        Assert.Equal(999.00m, f!.Value.Amount); Assert.Equal("Food", f.Value.Profile.Category);
+    }
+
+    [Fact]
+    public void Adidas_refund_is_flagged_and_does_not_shadow_the_order_profile()
+    {
+        const string body = "Products refund SLRs5550 Total SLRs5550";
+        var r = BillParser.TryParse("do-not-reply@global-e.com", "Refund Notification - adidas - order number ALK01712422", body);
+        Assert.Equal("Adidas Refund (Global-e)", r!.Value.Profile.Name);
+        Assert.Equal(5550m, r.Value.Amount);
+        Assert.True(r.Value.Profile.Refund);
+
+        // the order confirmation from the same sender still lands on the expense profile
+        var o = BillParser.TryParse("do-not-reply@global-e.com", "Order confirmed - adidas by Global-e", "Total SL Rs25950");
+        Assert.Equal("Adidas (Global-e)", o!.Value.Profile.Name);
+        Assert.False(o.Value.Profile.Refund);
+    }
+
     private static (string,decimal)? Cat((BillProfile Profile, decimal Amount, string Currency)? r) =>
         r is { } v ? (v.Profile.Category, v.Amount) : null;
 

@@ -141,7 +141,10 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
                 // Cross-source dedup: same amount + category + day already imported (e.g. the PayHere
                 // receipt already landed for this order) → record + trash this one, don't double-count.
                 var dupKey = DedupKey(profile.Category, amount, billDate);
-                if (amount > 0 && seen.Contains(dupKey))   // 0.00 items (free) are never dedup'd — many can share a day
+                // 0.00 items (free) are never dedup'd — many can share a day. Refunds are exempt too:
+                // ImportedBills doesn't record the sign, so a refund matching an expense would look
+                // like a duplicate of it. GmailMessageId still stops the same email twice.
+                if (amount > 0 && !profile.Refund && seen.Contains(dupKey))
                 {
                     db.ImportedBills.Add(new ImportedBill
                     {
@@ -154,8 +157,8 @@ public class BillMailWorker(IServiceScopeFactory scopes) : BackgroundService
                     continue;
                 }
 
-                // Post the expense (negative). On failure leave the email untouched to retry next sweep.
-                var txId = await ft.PostTransactionAsync(-amount, profile.Category,
+                // Post the expense (negative), or a refund (positive). On failure leave the email untouched to retry next sweep.
+                var txId = await ft.PostTransactionAsync(profile.Refund ? amount : -amount, profile.Category,
                     $"{profile.Name} — {msg.Value.Subject}", billDate, currency, ct: ct);
                 if (txId == null) { lastError = $"POST transaction failed for {id}"; continue; }
 
